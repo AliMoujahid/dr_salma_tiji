@@ -1,0 +1,291 @@
+@import "tailwindcss";
+
+:root {
+  --bg-app: #f4f6fa;
+  --bg-panel: rgba(255, 255, 255, 0.7);
+  --border-panel: rgba(0, 0, 0, 0.08);
+  --bg-card: rgba(255, 255, 255, 0.8);
+  --border-card: rgba(0, 0, 0, 0.05);
+  --text-primary: #1e293b;
+  --text-secondary: #64748b;
+  --bg-input: rgba(255, 255, 255, 0.95);
+  --border-input: rgba(0, 0, 0, 0.12);
+}
+
+.dark {
+  --bg-app: #090d16;
+  --bg-panel: rgba(15, 23, 42, 0.45);
+  --border-panel: rgba(255, 255, 255, 0.07);
+  --bg-card: rgba(30, 41, 59, 0.3);
+  --border-card: rgba(255, 255, 255, 0.05);
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --bg-input: rgba(15, 23, 42, 0.6);
+  --border-input: rgba(255, 255, 255, 0.1);
+}
+
+@layer base {
+  body {
+    background-color: var(--bg-app);
+    color: var(--text-primary);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+}
+
+/* Premium Apple-style Glassmorphism and Backdrop Blurs */
+.glass-panel {
+  background: var(--bg-panel);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border-panel);
+}
+
+.glass-card {
+  background: var(--bg-card);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-card);
+}
+
+.glass-input {
+  background: var(--bg-input);
+  border: 1px solid var(--border-input);
+  color: var(--text-primary);
+  transition: all 0.2s ease-in-out;
+}
+
+/* Premium light theme overrides for a unified Apple-like professional look */
+html:not(.dark) {
+  --bg-app: #f3f4f6;
+  --bg-panel: #ffffff;
+  --border-panel: rgba(0, 0, 0, 0.06);
+  --bg-card: #ffffff;
+  --border-card: rgba(0, 0, 0, 0.05);
+  --text-primary: #111827;
+  --text-secondary: #4b5563;
+  --bg-input: #ffffff;
+  --border-input: rgba(0, 0, 0, 0.12);
+}
+
+/* Force light backgrounds on containers */
+html:not(.dark) body {
+  background-color: #f3f4f6 !important;
+  color: #111827 !important;
+}
+
+html:not(.dark) aside {
+  background-color: #ffffff !important;
+  border-right: 1px solid rgba(0, 0, 0, 0.06) !important;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.01) !important;
+}
+
+html:not(.dark) header {
+  background-color: rgba(255, 255, 255, 0.7) !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+}
+
+/* Form inputs & interactive widgets */
+html:not(.dark) input,
+html:not(.dark) select,
+html:not(.dark) textarea {
+  background-color: #ffffff !important;
+  border-color: rgba(0, 0, 0, 0.12) !important;
+  color: #111827 !important;
+}
+
+html:not(.dark) input::placeholder,
+html:not(.dark) textarea::placeholder {
+  color: #9ca3af !important;
+}
+
+/* Cards & panels */
+html:not(.dark) .glass-card,
+html:not(.dark) .bg-slate-900\/40,
+html:not(.dark) .bg-slate-950\/20,
+html:not(.dark) .bg-slate-900 {
+  background-color: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.06) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02) !important;
+}
+
+/* Text visibility overrides */
+html:not(.dark) .text-white {
+  color: #111827 !important;
+}
+
+html:not(.dark) .text-slate-100 {
+  color: #111827 !important;
+}
+
+html:not(.dark) .text-slate-300 {
+  color: #374151 !important;
+}
+
+html:not(.dark) .text-slate-400 {
+  color: #4b5563 !important; /* Darker Slate for high contrast */
+}
+
+/* Focus Ring Outline Override (Globally clean up buttons & links focus) */
+aside nav a:focus,
+aside nav a:focus-visible,
+button:focus,
+button:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Sidebar navigation link overrides */
+.nav-active {
+  background-color: #2563eb !important;
+  color: #ffffff !important;
+}
+.nav-active * {
+  color: #ffffff !important;
+}
+.nav-active:hover {
+  background-color: #1d4ed8 !important;
+  color: #ffffff !important;
+}
+.nav-active:hover * {
+  color: #ffffff !important;
+}
+
+html:not(.dark) aside nav a:not(.nav-active) {
+  color: #4b5563 !important;
+  background-color: transparent !important;
+}
+html:not(.dark) aside nav a:not(.nav-active) * {
+  color: #4b5563 !important;
+}
+
+html:not(.dark) aside nav a:not(.nav-active):hover {
+  background-color: rgba(59, 130, 246, 0.08) !important;
+  color: #2563eb !important;
+}
+html:not(.dark) aside nav a:not(.nav-active):hover * {
+  color: #2563eb !important;
+}
+
+/* Ensure white text inside colored action panels/buttons is preserved */
+html:not(.dark) .bg-blue-600 *,
+html:not(.dark) .bg-emerald-600 *,
+html:not(.dark) .bg-rose-600 *,
+html:not(.dark) .bg-indigo-600 *,
+html:not(.dark) .bg-blue-600,
+html:not(.dark) .bg-emerald-600,
+html:not(.dark) .bg-rose-600,
+html:not(.dark) .bg-indigo-600,
+html:not(.dark) button.bg-blue-600,
+html:not(.dark) button.bg-emerald-600,
+html:not(.dark) button.bg-rose-600 {
+  color: #ffffff !important;
+}
+
+/* Brand colored links */
+html:not(.dark) .text-indigo-400,
+html:not(.dark) .text-indigo-300 {
+  color: #4f46e5 !important;
+}
+
+html:not(.dark) .text-blue-400,
+html:not(.dark) .text-blue-300 {
+  color: #2563eb !important;
+}
+
+html:not(.dark) .text-emerald-400,
+html:not(.dark) .text-emerald-300 {
+  color: #059669 !important;
+}
+
+/* Sub-panels and inner backgrounds */
+html:not(.dark) .bg-white\/3,
+html:not(.dark) .bg-white\/5,
+html:not(.dark) .bg-slate-950\/20,
+html:not(.dark) .bg-slate-950\/80 {
+  background-color: rgba(0, 0, 0, 0.02) !important;
+  border-color: rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Modal layers */
+html:not(.dark) .fixed.bg-black\/60 {
+  background-color: rgba(0, 0, 0, 0.3) !important;
+}
+
+html:not(.dark) .fixed .bg-slate-900 {
+  background-color: #ffffff !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 0 20px 25px -5px rgba(0,0,0,0.05), 0 10px 10px -5px rgba(0,0,0,0.02) !important;
+}
+
+.glass-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+  background: rgba(15, 23, 42, 0.85);
+  outline: none;
+}
+
+.text-gradient {
+  background: linear-gradient(135deg, #ffffff 30%, #a5b4fc 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Hide scrollbar utilities */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Custom transitions and scroll behaviors */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Tooth grid map status highlight classes */
+.tooth-healthy { fill: #10b981; fill-opacity: 0.15; stroke: #10b981; }
+.tooth-missing { fill: #4b5563; fill-opacity: 0.3; stroke: #9ca3af; stroke-dasharray: 2 2; }
+.tooth-extracted { fill: #ef4444; fill-opacity: 0.1; stroke: #ef4444; }
+.tooth-implant { fill: #3b82f6; fill-opacity: 0.4; stroke: #3b82f6; stroke-width: 2px; }
+.tooth-bridge { fill: #8b5cf6; fill-opacity: 0.25; stroke: #8b5cf6; }
+.tooth-crown { fill: #f59e0b; fill-opacity: 0.25; stroke: #f59e0b; }
+.tooth-rootcanal { fill: #ec4899; fill-opacity: 0.25; stroke: #ec4899; }
+.tooth-filling { fill: #06b6d4; fill-opacity: 0.25; stroke: #06b6d4; }
+.tooth-fracture { fill: #dc2626; fill-opacity: 0.4; stroke: #dc2626; }
+.tooth-mobile { fill: #14b8a6; fill-opacity: 0.2; stroke: #14b8a6; }
+.tooth-wisdom { fill: #6366f1; fill-opacity: 0.15; stroke: #6366f1; }
+
+/* Custom print media queries matching facture.html A4 layout precisely */
+@media print {
+  @page {
+    size: A4;
+    margin: 0 !important; /* Hides default browser header and footer (URL, date, title, page numbers) */
+  }
+
+  body {
+    margin: 0 !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+  
+  .print-container {
+    display: block !important;
+    position: static !important;
+    transform: none !important;
+    box-shadow: none !important;
+    padding: 20mm 15mm !important; /* Re-applies clean A4 margins on the template itself */
+    margin: 0 auto !important;
+    width: 210mm !important; /* Exact A4 width */
+    height: 297mm !important; /* Exact A4 height */
+    box-sizing: border-box !important;
+    background: white !important;
+    color: black !important;
+  }
+}

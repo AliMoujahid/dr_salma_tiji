@@ -1,0 +1,100 @@
+import { Router, Response } from 'express';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import User from '../models/User';
+import { protect, restrictTo, AuthRequest } from '../middleware/auth';
+
+const router = Router();
+const JWT_SECRET = process.env.JWT_SECRET || 'fallback-super-secret-dental-key';
+
+// Login route
+router.post('/login', async (req: any, res: any) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Veuillez saisir votre email et mot de passe.' });
+    }
+
+    const user = await User.findOne({ email });
+    if (!user || !user.active) {
+      return res.status(401).json({ message: 'Identifiants incorrects ou compte inactif.' });
+    }
+
+    const isMatch = await bcrypt.compare(password, user.passwordHash);
+    if (!isMatch) {
+      return res.status(401).json({ message: 'Identifiants incorrects.' });
+    }
+
+    const token = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, {
+      expiresIn: '30d',
+    });
+
+    res.json({
+      token,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        avatarUrl: user.avatarUrl,
+      },
+    });
+  } catch (error: any) {
+    res.status(500).json({ message: 'Erreur serveur lors de la connexion.', error: error.message });
+  }
+});
+
+// Register route (Admin only)
+router.post('/register', protect, restrictTo('ADMIN'), async (req: any, res: any) => {
+  try {
+    const { email, password, name, role, avatarUrl } = req.body;
+    if (!email || !password || !name || !role) {
+      return res.status(400).json({ message: 'Veuillez remplir tous les champs obligatoires.' });
+    }
+
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ message: 'Cet email est déjà utilisé.' });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(password, salt);
+
+    const newUser = await User.create({
+      email,
+      passwordHash,
+      name,
+      role,
+      avatarUrl,
+    });
+
+    res.status(201).json({
+      message: 'Utilisateur créé avec succès.',
+      user: {
+        id: newUser._id,
+        name: newUser.name,
+        email: newUser.email,
+        role: newUser.role,
+      },
+    });
+  } catch (error: any) {
+    res.status(500).json({ message: 'Erreur lors de la création du compte.', error: error.message });
+  }
+});
+
+// Get current user profile
+router.get('/me', protect, (req: AuthRequest, res: Response) => {
+  if (!req.user) {
+    res.status(404).json({ message: 'Utilisateur non trouvé.' });
+    return;
+  }
+  res.json({
+    id: req.user._id,
+    name: req.user.name,
+    email: req.user.email,
+    role: req.user.role,
+    avatarUrl: req.user.avatarUrl,
+  });
+});
+
+export default router;
