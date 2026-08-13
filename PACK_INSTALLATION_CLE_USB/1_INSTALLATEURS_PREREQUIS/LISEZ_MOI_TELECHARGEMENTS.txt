@@ -1,0 +1,15 @@
+=======================================================================
+   DOSSIER DES INSTALLATEURS (A METTRE ICI APRES TELECHARGEMENT)
+=======================================================================
+
+Placez dans ce dossier les 2 fichiers .msi téléchargés :
+
+1. Node.js (Version LTS) :
+   Lien direct : https://nodejs.org/dist/v20.18.0/node-v20.18.0-x64.msi
+   Nom du fichier attendu : node-v20.18.0-x64.msi
+
+2. MongoDB Community Server :
+   Lien direct : https://fastdl.mongodb.org/windows/mongodb-windows-x86_64-7.0.14-signed.msi
+   Nom du fichier attendu : mongodb-windows-x86_64-7.0.14-signed.msi
+
+=======================================================================

@@ -93,7 +93,7 @@ export const Reports: React.FC = () => {
             <BarChart3 className="w-5 h-5 text-indigo-400" />
           </div>
 
-          <div className="flex gap-4 h-56 items-end justify-between px-2 pt-4">
+          <div className="flex gap-1 md:gap-4 h-56 items-end justify-between px-1 md:px-2 pt-4">
             {financials.monthlyRevenue.map((item: any, i: number) => {
               const heightPct = Math.max(4, (item.revenue / maxRevenue) * 100);
               return (
@@ -107,7 +107,12 @@ export const Reports: React.FC = () => {
                       className="w-full max-w-[24px] rounded-t bg-gradient-to-t from-blue-600 to-indigo-400 hover:from-emerald-500 hover:to-teal-400 transition-all duration-300 group-hover/bar:shadow-lg shadow-indigo-500/20"
                     ></div>
                   </div>
-                  <span className="text-[10px] font-bold text-slate-500 tracking-tighter">{item.month}</span>
+                  <span className="text-[9px] md:text-[10px] font-bold text-slate-500 tracking-tighter block sm:hidden">
+                    {item.month.charAt(0).toUpperCase()}
+                  </span>
+                  <span className="text-[10px] font-bold text-slate-500 tracking-tighter hidden sm:block">
+                    {item.month}
+                  </span>
                 </div>
               );
             })}

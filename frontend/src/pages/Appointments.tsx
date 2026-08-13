@@ -1,18 +1,39 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Calendar, Clock, User, Armchair, Trash2, Edit } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  Plus,
+  Calendar as CalendarIcon,
+  Clock,
+  User,
+  Armchair,
+  Trash2,
+  Edit,
+  Search,
+  MessageSquare,
+  CheckCircle2,
+  Play,
+  XCircle,
+  RotateCcw,
+  ChevronLeft,
+  ChevronRight,
+  Filter,
+} from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Appointment, Patient } from '../types';
 import { SearchablePatientSelect } from '../components/SearchablePatientSelect';
-
 
 export const Appointments: React.FC = () => {
   const { token } = useAuth();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedChair, setSelectedChair] = useState('All');
 
-  // Form states for creating/editing appointment
+  // Filters state
+  const [selectedChair, setSelectedChair] = useState<'All' | 'Chair 1' | 'Chair 2'>('All');
+  const [dateFilterMode, setDateFilterMode] = useState<'Today' | 'Week' | 'Month' | 'All'>('Today');
+  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Form modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editApptId, setEditApptId] = useState<string | null>(null);
   const [selectedPatientId, setSelectedPatientId] = useState('');
@@ -21,6 +42,7 @@ export const Appointments: React.FC = () => {
   const [chair, setChair] = useState('Chair 1');
   const [status, setStatus] = useState<'Scheduled' | 'Confirmed' | 'In Treatment' | 'Completed' | 'Cancelled' | 'No Show'>('Scheduled');
   const [notes, setNotes] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -35,28 +57,31 @@ export const Appointments: React.FC = () => {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => res.json())
-      .then((data) => setAppointments(data))
+      .then((data) => {
+        if (Array.isArray(data)) setAppointments(data);
+      })
       .catch((err) => console.error('Error fetching appointments:', err))
       .finally(() => setLoading(false));
   };
 
   const fetchPatients = () => {
-    fetch(`${API_URL}/patients?limit=100`, {
+    fetch(`${API_URL}/patients?limit=150`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => res.json())
-      .then((data) => setPatients(data.patients || []))
+      .then((data) => setPatients(data.patients || (Array.isArray(data) ? data : [])))
       .catch((err) => console.error('Error fetching patients:', err));
   };
 
   const handleOpenCreateModal = () => {
     setEditApptId(null);
     setSelectedPatientId(patients[0]?._id || '');
-    // Pre-fill local date-time string matching YYYY-MM-DDTHH:MM
+
     const now = new Date();
     now.setMinutes(0);
     const tzoffset = now.getTimezoneOffset() * 60000;
     const localISOTime = new Date(now.getTime() - tzoffset).toISOString().slice(0, 16);
+
     setDateTime(localISOTime);
     setDuration('30');
     setChair('Chair 1');
@@ -67,12 +92,13 @@ export const Appointments: React.FC = () => {
 
   const handleOpenEditModal = (appt: Appointment) => {
     setEditApptId(appt._id);
-    setSelectedPatientId(typeof appt.patientId === 'object' ? appt.patientId._id : appt.patientId);
-    
+    const patObj = appt.patientId && typeof appt.patientId === 'object' ? (appt.patientId as Patient) : null;
+    setSelectedPatientId(patObj?._id || (typeof appt.patientId === 'string' ? appt.patientId : ''));
+
     const tzoffset = new Date(appt.dateTime).getTimezoneOffset() * 60000;
     const localISOTime = new Date(new Date(appt.dateTime).getTime() - tzoffset).toISOString().slice(0, 16);
     setDateTime(localISOTime);
-    
+
     setDuration(appt.duration.toString());
     setChair(appt.chair);
     setStatus(appt.status);
@@ -84,12 +110,9 @@ export const Appointments: React.FC = () => {
     e.preventDefault();
     if (!selectedPatientId || !dateTime || !chair) return;
 
-    // Standard dummy doctorId (the logged in user or first user, backend resolves)
-    const mockDoctorId = '65b4c10c14b98c1998f48df2'; // standard placeholder, backend updates with req.user
-
+    setSubmitting(true);
     const payload = {
       patientId: selectedPatientId,
-      doctorId: mockDoctorId,
       dateTime,
       duration: parseInt(duration, 10),
       chair,
@@ -109,14 +132,60 @@ export const Appointments: React.FC = () => {
       body: JSON.stringify(payload),
     })
       .then((res) => {
-        if (!res.ok) throw new Error('Failed to save appointment');
+        if (!res.ok) throw new Error('Error saving appointment');
         return res.json();
       })
       .then(() => {
         setIsModalOpen(false);
         fetchAppointments();
       })
-      .catch((err) => console.error('Error saving appointment:', err));
+      .catch((err) => console.error('Error saving appointment:', err))
+      .finally(() => setSubmitting(false));
+  };
+
+  const handleUpdateStatus = (id: string, newStatus: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    fetch(`${API_URL}/appointments/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ status: newStatus }),
+    })
+      .then(() => fetchAppointments())
+      .catch((err) => console.error('Error updating status:', err));
+  };
+
+  const handleSendWhatsAppReminder = (appt: Appointment, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const patientObj: any = appt.patientId;
+    if (!patientObj || !patientObj.phone) {
+      alert('Numéro de téléphone du patient introuvable.');
+      return;
+    }
+
+    const apptDateStr = new Date(appt.dateTime).toLocaleDateString('fr-FR');
+    const apptTimeStr = new Date(appt.dateTime).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    const message = `Bonjour ${patientObj.name},\n\nRappel : Votre rendez-vous au Cabinet Dentaire Dr. Salma Tijini est prévu le ${apptDateStr} à ${apptTimeStr}.\n\nMerci de nous contacter en cas d'empêchement.`;
+
+    fetch(`${API_URL}/notifications/send-manual`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        patientId: patientObj._id,
+        appointmentId: appt._id,
+        channel: 'WhatsApp',
+        recipient: patientObj.phone,
+        body: message,
+      }),
+    })
+      .then((res) => res.json())
+      .then(() => alert(`Rappel WhatsApp envoyé avec succès à ${patientObj.name} !`))
+      .catch((err) => console.error('Error sending WhatsApp reminder:', err));
   };
 
   const handleDeleteAppointment = (id: string, e: React.MouseEvent) => {
@@ -131,125 +200,289 @@ export const Appointments: React.FC = () => {
       .catch((err) => console.error('Error deleting appointment:', err));
   };
 
-  const filteredAppts = selectedChair === 'All'
-    ? appointments
-    : appointments.filter((a) => a.chair === selectedChair);
+  // Filtered appointments computation
+  const filteredAppts = useMemo(() => {
+    return appointments.filter((appt) => {
+      // Chair filter
+      if (selectedChair !== 'All' && appt.chair !== selectedChair) return false;
+
+      // Search filter
+      const patientObj = appt.patientId && typeof appt.patientId === 'object' ? (appt.patientId as Patient) : null;
+      const patientName = patientObj?.name ? patientObj.name.toLowerCase() : '';
+      const notesText = (appt.notes || '').toLowerCase();
+      if (searchQuery && !patientName.includes(searchQuery.toLowerCase()) && !notesText.includes(searchQuery.toLowerCase())) {
+        return false;
+      }
+
+      // Date range mode filter
+      const apptDate = new Date(appt.dateTime);
+      const selDateObj = new Date(selectedDate);
+
+      if (dateFilterMode === 'Today') {
+        return apptDate.toDateString() === selDateObj.toDateString();
+      }
+
+      if (dateFilterMode === 'Week') {
+        const startOfWeek = new Date(selDateObj);
+        startOfWeek.setDate(selDateObj.getDate() - selDateObj.getDay());
+        startOfWeek.setHours(0, 0, 0, 0);
+
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 6);
+        endOfWeek.setHours(23, 59, 59, 999);
+
+        return apptDate >= startOfWeek && apptDate <= endOfWeek;
+      }
+
+      if (dateFilterMode === 'Month') {
+        return apptDate.getMonth() === selDateObj.getMonth() && apptDate.getFullYear() === selDateObj.getFullYear();
+      }
+
+      return true;
+    });
+  }, [appointments, selectedChair, dateFilterMode, selectedDate, searchQuery]);
 
   return (
-    <div className="flex-1 p-8 flex flex-col gap-6 overflow-y-auto no-scrollbar max-h-[calc(100vh-80px)] select-none">
+    <div className="flex-1 p-6 md:p-8 flex flex-col gap-6 overflow-y-auto no-scrollbar max-h-[calc(100vh-80px)] text-white font-sans">
       
-      {/* Title & Add button */}
-      <div className="flex justify-between items-center">
+      {/* Top Header & Quick Actions */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-white tracking-tight">Agenda Clinique</h2>
-          <p className="text-xs text-slate-400 mt-1">Gérez le planning des consultations et l'attribution des fauteuils dentaires.</p>
+          <h1 className="text-2xl font-black text-white tracking-tight">Agenda Clinique & Rendez-vous</h1>
+          <p className="text-xs text-slate-400 mt-1">
+            Gérez le planning des consultations, l'attribution des fauteuils et l'envoi des rappels automatiques.
+          </p>
         </div>
+
         <button
           onClick={handleOpenCreateModal}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 font-semibold text-xs text-white transition-all shadow-lg shadow-blue-600/20 cursor-pointer"
+          className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-500 font-bold text-xs text-white transition-all shadow-lg shadow-blue-600/25 cursor-pointer"
         >
           <Plus className="w-4 h-4" />
           <span>Nouveau Rendez-vous</span>
         </button>
       </div>
 
-      {/* Filters panel */}
-      <div className="flex flex-col sm:flex-row justify-between gap-4 p-4 rounded-2xl bg-slate-900/40 border border-white/5 shadow">
-        <div className="flex gap-2 items-center">
-          <Armchair className="w-4.5 h-4.5 text-slate-500" />
-          <span className="text-xs font-semibold text-slate-400 mr-2">Filtrer par Fauteuil :</span>
-          {['All', 'Chair 1', 'Chair 2'].map((c) => (
+      {/* Control Toolbar (Date mode, Chair, Datepicker, Search) */}
+      <div className="p-4 rounded-3xl bg-slate-900/60 border border-white/10 shadow-xl flex flex-wrap gap-4 items-center justify-between">
+        
+        {/* Date Mode Switcher & Date Picker */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center bg-slate-950 p-1 rounded-2xl border border-white/5">
             <button
-              key={c}
-              onClick={() => setSelectedChair(c)}
-              className={`px-3 py-1.5 rounded-lg text-xxs font-bold transition-all cursor-pointer border ${
-                selectedChair === c
-                  ? 'bg-blue-600/10 border-blue-500/30 text-blue-400'
-                  : 'bg-white/5 border-white/5 text-slate-400 hover:text-white'
+              onClick={() => setDateFilterMode('Today')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                dateFilterMode === 'Today' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
               }`}
             >
-              {c === 'All' ? 'Tous' : c === 'Chair 1' ? 'Fauteuil 1' : 'Fauteuil 2'}
+              Aujourd'hui
             </button>
-          ))}
+            <button
+              onClick={() => setDateFilterMode('Week')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                dateFilterMode === 'Week' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Semaine
+            </button>
+            <button
+              onClick={() => setDateFilterMode('Month')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                dateFilterMode === 'Month' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Mois
+            </button>
+            <button
+              onClick={() => setDateFilterMode('All')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                dateFilterMode === 'All' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Tout
+            </button>
+          </div>
+
+          {/* Date Picker Input */}
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={(e) => {
+              setSelectedDate(e.target.value);
+              setDateFilterMode('Today');
+            }}
+            className="h-10 px-3 rounded-xl border border-white/10 bg-slate-950 text-xs text-white"
+          />
         </div>
+
+        {/* Chair Filter & Search Bar */}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-2xl border border-white/5">
+            <button
+              onClick={() => setSelectedChair('All')}
+              className={`px-3 py-1.5 rounded-xl text-xxs font-bold transition-all cursor-pointer ${
+                selectedChair === 'All' ? 'bg-white/15 text-white' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Tous Fauteuils
+            </button>
+            <button
+              onClick={() => setSelectedChair('Chair 1')}
+              className={`px-3 py-1.5 rounded-xl text-xxs font-bold transition-all cursor-pointer ${
+                selectedChair === 'Chair 1' ? 'bg-white/15 text-white' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Fauteuil 1
+            </button>
+            <button
+              onClick={() => setSelectedChair('Chair 2')}
+              className={`px-3 py-1.5 rounded-xl text-xxs font-bold transition-all cursor-pointer ${
+                selectedChair === 'Chair 2' ? 'bg-white/15 text-white' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Fauteuil 2
+            </button>
+          </div>
+
+          <div className="relative w-56">
+            <Search className="w-4 h-4 absolute left-3 top-3 text-slate-500" />
+            <input
+              type="text"
+              placeholder="Rechercher patient..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full h-10 pl-9 pr-4 rounded-xl text-xs glass-input"
+            />
+          </div>
+        </div>
+
       </div>
 
-      {/* Calendar List */}
+      {/* Appointments List Grid */}
       {loading ? (
-        <div className="flex-grow flex items-center justify-center py-20">
+        <div className="flex items-center justify-center py-20">
           <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
         </div>
       ) : filteredAppts.length === 0 ? (
-        <div className="flex-grow flex flex-col items-center justify-center gap-3 py-20">
-          <Calendar className="w-12 h-12 text-slate-600" />
-          <p className="text-sm font-semibold text-slate-400">Aucun rendez-vous consigné.</p>
+        <div className="p-12 rounded-3xl bg-slate-900/40 border border-white/5 text-center flex flex-col items-center justify-center gap-3">
+          <CalendarIcon className="w-12 h-12 text-slate-600" />
+          <h4 className="text-base font-bold text-white">Aucun rendez-vous consigné</h4>
+          <p className="text-xs text-slate-400 max-w-sm">
+            Aucune consultation ne correspond à la période ou au fauteuil sélectionné.
+          </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredAppts.map((appt) => {
             const dateObj = new Date(appt.dateTime);
             const timeStr = dateObj.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-            const dateStr = dateObj.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short' });
-            
+            const dateStr = dateObj.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+            const patientObj = appt.patientId && typeof appt.patientId === 'object' ? (appt.patientId as Patient) : null;
+            const patientName = patientObj?.name || 'Patient';
+
             return (
               <div
                 key={appt._id}
-                className="rounded-2xl glass-card hover:bg-slate-900/60 p-5 shadow-lg border border-white/5 flex flex-col justify-between gap-4 group"
+                className="rounded-3xl bg-slate-900/80 border border-white/10 hover:border-white/20 p-5 shadow-xl flex flex-col justify-between gap-4 transition-all group"
               >
                 <div>
-                  <div className="flex justify-between items-start mb-2">
-                    <span className="text-[10px] font-extrabold text-blue-400 capitalize tracking-wider flex items-center gap-1">
-                      <Calendar className="w-3.5 h-3.5" />
+                  {/* Top Status & Date Header */}
+                  <div className="flex justify-between items-center mb-3">
+                    <span className="text-xs font-bold text-blue-400 flex items-center gap-1.5">
+                      <CalendarIcon className="w-4 h-4 text-blue-400" />
                       {dateStr}
                     </span>
-                    <span className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full ${
-                      appt.status === 'Completed'
-                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                        : appt.status === 'Scheduled'
-                        ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
-                        : appt.status === 'In Treatment'
-                        ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                        : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-                    }`}>
+
+                    <span
+                      className={`text-xxs font-extrabold uppercase px-2.5 py-1 rounded-full ${
+                        appt.status === 'Completed'
+                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                          : appt.status === 'Scheduled'
+                          ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                          : appt.status === 'Confirmed'
+                          ? 'bg-teal-500/20 text-teal-400 border border-teal-500/30'
+                          : appt.status === 'In Treatment'
+                          ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                          : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                      }`}
+                    >
                       {appt.status}
                     </span>
                   </div>
 
-                  <h3 className="text-sm font-bold text-white tracking-tight">
-                    {typeof appt.patientId === 'object' ? appt.patientId.name : 'Patient'}
-                  </h3>
+                  {/* Patient Name */}
+                  <h3 className="text-base font-extrabold text-white mb-2">{patientName}</h3>
 
-                  <div className="flex flex-col gap-1.5 mt-3 text-xs text-slate-400">
+                  {/* Time & Chair Details */}
+                  <div className="flex flex-col gap-1.5 text-xs text-slate-300">
                     <span className="flex items-center gap-2">
-                      <Clock className="w-3.5 h-3.5 text-slate-500" />
+                      <Clock className="w-4 h-4 text-slate-500" />
                       <strong>{timeStr}</strong> ({appt.duration} min)
                     </span>
                     <span className="flex items-center gap-2">
-                      <Armchair className="w-3.5 h-3.5 text-slate-500" />
+                      <Armchair className="w-4 h-4 text-slate-500" />
                       {appt.chair === 'Chair 1' ? 'Fauteuil 1' : 'Fauteuil 2'}
                     </span>
                   </div>
 
                   {appt.notes && (
-                    <p className="mt-3.5 text-xxs leading-relaxed bg-white/3 p-2.5 rounded-xl border border-white/5 text-slate-300">
+                    <p className="mt-3 text-xs leading-relaxed bg-white/5 p-3 rounded-2xl border border-white/5 text-slate-300">
                       {appt.notes}
                     </p>
                   )}
                 </div>
 
-                <div className="flex justify-end gap-2 pt-3 border-t border-white/5 opacity-0 group-hover:opacity-100 transition-all select-none">
-                  <button
-                    onClick={() => handleOpenEditModal(appt)}
-                    className="p-1.5 rounded bg-white/5 border border-white/5 hover:border-white/10 text-slate-400 hover:text-white cursor-pointer"
-                  >
-                    <Edit className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={(e) => handleDeleteAppointment(appt._id, e)}
-                    className="p-1.5 rounded bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500 hover:text-white transition-all cursor-pointer"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                {/* Quick Action Transitions & WhatsApp Reminder Trigger */}
+                <div className="flex items-center justify-between border-t border-white/10 pt-3 mt-1">
+                  
+                  {/* Status Fast Switchers */}
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={(e) => handleUpdateStatus(appt._id, 'Confirmed', e)}
+                      title="Marquer Confirmé"
+                      className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 cursor-pointer"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={(e) => handleUpdateStatus(appt._id, 'In Treatment', e)}
+                      title="Marquer En Soin"
+                      className="p-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 cursor-pointer"
+                    >
+                      <Play className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={(e) => handleUpdateStatus(appt._id, 'Completed', e)}
+                      title="Marquer Terminé"
+                      className="p-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 cursor-pointer"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  {/* WhatsApp & Edit/Delete Action Icons */}
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={(e) => handleSendWhatsAppReminder(appt, e)}
+                      title="Rappel WhatsApp"
+                      className="p-1.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 cursor-pointer flex items-center gap-1 text-xxs font-bold"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" /> WhatsApp
+                    </button>
+                    <button
+                      onClick={() => handleOpenEditModal(appt)}
+                      className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white cursor-pointer"
+                    >
+                      <Edit className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={(e) => handleDeleteAppointment(appt._id, e)}
+                      className="p-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
                 </div>
 
               </div>
@@ -258,27 +491,27 @@ export const Appointments: React.FC = () => {
         </div>
       )}
 
-      {/* CREATE & EDIT SCHEDULER DIALOG MODAL */}
+      {/* CREATE & EDIT APPOINTMENT MODAL */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="w-full max-w-md rounded-3xl bg-slate-900 border border-white/10 shadow-2xl p-6 flex flex-col gap-5">
-            <div className="flex justify-between items-center border-b border-white/5 pb-3">
-              <h3 className="text-md font-bold text-white">
-                {editApptId ? 'Modifier le Rendez-vous' : 'Prendre un Rendez-vous'}
+            <div className="flex justify-between items-center border-b border-white/10 pb-3">
+              <h3 className="text-base font-bold text-white">
+                {editApptId ? 'Modifier le Rendez-vous' : 'Planifier un Rendez-vous'}
               </h3>
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="p-1.5 hover:bg-white/5 rounded-lg text-slate-400 hover:text-white cursor-pointer"
+                className="p-1.5 rounded-xl hover:bg-white/10 text-slate-400 hover:text-white cursor-pointer"
               >
-                <XIcon />
+                ✕
               </button>
             </div>
 
             <form onSubmit={handleSubmitAppointment} className="flex flex-col gap-4">
               
-              {/* Patient Selector */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-slate-400">Patient</label>
+              {/* Patient Selection */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Patient</label>
                 <SearchablePatientSelect
                   patients={patients}
                   selectedId={selectedPatientId}
@@ -287,25 +520,25 @@ export const Appointments: React.FC = () => {
               </div>
 
               {/* Date & Time Input */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-slate-400">Date et Heure</label>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Date et Heure</label>
                 <input
                   type="datetime-local"
                   required
                   value={dateTime}
                   onChange={(e) => setDateTime(e.target.value)}
-                  className="h-11 px-4 rounded-xl text-sm glass-input text-slate-300"
+                  className="w-full h-11 px-4 rounded-xl text-xs glass-input text-white"
                 />
               </div>
 
               {/* Duration and Chair Grid */}
-              <div className="grid grid-cols-2 gap-3.5">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-slate-400">Durée (min)</label>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Durée (min)</label>
                   <select
                     value={duration}
                     onChange={(e) => setDuration(e.target.value)}
-                    className="h-11 px-3 rounded-xl border border-white/5 bg-slate-950 text-sm text-white focus:outline-none focus:border-blue-500"
+                    className="w-full h-11 px-3 rounded-xl border border-white/10 bg-slate-950 text-xs text-white"
                   >
                     <option value="15">15 min</option>
                     <option value="30">30 min</option>
@@ -315,12 +548,12 @@ export const Appointments: React.FC = () => {
                   </select>
                 </div>
 
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-slate-400">Fauteuil</label>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Fauteuil</label>
                   <select
                     value={chair}
                     onChange={(e) => setChair(e.target.value)}
-                    className="h-11 px-3 rounded-xl border border-white/5 bg-slate-950 text-sm text-white focus:outline-none focus:border-blue-500"
+                    className="w-full h-11 px-3 rounded-xl border border-white/10 bg-slate-950 text-xs text-white"
                   >
                     <option value="Chair 1">Fauteuil 1</option>
                     <option value="Chair 2">Fauteuil 2</option>
@@ -329,12 +562,12 @@ export const Appointments: React.FC = () => {
               </div>
 
               {/* Status */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-slate-400">Statut</label>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Statut</label>
                 <select
                   value={status}
                   onChange={(e: any) => setStatus(e.target.value)}
-                  className="h-11 px-3 rounded-xl border border-white/5 bg-slate-950 text-sm text-white focus:outline-none focus:border-blue-500"
+                  className="w-full h-11 px-3 rounded-xl border border-white/10 bg-slate-950 text-xs text-white"
                 >
                   <option value="Scheduled">Planifié</option>
                   <option value="Confirmed">Confirmé</option>
@@ -346,31 +579,32 @@ export const Appointments: React.FC = () => {
               </div>
 
               {/* Notes */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-slate-400">Motif / Notes</label>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Motif / Acte Prévu</label>
                 <input
                   type="text"
-                  placeholder="ex: Détartrage..."
+                  placeholder="ex: Consultation, Détartrage, Pose de couronne..."
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  className="h-11 px-4 rounded-xl text-sm glass-input"
+                  className="w-full h-11 px-4 rounded-xl text-xs glass-input"
                 />
               </div>
 
-              {/* Submit triggers */}
-              <div className="flex justify-end gap-3 pt-3 border-t border-white/5">
+              {/* Modal Buttons */}
+              <div className="flex justify-end gap-3 pt-3 border-t border-white/10">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2.5 rounded-xl border border-white/5 text-xs font-semibold text-slate-400 hover:text-white cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl border border-white/10 text-xs font-semibold text-slate-400 hover:text-white cursor-pointer"
                 >
                   Annuler
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition-all cursor-pointer"
+                  disabled={submitting}
+                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition-all shadow-lg shadow-blue-600/20 cursor-pointer"
                 >
-                  Enregistrer
+                  {submitting ? 'Enregistrement...' : 'Enregistrer'}
                 </button>
               </div>
             </form>
@@ -380,10 +614,3 @@ export const Appointments: React.FC = () => {
     </div>
   );
 };
-
-const XIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="18" y1="6" x2="6" y2="18"></line>
-    <line x1="6" y1="6" x2="18" y2="18"></line>
-  </svg>
-);

@@ -65,11 +65,17 @@ router.get('/waiting-room', protect, async (req: AuthRequest, res: Response) => 
 // Create new appointment
 router.post('/', protect, async (req: AuthRequest, res: Response) => {
   try {
-    const { patientId, doctorId, dateTime, duration, chair, notes, status } = req.body;
+    const { patientId, dateTime, duration, chair, notes, status } = req.body;
+    let { doctorId } = req.body;
 
-    if (!patientId || !doctorId || !dateTime || !chair) {
+    if (!patientId || !dateTime || !chair) {
       res.status(400).json({ message: 'Champs requis manquants pour le rendez-vous.' });
       return;
+    }
+
+    // Fallback doctorId to logged in user if not provided or invalid
+    if (!doctorId || typeof doctorId !== 'string' || doctorId.length !== 24) {
+      doctorId = req.user?._id;
     }
 
     const newAppt = await Appointment.create({

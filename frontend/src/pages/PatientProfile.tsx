@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { DentalChart } from '../components/DentalChart';
+import { Dental3DViewer } from '../components/Dental3DViewer';
 import {
   User,
   Heart,
@@ -29,6 +30,7 @@ export const PatientProfile: React.FC = () => {
 
   const [patient, setPatient] = useState<Patient | null>(null);
   const [activeTab, setActiveTab] = useState('Overview');
+  const [chartMode, setChartMode] = useState<'3D' | '2D'>('3D');
   const [loading, setLoading] = useState(true);
 
   // Sub-data states
@@ -50,6 +52,7 @@ export const PatientProfile: React.FC = () => {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+  const UPLOADS_URL = API_URL.replace('/api', '/uploads');
 
   useEffect(() => {
     fetchPatientProfile();
@@ -372,9 +375,43 @@ export const PatientProfile: React.FC = () => {
 
         {/* DENTAL CHART PANEL */}
         {activeTab === 'Chart' && (
-          <div className="p-6 rounded-2xl bg-slate-900/40 border border-white/5 shadow-md">
-            <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-6">Odontogramme Interactif</h3>
-            {id && <DentalChart patientId={id} />}
+          <div className="flex flex-col gap-4">
+            {/* 3D vs 2D Toggle Switcher */}
+            <div className="flex justify-between items-center p-4 rounded-2xl bg-slate-900/40 border border-white/5 shadow-md">
+              <div>
+                <h3 className="text-sm font-bold text-white uppercase tracking-wider">Odontogramme Clinique & Schéma Dentaire</h3>
+                <p className="text-xs text-slate-400">Basculez entre l'arcade 3D interactive et le schéma 2D classique</p>
+              </div>
+              <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-white/5">
+                <button
+                  onClick={() => setChartMode('3D')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    chartMode === '3D' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Vue 3D HD (R3F)
+                </button>
+                <button
+                  onClick={() => setChartMode('2D')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    chartMode === '2D' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Vue 2D Schématique
+                </button>
+              </div>
+            </div>
+
+            {/* Display Selected Chart Mode */}
+            {id && (
+              chartMode === '3D' ? (
+                <Dental3DViewer patientId={id} />
+              ) : (
+                <div className="p-6 rounded-2xl bg-slate-900/40 border border-white/5 shadow-md">
+                  <DentalChart patientId={id} />
+                </div>
+              )
+            )}
           </div>
         )}
 
@@ -617,7 +654,7 @@ export const PatientProfile: React.FC = () => {
                             <Eye className="w-4.5 h-4.5" />
                           </button>
                           <a
-                            href={`http://localhost:5000/uploads${doc.filePath}`}
+                            href={`${UPLOADS_URL}${doc.filePath}`}
                             download
                             className="p-1 hover:bg-white/5 text-slate-500 hover:text-white rounded transition-all cursor-pointer"
                             title="Télécharger"
@@ -653,7 +690,7 @@ export const PatientProfile: React.FC = () => {
                 <div className="w-full flex justify-center bg-slate-950 rounded-xl overflow-hidden p-4 max-h-[500px]">
                   {previewFile.fileType === 'Photo' || previewFile.fileType === 'XRay' ? (
                     <img
-                      src={`http://localhost:5000/uploads${previewFile.filePath}`}
+                      src={`${UPLOADS_URL}${previewFile.filePath}`}
                       alt={previewFile.fileName}
                       className="max-h-[450px] object-contain rounded-lg"
                     />
@@ -662,7 +699,7 @@ export const PatientProfile: React.FC = () => {
                       <FileDigit className="w-12 h-12 mb-3" />
                       <p className="text-xs">Aperçu non disponible pour les formats non-images.</p>
                       <a
-                        href={`http://localhost:5000/uploads${previewFile.filePath}`}
+                        href={`${UPLOADS_URL}${previewFile.filePath}`}
                         download
                         className="text-xs text-blue-400 hover:underline font-bold mt-2"
                       >

@@ -1,4 +1,5 @@
 import { Router, Response } from 'express';
+import mongoose from 'mongoose';
 import ToothHistory from '../models/ToothHistory';
 import { protect, AuthRequest } from '../middleware/auth';
 
@@ -11,7 +12,7 @@ router.get('/patient/:patientId', protect, async (req: AuthRequest, res: Respons
 
     // Aggregate to get the latest status for each tooth of the patient
     const odontogram = await ToothHistory.aggregate([
-      { $match: { patientId: new mongoose.Types.ObjectId(patientId) } },
+      { $match: { patientId: new mongoose.Types.ObjectId(patientId as string) } },
       { $sort: { date: -1, createdAt: -1 } },
       {
         $group: {
@@ -31,15 +32,13 @@ router.get('/patient/:patientId', protect, async (req: AuthRequest, res: Respons
   }
 });
 
-import mongoose from 'mongoose';
-
 // Get detailed chronological history of a specific tooth
 router.get('/patient/:patientId/tooth/:toothNumber', protect, async (req: AuthRequest, res: Response) => {
   try {
     const { patientId, toothNumber } = req.params;
     const history = await ToothHistory.find({
-      patientId: new mongoose.Types.ObjectId(patientId),
-      toothNumber: parseInt(toothNumber, 10),
+      patientId: new mongoose.Types.ObjectId(patientId as string),
+      toothNumber: parseInt(toothNumber as string, 10),
     })
       .populate('invoiceId', 'invoiceNumber')
       .sort({ date: -1 });

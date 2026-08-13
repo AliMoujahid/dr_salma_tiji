@@ -123,6 +123,9 @@ export function formatNumberToWordsWithCentimes(netVal: number): string {
 }
 
 export const InvoicePrintLayout: React.FC<InvoicePrintLayoutProps> = ({ invoice, config }) => {
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+  const UPLOADS_URL = API_URL.replace('/api', '/uploads');
+
   const formattedDate = () => {
     if (!invoice.date) return '.........';
     const dateObj = new Date(invoice.date);
@@ -152,7 +155,7 @@ export const InvoicePrintLayout: React.FC<InvoicePrintLayoutProps> = ({ invoice,
         {/* Center: Logo */}
         <div className="w-[33%] flex justify-center items-center">
           {config.logoUrl ? (
-            <img src={`http://localhost:5000/uploads${config.logoUrl}`} alt="Logo" className="h-[100px] object-contain block mx-auto" />
+            <img src={`${UPLOADS_URL}${config.logoUrl}`} alt="Logo" className="h-[100px] object-contain block mx-auto" />
           ) : (
             <img src="/logo.png" alt="Logo" className="h-[100px] object-contain block mx-auto" onError={(e) => {
               (e.target as HTMLImageElement).src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='48' height='48' fill='none' stroke='%231e3a5f' stroke-width='2'><path d='M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5'></path></svg>";
@@ -285,7 +288,7 @@ export const InvoicePrintLayout: React.FC<InvoicePrintLayoutProps> = ({ invoice,
         <div className="text-right pr-6 pt-2 font-semibold">
           Signature et Cachet du praticien
           {config.stampUrl && (
-            <img src={`http://localhost:5000/uploads${config.stampUrl}`} alt="Signature Stamp" className="h-20 object-contain block ml-auto mt-2 opacity-90" />
+            <img src={`${UPLOADS_URL}${config.stampUrl}`} alt="Signature Stamp" className="h-20 object-contain block ml-auto mt-2 opacity-90" />
           )}
         </div>
       </div>

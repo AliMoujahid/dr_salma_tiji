@@ -14,12 +14,47 @@ export const Settings: React.FC = () => {
   // Backup files upload trigger
   const [backupFile, setBackupFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
+  const [backupStatus, setBackupStatus] = useState<any>(null);
+  const [runningBackup, setRunningBackup] = useState(false);
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
   useEffect(() => {
     fetchClinicConfig();
+    fetchBackupStatus();
   }, []);
+
+  const fetchBackupStatus = () => {
+    fetch(`${API_URL}/backup/status`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => res.json())
+      .then((data) => setBackupStatus(data))
+      .catch((err) => console.error('Error loading backup status:', err));
+  };
+
+  const handleRunManualBackup = async () => {
+    setRunningBackup(true);
+    setMessage('');
+    try {
+      const res = await fetch(`${API_URL}/backup/run-now`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setMessage('Sauvegarde manuelle effectuée avec succès !');
+        fetchBackupStatus();
+        setTimeout(() => setMessage(''), 4000);
+      } else {
+        alert(data.message || 'Échec de la sauvegarde.');
+      }
+    } catch (err: any) {
+      alert(`Erreur : ${err.message}`);
+    } finally {
+      setRunningBackup(false);
+    }
+  };
 
   const fetchClinicConfig = () => {
     setLoading(true);
@@ -351,9 +386,57 @@ export const Settings: React.FC = () => {
           {/* Backup Database Manager */}
           {isAdmin && (
             <div className="rounded-3xl bg-slate-900/40 border border-white/5 p-6 shadow-2xl flex flex-col gap-4">
-              <h3 className="text-xs font-extrabold text-slate-400 uppercase tracking-widest border-b border-white/5 pb-3">Sauvegardes Cliniques</h3>
+              <div className="flex items-center justify-between border-b border-white/5 pb-3">
+                <h3 className="text-xs font-extrabold text-slate-400 uppercase tracking-widest">Sauvegardes & Résilience</h3>
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                  Auto (23h00)
+                </span>
+              </div>
+
+              {/* Automatic Backup Status Card */}
+              <div className="p-3.5 bg-slate-950/40 border border-white/5 rounded-2xl flex flex-col gap-2.5">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-slate-400 font-medium">Dernière sauvegarde :</span>
+                  <span className="font-semibold text-white font-mono text-[11px]">
+                    {backupStatus?.lastBackupDate
+                      ? new Date(backupStatus.lastBackupDate).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })
+                      : 'Initialisation...'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-slate-400 font-medium">Points de restauration :</span>
+                  <span className="text-blue-400 font-bold text-[11px]">
+                    {backupStatus?.totalBackupsCount || 0} sauvegardes (30j)
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleRunManualBackup}
+                  disabled={runningBackup}
+                  className="mt-1 w-full py-2 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 font-semibold rounded-xl text-xs flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  {runningBackup ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
+                      <span>Sauvegarde en cours...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Database className="w-3.5 h-3.5 text-blue-400" />
+                      <span>Sauvegarder Maintenant</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Power Recovery Notification */}
+              <div className="p-3 bg-amber-500/5 border border-amber-500/10 rounded-xl text-[11px] text-amber-300/80 leading-relaxed">
+                ⚡ <strong className="text-amber-200">Tolérance aux coupures :</strong> En cas de coupure de courant, l'application et la base de données redémarrent automatiquement dès que le PC s'allume.
+              </div>
               
-              <div className="flex flex-col gap-3.5 mt-2">
+              <div className="flex flex-col gap-3.5 mt-1">
                 <button
                   type="button"
                   onClick={handleBackupExport}
@@ -361,7 +444,7 @@ export const Settings: React.FC = () => {
                 >
                   <div className="flex items-center gap-3">
                     <Database className="w-4.5 h-4.5 text-blue-400" />
-                    <span className="text-xs font-bold">Exporter Base de données</span>
+                    <span className="text-xs font-bold">Exporter Archive JSON</span>
                   </div>
                   <Download className="w-4 h-4 text-slate-500" />
                 </button>

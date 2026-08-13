@@ -10,11 +10,58 @@ import PaymentTransaction from '../models/Payment';
 import ClinicConfig from '../models/ClinicConfig';
 import DocumentModel from '../models/Document';
 import { protect, restrictTo, AuthRequest } from '../middleware/auth';
+import { backupScheduler } from '../services/backupScheduler';
 
 const router = Router();
 const upload = multer({ dest: 'uploads/temp/' });
 
-// Export Database Backup as a JSON File
+/**
+ * GET /api/backup/status
+ * Get status of automated daily backups
+ */
+router.get('/status', protect, (req: AuthRequest, res: Response) => {
+  try {
+    const status = backupScheduler.getStatus();
+    const backupsList = backupScheduler.getBackupsList();
+    res.json({
+      ...status,
+      backupsList,
+    });
+  } catch (error: any) {
+    res.status(500).json({ message: 'Erreur lors de la récupération du statut de sauvegarde.', error: error.message });
+  }
+});
+
+/**
+ * POST /api/backup/run-now
+ * Trigger an immediate backup on demand
+ */
+router.post('/run-now', protect, restrictTo('ADMIN', 'DOCTOR'), async (req: AuthRequest, res: Response) => {
+  try {
+    const result = await backupScheduler.runBackupWithRetry(3);
+    if (result.success) {
+      res.json({
+        success: true,
+        message: 'Sauvegarde effectuée avec succès !',
+        path: result.path,
+        status: backupScheduler.getStatus(),
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        message: result.error || 'Échec de la sauvegarde.',
+        status: backupScheduler.getStatus(),
+      });
+    }
+  } catch (error: any) {
+    res.status(500).json({ message: 'Erreur lors de l\'exécution de la sauvegarde.', error: error.message });
+  }
+});
+
+/**
+ * GET /api/backup/export
+ * Export Database Backup as a JSON File download
+ */
 router.get('/export', protect, restrictTo('ADMIN', 'DOCTOR'), async (req: AuthRequest, res: Response) => {
   try {
     const data = {
@@ -37,7 +84,10 @@ router.get('/export', protect, restrictTo('ADMIN', 'DOCTOR'), async (req: AuthRe
   }
 });
 
-// Import and Restore Database from a JSON File
+/**
+ * POST /api/backup/import
+ * Import and Restore Database from a JSON File
+ */
 router.post(
   '/import',
   protect,
@@ -78,7 +128,7 @@ router.post(
       await ClinicConfig.deleteMany({});
       await DocumentModel.deleteMany({});
 
-      // Restore data (disable validator triggers for raw seed)
+      // Restore data
       if (parsedData.users.length) await User.insertMany(parsedData.users);
       if (parsedData.patients.length) await Patient.insertMany(parsedData.patients);
       if (parsedData.appointments.length) await Appointment.insertMany(parsedData.appointments);

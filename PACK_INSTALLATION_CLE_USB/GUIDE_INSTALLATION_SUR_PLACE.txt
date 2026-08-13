@@ -1,0 +1,39 @@
+=======================================================================
+   CABINET DENTAIRE DR. SALMA TIJINI - GUIDE DE DEPLOIEMENT EN 5 MINUTES
+=======================================================================
+
+ORGANISATION DES DOSSIERS SUR CETTE CLE USB :
+---------------------------------------------
+📁 1_INSTALLATEURS_PREREQUIS/
+   -> Contient Node.js et MongoDB (fichiers .msi à installer sur le PC du cabinet)
+
+📁 2_APPLICATION_A_COPIER_CHEZ_TBIB/
+   -> Le dossier "Cabinet_Dr_Salma_Tijini_Release" à copier dans "C:\Cabinet_Dr_Salma_Tijini"
+
+📁 3_DEVELOPPEUR_POUR_VOUS_SEULEMENT/
+   -> Le générateur de licence (A GARDER SUR VOTRE PROPRE PC)
+
+
+ETAPES D'INSTALLATION SUR PLACE CHEZ LE MEDECIN :
+-------------------------------------------------
+ETAPE 1 : Installez Node.js depuis le dossier "1_INSTALLATEURS_PREREQUIS"
+          (Cliquez sur Suivant -> Suivant -> Terminer).
+
+ETAPE 2 : Installez MongoDB depuis le dossier "1_INSTALLATEURS_PREREQUIS"
+          (Cliquez sur Complete -> Laissez coché "Install as Service" -> Installer).
+
+ETAPE 3 : Copiez le dossier "Cabinet_Dr_Salma_Tijini_Release" 
+          sur le disque dur du cabinet (ex: C:\Cabinet_Dr_Salma_Tijini).
+
+ETAPE 4 : Dans le dossier copié, double-cliquez sur "Installer_Cabinet.bat".
+          -> Cela crée l'icône sur le Bureau et configure le démarrage automatique 
+             dès que le PC s'allume (même après coupure de courant).
+
+ETAPE 5 : Double-cliquez sur l'icône du Bureau "Cabinet Dr Salma Tijini".
+          -> L'écran d'activation affiche le Machine ID du PC de la docteure.
+          -> Sur votre PC, lancez "3_DEVELOPPEUR.../generate_license.bat".
+          -> Collez son Machine ID, générez la clé, et collez-la dans son application.
+          -> Cliquez sur "Activer le Logiciel".
+
+C'EST TOUT ! Le cabinet est prêt, sécurisé et sauvegardé chaque jour à 23h00.
+=======================================================================

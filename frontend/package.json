@@ -11,9 +11,12 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.7.0",
     "@reduxjs/toolkit": "^2.12.0",
     "@rolldown/binding-win32-x64-msvc": "^1.1.5",
     "@tanstack/react-query": "^5.101.2",
+    "@types/three": "^0.185.3",
     "clsx": "^2.1.1",
     "framer-motion": "^12.42.2",
     "lucide-react": "^1.24.0",
@@ -23,6 +26,7 @@
     "react-redux": "^9.3.0",
     "react-router-dom": "^7.18.1",
     "tailwind-merge": "^3.6.0",
+    "three": "^0.185.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {
