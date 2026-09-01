@@ -17,10 +17,12 @@ interface CustomDatePickerProps {
   placeholder?: string;
   required?: boolean;
   showAge?: boolean;
+  align?: 'left' | 'right' | 'auto';
   maxDate?: string;
   minDate?: string;
   className?: string;
 }
+
 
 const MONTH_NAMES = [
   'Janvier',
@@ -46,9 +48,11 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
   placeholder = 'JJ/MM/AAAA',
   required = false,
   showAge = false,
+  align = 'auto',
   maxDate,
   minDate,
   className = '',
+
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -72,8 +76,27 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
   });
 
   const [quickAge, setQuickAge] = useState('');
+  const [computedAlign, setComputedAlign] = useState<'left' | 'right'>('left');
 
-  // Sync formatted text input value when prop `value` changes
+  // Compute smart popup alignment (left or right)
+  useEffect(() => {
+    if (isOpen && containerRef.current) {
+      if (align === 'right') {
+        setComputedAlign('right');
+      } else if (align === 'left') {
+        setComputedAlign('left');
+      } else {
+        const rect = containerRef.current.getBoundingClientRect();
+        const screenWidth = window.innerWidth;
+        if (rect.right + 260 > screenWidth || rect.left > screenWidth / 2) {
+          setComputedAlign('right');
+        } else {
+          setComputedAlign('left');
+        }
+      }
+    }
+  }, [isOpen, align]);
+
   useEffect(() => {
     if (value) {
       const d = new Date(value);
@@ -304,7 +327,11 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
 
       {/* POPUP CALENDAR MODAL / DROPDOWN */}
       {isOpen && (
-        <div className="absolute top-[calc(100%+6px)] left-0 z-50 w-80 sm:w-88 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-2xl p-4 flex flex-col gap-3.5 animate-in fade-in zoom-in-95 duration-150 select-none">
+        <div
+          className={`absolute top-[calc(100%+6px)] ${
+            computedAlign === 'right' ? 'right-0' : 'left-0'
+          } z-50 w-76 sm:w-80 max-w-[calc(100vw-32px)] rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-2xl p-4 flex flex-col gap-3.5 animate-in fade-in zoom-in-95 duration-150 select-none`}
+        >
           
           {/* Header Controls: Month + Year Selectors */}
           <div className="flex items-center justify-between gap-2 border-b border-slate-100 dark:border-white/5 pb-3">
@@ -415,29 +442,32 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
           </div>
 
           {/* Quick Shortcuts & Age Input Footer */}
-          <div className="flex flex-col gap-2 border-t border-slate-100 dark:border-white/5 pt-3 mt-1">
+          <div className="flex flex-col gap-2.5 border-t border-slate-100 dark:border-white/5 pt-3 mt-1">
             {showAge && (
-              <div className="flex items-center gap-2">
-                <span className="text-xxs font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">
+              <div className="flex items-center justify-between gap-1.5 bg-slate-50 dark:bg-slate-950/60 p-1.5 rounded-xl border border-slate-100 dark:border-white/5">
+                <span className="text-[10.5px] font-bold text-slate-500 dark:text-slate-400 whitespace-nowrap pl-1">
                   Âge direct :
                 </span>
-                <input
-                  type="number"
-                  placeholder="Ex: 34 ans"
-                  value={quickAge}
-                  onChange={(e) => setQuickAge(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleApplyAge(e)}
-                  className="h-7 w-20 px-2 rounded-lg text-xs bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 font-mono shadow-xs"
-                />
-                <button
-                  type="button"
-                  onClick={handleApplyAge}
-                  className="h-7 px-2.5 rounded-lg bg-blue-50 hover:bg-blue-100 dark:bg-blue-500/10 dark:hover:bg-blue-500/20 text-blue-700 dark:text-blue-400 text-xxs font-bold transition-all cursor-pointer border border-blue-200 dark:border-blue-500/20"
-                >
-                  Appliquer
-                </button>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    placeholder="Ex: 34"
+                    value={quickAge}
+                    onChange={(e) => setQuickAge(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleApplyAge(e)}
+                    className="h-7 w-16 px-2 rounded-lg text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 font-mono shadow-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleApplyAge}
+                    className="h-7 px-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold transition-all cursor-pointer shadow-xs whitespace-nowrap"
+                  >
+                    Appliquer
+                  </button>
+                </div>
               </div>
             )}
+
 
             <div className="flex justify-between items-center">
               <button

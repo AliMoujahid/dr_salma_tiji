@@ -473,10 +473,12 @@ export const Patients: React.FC = () => {
                   label="Date de naissance *"
                   required
                   showAge
+                  align="right"
                   value={birthDate}
                   onChange={(val) => setBirthDate(val)}
                   placeholder="JJ/MM/AAAA"
                 />
+
 
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 pl-0.5">National ID (CNIE)</label>
