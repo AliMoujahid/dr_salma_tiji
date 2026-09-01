@@ -277,15 +277,108 @@ pause
 `;
 fs.writeFileSync(path.join(RELEASE_DIR, 'Sauvegarder_Donnees.bat'), backupBat, 'utf8');
 
-// 7.5 LISEZ-MOI / GUIDE D'INSTALLATION
+// 7.5 Desinstaller_Cabinet.bat
+const desinstallerBat = `@echo off
+title Desinstallation et Nettoyage - Cabinet Dentaire
+color 0C
+cls
+
+echo =======================================================================
+echo     DESINSTALLATION DU SYSTEME - CABINET DENTAIRE
+echo =======================================================================
+echo.
+echo Cette operation va :
+echo  1. Arreter le serveur de l'application (port 5000)
+echo  2. Supprimer le raccourci sur le Bureau
+echo  3. Supprimer le demarrage automatique au demarrage de Windows
+echo.
+set /p CONFIRM="Voulez-vous vraiment desinstaller l'application ? (O/N) : "
+if /i "%CONFIRM%" neq "O" (
+    echo [ANNULE] Operation annulee par l'utilisateur.
+    timeout /t 2 >nul
+    exit /b 0
+)
+
+echo.
+echo [1/3] Arret du serveur en cours...
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr :5000 ^| findstr LISTENING') do (
+    taskkill /f /pid %%a >nul 2>nul
+)
+
+echo [2/3] Suppression des raccourcis du Bureau et du Demarrage...
+del /f /q "%USERPROFILE%\\Desktop\\Cabinet Dr Salma Tijini.lnk" >nul 2>nul
+del /f /q "%USERPROFILE%\\Desktop\\Cabinet*.lnk" >nul 2>nul
+del /f /q "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\Cabinet_Dr_Salma_Tijini.lnk" >nul 2>nul
+del /f /q "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\Cabinet*.lnk" >nul 2>nul
+
+echo [3/3] Nettoyage des processus termine.
+
+echo.
+set /p PURGE_DATA="Voulez-vous aussi reinitialiser la licence (supprimer license.key) ? (O/N) : "
+if /i "%PURGE_DATA%" equ "O" (
+    del /f /q "%~dp0license.key" >nul 2>nul
+    del /f /q "%~dp0app\\license.key" >nul 2>nul
+    echo [OK] Cle de licence supprimee.
+)
+
+echo.
+echo =======================================================================
+echo   [OK] L'APPLICATION A ETE DESINSTALLEE AVEC SUCCES !
+echo   Tous les raccourcis et demarrages automatiques ont ete retires.
+echo =======================================================================
+echo.
+pause
+`;
+fs.writeFileSync(path.join(RELEASE_DIR, 'Desinstaller_Cabinet.bat'), desinstallerBat, 'utf8');
+
+// 7.6 Reinitialiser_A_Zero.bat (Pour tests & redéploiement à zéro)
+const resetBat = `@echo off
+title Remise a Zero Complete pour Nouveau Test
+color 0E
+cls
+
+echo =======================================================================
+echo    REMISE A ZERO COMPLETE (TEST DU CYCLE D'INSTALLATION ET ACTIVATION)
+echo =======================================================================
+echo.
+echo Cette operation permet de tester l'application comme si elle etait
+echo installee pour la toute premiere fois sur un PC vierge :
+echo  - Arret du serveur
+echo  - Suppression de la cle d'activation (pour tester l'ecran de licence)
+echo  - Remise a zero des raccourcis
+echo.
+set /p CONFIRM="Voulez-vous reinitialiser l'activation et relancer ? (O/N) : "
+if /i "%CONFIRM%" neq "O" (
+    echo [ANNULE] Operation annulee.
+    timeout /t 2 >nul
+    exit /b 0
+)
+
+echo.
+echo [1/3] Arret de l'application...
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr :5000 ^| findstr LISTENING') do (
+    taskkill /f /pid %%a >nul 2>nul
+)
+
+echo [2/3] Suppression de la licence active...
+del /f /q "%~dp0license.key" >nul 2>nul
+del /f /q "%~dp0app\\license.key" >nul 2>nul
+
+echo [3/3] Relancement en mode vierge...
+timeout /t 2 >nul
+call "%~dp0Lancer_Application.bat"
+`;
+fs.writeFileSync(path.join(RELEASE_DIR, 'Reinitialiser_A_Zero.bat'), resetBat, 'utf8');
+
+// 7.7 LISEZ-MOI / GUIDE D'INSTALLATION
 const guideText = `=======================================================================
-   CABINET DENTAIRE DR. SALMA TIJINI - GUIDE D'INSTALLATION ET GESTION
+   CABINET DENTAIRE - GUIDE D'INSTALLATION ET GESTION
 =======================================================================
 
 1. PREMIERE UTILISATION / INSTALLATION SUR LE PC DU CABINET :
 -------------------------------------------------------------
 - Double-cliquez sur "Installer_Cabinet.bat".
-- Cela crée immédiatement une icône "Cabinet Dr Salma Tijini" sur le Bureau.
+- Cela crée immédiatement une icône sur le Bureau et active le démarrage automatique.
 
 2. LANCEMENT DU LOGICIEL :
 ---------------------------
@@ -297,25 +390,24 @@ const guideText = `=============================================================
 -------------------------------------------
 - Lors de la première ouverture sur un nouvel ordinateur, un écran d'activation
   sécurisé apparaît avec le Code Machine Unique (Hardware ID) de l'ordinateur.
-- Copiez ce code et transmettez-le à votre développeur/fournisseur.
+- Copiez ce code et collez-le dans votre générateur de licence.
 - Collez la clé de licence reçue dans l'application et cliquez sur "Activer".
-- Dès activation, le logiciel est déverrouillé et prêt pour toutes vos consultations.
 
-4. COMPTES PAR DEFAUT (SEEDED STAFF) :
+4. COMPTE ADMINISTRATEUR PAR DEFAUT :
 --------------------------------------
-- Docteur (Admin) : doctor@tijini.com  /  Mot de passe : password123
-- Assistante      : assistant@tijini.com  /  Mot de passe : password123
-- Réceptionniste  : receptionist@tijini.com  /  Mot de passe : password123
-(Vous pouvez modifier ces mots de passe dans l'onglet Paramètres).
+- Email        : admin@tijini.com
+- Mot de passe : password123
+(Connectez-vous pour ajouter les comptes du médecin et des assistantes dans Paramètres > Équipe).
 
-5. SAUVEGARDES AUTOMATIQUES :
------------------------------
-- Double-cliquez sur "Sauvegarder_Donnees.bat" pour faire une copie horodatée
-  de toutes vos radios, photos et dossiers dans le dossier "Sauvegardes_Cabinet".
+5. DESINSTALLATION OU REINITIALISATION :
+----------------------------------------
+- Double-cliquez sur "Desinstaller_Cabinet.bat" pour désinstaller l'application et retirer les raccourcis.
+- Double-cliquez sur "Reinitialiser_A_Zero.bat" pour effacer la licence et retester l'activation depuis le début.
 
 =======================================================================
 `;
 fs.writeFileSync(path.join(RELEASE_DIR, 'LISEZ-MOI.txt'), guideText, 'utf8');
+
 
 // Helper to copy directory recursively
 function copyDirSync(src, dest) {
