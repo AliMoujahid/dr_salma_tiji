@@ -30,9 +30,21 @@ router.get('/', protect, async (req: AuthRequest, res: Response) => {
     }
 
     if (search && typeof search === 'string' && search.trim()) {
-      // Find invoices by number directly using escaped regex
-      query.invoiceNumber = new RegExp(escapeRegex(search.trim()), 'i');
+      const escaped = escapeRegex(search.trim());
+      const regex = new RegExp(escaped, 'i');
+
+      const matchingPatients = await Patient.find({
+        $or: [{ name: regex }, { phone: regex }, { nationalId: regex }],
+      }).select('_id');
+      const patientIds = matchingPatients.map((p) => p._id);
+
+      query.$or = [
+        { invoiceNumber: regex },
+        { 'items.description': regex },
+        ...(patientIds.length > 0 ? [{ patientId: { $in: patientIds } }] : []),
+      ];
     }
+
 
     const pageSize = Math.max(1, parseInt(limit as string, 10) || 20);
     const pageNum = Math.max(1, parseInt(page as string, 10) || 1);

@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Plus, Trash2, Printer, RefreshCw, Eye, ClipboardCopy, MessageSquare, Send } from 'lucide-react';
+import { Plus, Trash2, Printer, RefreshCw, Eye, ClipboardCopy, MessageSquare, Send, Search, X, Filter, CheckCircle2, Clock, AlertCircle, Coins, FileText } from 'lucide-react';
 import { Invoice, Patient, ClinicConfig } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -18,6 +18,10 @@ export const InvoiceEditor: React.FC = () => {
   const [viewMode, setViewMode] = useState<'list' | 'edit'>('list');
   const [loading, setLoading] = useState(true);
 
+  // Search and Filter states
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'Paid' | 'Partially Paid' | 'Unpaid'>('all');
+
   // Editor states
   const [selectedPatientId, setSelectedPatientId] = useState('');
   const [invoiceNumber, setInvoiceNumber] = useState('');
@@ -29,6 +33,7 @@ export const InvoiceEditor: React.FC = () => {
   const [lineItems, setLineItems] = useState<any[]>([
     { date: '', tooth: '', description: '', amount: 0 },
   ]);
+
 
   // Edit / Duplicate ID target
   const [editInvoiceId, setEditInvoiceId] = useState<string | null>(null);
@@ -263,18 +268,139 @@ export const InvoiceEditor: React.FC = () => {
         {/* LIST VIEW */}
         {viewMode === 'list' && (
           <>
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
               <div>
                 <h2 className="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Factures & Honoraires</h2>
-                <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400 mt-1">Créez et imprimez des factures détaillées pour vos patients.</p>
+                <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400 mt-1">Créez, recherchez et imprimez des factures détaillées pour vos patients.</p>
               </div>
               <button
                 onClick={() => handleNewInvoice()}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 font-semibold text-xs text-white transition-all shadow-md shadow-blue-600/20 cursor-pointer"
+                className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 font-semibold text-xs text-white transition-all shadow-md shadow-blue-600/20 cursor-pointer shrink-0"
               >
                 <Plus className="w-4 h-4" />
                 <span>Créer une Facture</span>
               </button>
+            </div>
+
+            {/* Financial Summary Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 shadow-sm flex items-center justify-between">
+                <div className="flex flex-col gap-1">
+                  <span className="text-xxs font-bold text-slate-500 uppercase tracking-wider">Total Facturé</span>
+                  <span className="text-lg font-extrabold text-slate-900 dark:text-white font-mono">
+                    {invoices.reduce((sum, i) => sum + (i.netAmount || 0), 0).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DH
+                  </span>
+                  <span className="text-[10px] text-slate-400">{invoices.length} factures au total</span>
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-500/20 flex items-center justify-center">
+                  <Coins className="w-5 h-5" />
+                </div>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 shadow-sm flex items-center justify-between">
+                <div className="flex flex-col gap-1">
+                  <span className="text-xxs font-bold text-slate-500 uppercase tracking-wider">Total Encaissé</span>
+                  <span className="text-lg font-extrabold text-emerald-600 dark:text-emerald-400 font-mono">
+                    {invoices.reduce((sum, i) => sum + (i.paidAmount || 0), 0).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DH
+                  </span>
+                  <span className="text-[10px] text-emerald-600/80">
+                    {invoices.filter((i) => i.paymentStatus === 'Paid').length} payées à 100%
+                  </span>
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20 flex items-center justify-center">
+                  <CheckCircle2 className="w-5 h-5" />
+                </div>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 shadow-sm flex items-center justify-between">
+                <div className="flex flex-col gap-1">
+                  <span className="text-xxs font-bold text-slate-500 uppercase tracking-wider">Reste à Recouvrer</span>
+                  <span className="text-lg font-extrabold text-rose-600 dark:text-rose-400 font-mono">
+                    {Math.max(
+                      0,
+                      invoices.reduce((sum, i) => sum + (i.netAmount || 0) - (i.paidAmount || 0), 0)
+                    ).toLocaleString('fr-FR', { minimumFractionDigits: 2 })}{' '}
+                    DH
+                  </span>
+                  <span className="text-[10px] text-rose-500">
+                    {invoices.filter((i) => i.paymentStatus !== 'Paid').length} en attente / impayées
+                  </span>
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20 flex items-center justify-center">
+                  <AlertCircle className="w-5 h-5" />
+                </div>
+              </div>
+            </div>
+
+            {/* Search Bar & Filter Tabs */}
+            <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
+              {/* Search Box */}
+              <div className="relative flex-1 max-w-lg">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Rechercher par patient, N° facture, acte médical, dent..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full h-11 pl-10 pr-10 rounded-xl text-xs border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-blue-500 shadow-xs"
+                />
+                {searchTerm && (
+                  <button
+                    onClick={() => setSearchTerm('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Status Filter Buttons */}
+              <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-white/10 overflow-x-auto no-scrollbar shadow-xs">
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter('all')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
+                    statusFilter === 'all'
+                      ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs font-bold'
+                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  Toutes ({invoices.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter('Paid')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
+                    statusFilter === 'Paid'
+                      ? 'bg-emerald-500 text-white shadow-xs font-bold'
+                      : 'text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400'
+                  }`}
+                >
+                  Payées ({invoices.filter((i) => i.paymentStatus === 'Paid').length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter('Partially Paid')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
+                    statusFilter === 'Partially Paid'
+                      ? 'bg-amber-500 text-white shadow-xs font-bold'
+                      : 'text-slate-500 hover:text-amber-600 dark:hover:text-amber-400'
+                  }`}
+                >
+                  Partielles ({invoices.filter((i) => i.paymentStatus === 'Partially Paid').length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter('Unpaid')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
+                    statusFilter === 'Unpaid'
+                      ? 'bg-rose-500 text-white shadow-xs font-bold'
+                      : 'text-slate-500 hover:text-rose-600 dark:hover:text-rose-400'
+                  }`}
+                >
+                  Impayées ({invoices.filter((i) => i.paymentStatus === 'Unpaid').length})
+                </button>
+              </div>
             </div>
 
             {loading ? (
@@ -286,76 +412,133 @@ export const InvoiceEditor: React.FC = () => {
                 <ClipboardCopy className="w-12 h-12 text-slate-400" />
                 <p className="text-sm font-semibold text-slate-500">Aucune facture émise.</p>
               </div>
-            ) : (
-              <div className="flex flex-col gap-3">
-                {invoices.map((inv) => (
-                  <div
-                    key={inv._id}
-                    className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 shadow-sm flex justify-between items-center hover:bg-slate-50 dark:hover:bg-slate-900/60 transition-all cursor-pointer group"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="p-2.5 bg-blue-50 text-blue-600 dark:bg-blue-600/10 dark:text-blue-400 rounded-xl border border-blue-200 dark:border-blue-500/15">
-                        <FileTextIcon />
-                      </div>
-                      <div>
-                        <h4 className="text-xs font-bold text-slate-900 dark:text-white font-mono">FAC-{inv.invoiceNumber}</h4>
-                        <p className="text-xxs text-slate-500 dark:text-slate-400 mt-1">
-                          Patient : <strong className="text-slate-800 dark:text-slate-200">{inv.patientId?.name || 'Inconnu'}</strong> • Date : {new Date(inv.date).toLocaleDateString('fr-FR')}
-                        </p>
-                      </div>
-                    </div>
+            ) : (() => {
+              const filteredInvoices = invoices.filter((inv) => {
+                if (statusFilter !== 'all' && inv.paymentStatus !== statusFilter) {
+                  return false;
+                }
+                if (!searchTerm.trim()) return true;
+                const term = searchTerm.toLowerCase();
+                const patName = (inv.patientId?.name || '').toLowerCase();
+                const patPhone = (inv.patientId?.phone || '').toLowerCase();
+                const num = (inv.invoiceNumber || '').toLowerCase();
+                const dateStr = new Date(inv.date).toLocaleDateString('fr-FR');
+                const itemsMatch = inv.items?.some(
+                  (it: any) =>
+                    it.description?.toLowerCase().includes(term) ||
+                    (it.tooth && String(it.tooth).toLowerCase().includes(term))
+                );
+                return (
+                  patName.includes(term) ||
+                  patPhone.includes(term) ||
+                  num.includes(term) ||
+                  `fac-${num}`.includes(term) ||
+                  dateStr.includes(term) ||
+                  itemsMatch
+                );
+              });
 
-                    <div className="flex items-center gap-6">
-                      <div className="text-right flex flex-col items-end gap-1">
-                        <span className="text-xs font-bold text-slate-900 dark:text-white font-mono">{inv.netAmount.toFixed(2)} DH</span>
-                        <span className={`text-[9px] font-extrabold uppercase px-2.5 py-0.5 rounded-full ${
-                          inv.paymentStatus === 'Paid'
-                            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20'
-                            : inv.paymentStatus === 'Partially Paid'
-                            ? 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20'
-                            : 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20'
-                        }`}>
-                          {inv.paymentStatus === 'Paid' ? 'Payée' : inv.paymentStatus === 'Partially Paid' ? 'Partiel' : 'Impayée'}
-                        </span>
-                      </div>
-
-                      <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-all select-none">
-                        <button
-                          onClick={() => handleEditInvoice(inv)}
-                          className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 border border-slate-200 dark:border-white/5 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white cursor-pointer transition-all shadow-xs"
-                          title="Modifier"
-                        >
-                          <EditIcon />
-                        </button>
-                        <button
-                          onClick={() => handleDuplicateInvoice(inv)}
-                          className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 border border-slate-200 dark:border-white/5 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white cursor-pointer transition-all shadow-xs"
-                          title="Dupliquer"
-                        >
-                          <ClipboardCopy className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handlePrintOnly(inv._id)}
-                          className="p-1.5 rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-600/10 dark:text-blue-400 border border-blue-200 dark:border-blue-500/20 hover:bg-blue-600 hover:text-white transition-all cursor-pointer shadow-xs"
-                          title="Imprimer A4"
-                        >
-                          <Printer className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleSendInvoiceWhatsApp(inv)}
-                          className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-600/10 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20 hover:bg-emerald-600 hover:text-white transition-all cursor-pointer shadow-xs"
-                          title="Envoyer la Facture par WhatsApp"
-                        >
-                          <MessageSquare className="w-4 h-4" />
-                        </button>
-                      </div>
+              if (filteredInvoices.length === 0) {
+                return (
+                  <div className="py-16 p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 text-center flex flex-col items-center justify-center gap-3">
+                    <Search className="w-10 h-10 text-slate-300 dark:text-slate-600" />
+                    <div className="flex flex-col gap-1">
+                      <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200">Aucune facture ne correspond à votre recherche</h4>
+                      <p className="text-xs text-slate-400">Essayez un autre mot-clé ou réinitialisez les filtres.</p>
                     </div>
+                    <button
+                      onClick={() => {
+                        setSearchTerm('');
+                        setStatusFilter('all');
+                      }}
+                      className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-xs font-bold text-slate-700 dark:text-slate-300 transition-all cursor-pointer"
+                    >
+                      Effacer la recherche
+                    </button>
                   </div>
-                ))}
-              </div>
-            )}
+                );
+              }
+
+              return (
+                <div className="flex flex-col gap-3">
+                  {filteredInvoices.map((inv) => (
+                    <div
+                      key={inv._id}
+                      className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 shadow-sm flex justify-between items-center hover:bg-slate-50 dark:hover:bg-slate-900/60 transition-all cursor-pointer group"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="p-2.5 bg-blue-50 text-blue-600 dark:bg-blue-600/10 dark:text-blue-400 rounded-xl border border-blue-200 dark:border-blue-500/15">
+                          <FileTextIcon />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-xs font-bold text-slate-900 dark:text-white font-mono">FAC-{inv.invoiceNumber}</h4>
+                            <span className="text-[10px] text-slate-400">• {new Date(inv.date).toLocaleDateString('fr-FR')}</span>
+                          </div>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                            Patient : <strong className="text-slate-800 dark:text-slate-200">{inv.patientId?.name || 'Inconnu'}</strong>
+                            {inv.items && inv.items.length > 0 && (
+                              <span className="hidden md:inline text-slate-400 ml-2">
+                                ({inv.items.map((it: any) => it.description).join(', ').slice(0, 45)}...)
+                              </span>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-6">
+                        <div className="text-right flex flex-col items-end gap-1">
+                          <span className="text-xs font-bold text-slate-900 dark:text-white font-mono">{inv.netAmount.toFixed(2)} DH</span>
+                          <span className={`text-[9px] font-extrabold uppercase px-2.5 py-0.5 rounded-full ${
+                            inv.paymentStatus === 'Paid'
+                              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20'
+                              : inv.paymentStatus === 'Partially Paid'
+                              ? 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20'
+                              : 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20'
+                          }`}>
+                            {inv.paymentStatus === 'Paid' ? 'Payée' : inv.paymentStatus === 'Partially Paid' ? 'Partiel' : 'Impayée'}
+                          </span>
+                        </div>
+
+                        <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-all select-none">
+                          <button
+                            onClick={() => handleEditInvoice(inv)}
+                            className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 border border-slate-200 dark:border-white/5 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white cursor-pointer transition-all shadow-xs"
+                            title="Modifier"
+                          >
+                            <EditIcon />
+                          </button>
+                          <button
+                            onClick={() => handleDuplicateInvoice(inv)}
+                            className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 border border-slate-200 dark:border-white/5 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white cursor-pointer transition-all shadow-xs"
+                            title="Dupliquer"
+                          >
+                            <ClipboardCopy className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handlePrintOnly(inv._id)}
+                            className="p-1.5 rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-600/10 dark:text-blue-400 border border-blue-200 dark:border-blue-500/20 hover:bg-blue-600 hover:text-white transition-all cursor-pointer shadow-xs"
+                            title="Imprimer A4"
+                          >
+                            <Printer className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleSendInvoiceWhatsApp(inv)}
+                            className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-600/10 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20 hover:bg-emerald-600 hover:text-white transition-all cursor-pointer shadow-xs"
+                            title="Envoyer la Facture par WhatsApp"
+                          >
+                            <MessageSquare className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
           </>
         )}
+
 
         {/* EDITOR / DUAL LAYOUT VIEW */}
         {viewMode === 'edit' && config && (
