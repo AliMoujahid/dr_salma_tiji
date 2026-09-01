@@ -52,12 +52,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ clinicNameFr = 'Cabinet Tijini
     if (!avatarUrl) {
       return `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name || 'User')}`;
     }
-    if (avatarUrl.startsWith('/uploads')) {
+    const cleanUrl = avatarUrl.replace(/^\.\.\//, '/').replace(/^uploads\//, '/uploads/');
+    if (cleanUrl.startsWith('/uploads')) {
       const baseUrl = API_URL.replace('/api', '');
-      return `${baseUrl}${avatarUrl}`;
+      return `${baseUrl}${cleanUrl}`;
     }
     return avatarUrl;
   };
+
 
   return (
     <>

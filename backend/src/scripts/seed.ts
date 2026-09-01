@@ -37,14 +37,14 @@ async function seed() {
 
     // 1. Create staff users
     const salt = await bcrypt.genSalt(10);
-    const commonPasswordHash = await bcrypt.hash('password123', salt);
+    const commonPasswordHash = await bcrypt.hash('dr1234', salt);
 
     const admin = await User.create({
       email: 'admin@tijini.com',
       passwordHash: commonPasswordHash,
       name: 'Moujahid Ali',
       role: 'ADMIN',
-      avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+      avatarUrl: '/uploads/avatars/avatar-1787945011413-961832010.jpg',
     });
 
     const doctor = await User.create({
@@ -52,15 +52,7 @@ async function seed() {
       passwordHash: commonPasswordHash,
       name: 'Dr. Salma Tijini',
       role: 'DOCTOR',
-      avatarUrl: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=150',
-    });
-
-    const assistant = await User.create({
-      email: 'assistant@tijini.com',
-      passwordHash: commonPasswordHash,
-      name: 'Yasmina Benjelloun',
-      role: 'ASSISTANT',
-      avatarUrl: 'https://images.unsplash.com/photo-1594824813573-246434de83fb?w=150',
+      avatarUrl: '/uploads/avatars/avatar-1787945011413-961832010.jpg',
     });
 
     const receptionist = await User.create({
@@ -68,10 +60,11 @@ async function seed() {
       passwordHash: commonPasswordHash,
       name: 'Asmae El Hilali',
       role: 'RECEPTIONIST',
-      avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150',
+      avatarUrl: '/uploads/avatars/avatar-1787945081420-898414264.jpg',
     });
 
     console.log('Seeded staff users.');
+
 
     // 2. Create Clinic Configuration
     await ClinicConfig.create({

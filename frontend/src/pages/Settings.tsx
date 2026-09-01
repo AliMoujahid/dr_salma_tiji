@@ -81,12 +81,14 @@ export const Settings: React.FC = () => {
     if (!avatarUrl) {
       return `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name || 'User')}`;
     }
-    if (avatarUrl.startsWith('/uploads')) {
+    const cleanUrl = avatarUrl.replace(/^\.\.\//, '/').replace(/^uploads\//, '/uploads/');
+    if (cleanUrl.startsWith('/uploads')) {
       const baseUrl = API_URL.replace('/api', '');
-      return `${baseUrl}${avatarUrl}`;
+      return `${baseUrl}${cleanUrl}`;
     }
     return avatarUrl;
   };
+
 
   const handleAvatarFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
