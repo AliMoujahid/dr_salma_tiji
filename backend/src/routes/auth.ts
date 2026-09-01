@@ -184,6 +184,114 @@ router.put('/profile', protect, async (req: AuthRequest, res: Response) => {
   }
 });
 
+// List all users (Admin only)
+router.get('/users', protect, restrictTo('ADMIN'), async (req: AuthRequest, res: Response) => {
+  try {
+    const users = await User.find({}, '-passwordHash').sort({ createdAt: -1 });
+    res.json(users);
+  } catch (error: any) {
+    res.status(500).json({ message: 'Erreur lors de la récupération des utilisateurs.', error: error.message });
+  }
+});
+
+// Create new user (Admin only)
+router.post('/users', protect, restrictTo('ADMIN'), async (req: AuthRequest, res: Response) => {
+  try {
+    const { name, email, password, role } = req.body;
+    if (!name || !email || !password || !role) {
+      res.status(400).json({ message: 'Veuillez remplir tous les champs obligatoires.' });
+      return;
+    }
+
+    const existing = await User.findOne({ email: email.toLowerCase().trim() });
+    if (existing) {
+      res.status(400).json({ message: 'Cet email est déjà utilisé par un autre compte.' });
+      return;
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(password, salt);
+
+    const newUser = await User.create({
+      name,
+      email: email.toLowerCase().trim(),
+      passwordHash,
+      role,
+      active: true,
+    });
+
+    res.status(201).json({
+      message: 'Utilisateur créé avec succès.',
+      user: {
+        _id: newUser._id,
+        name: newUser.name,
+        email: newUser.email,
+        role: newUser.role,
+        active: newUser.active,
+      },
+    });
+  } catch (error: any) {
+    res.status(500).json({ message: 'Erreur lors de la création.', error: error.message });
+  }
+});
+
+// Update user by ID (Admin only)
+router.put('/users/:id', protect, restrictTo('ADMIN'), async (req: AuthRequest, res: Response) => {
+  try {
+    const { name, email, role, password, active } = req.body;
+    const targetUser = await User.findById(req.params.id);
+    if (!targetUser) {
+      res.status(404).json({ message: 'Utilisateur non trouvé.' });
+      return;
+    }
+
+    if (name) targetUser.name = name;
+    if (email) targetUser.email = email.toLowerCase().trim();
+    if (role) targetUser.role = role;
+    if (active !== undefined) targetUser.active = active;
+
+    if (password) {
+      const salt = await bcrypt.genSalt(10);
+      targetUser.passwordHash = await bcrypt.hash(password, salt);
+    }
+
+    await targetUser.save();
+
+    res.json({
+      message: 'Compte utilisateur mis à jour avec succès.',
+      user: {
+        _id: targetUser._id,
+        name: targetUser.name,
+        email: targetUser.email,
+        role: targetUser.role,
+        active: targetUser.active,
+      },
+    });
+  } catch (error: any) {
+    res.status(500).json({ message: 'Erreur lors de la modification.', error: error.message });
+  }
+});
+
+// Delete user by ID (Admin only)
+router.delete('/users/:id', protect, restrictTo('ADMIN'), async (req: AuthRequest, res: Response) => {
+  try {
+    if (req.user?._id.toString() === req.params.id) {
+      res.status(400).json({ message: 'Vous ne pouvez pas supprimer votre propre compte connecté.' });
+      return;
+    }
+
+    const deleted = await User.findByIdAndDelete(req.params.id);
+    if (!deleted) {
+      res.status(404).json({ message: 'Utilisateur non trouvé.' });
+      return;
+    }
+
+    res.json({ message: 'Utilisateur supprimé avec succès.' });
+  } catch (error: any) {
+    res.status(500).json({ message: 'Erreur lors de la suppression.', error: error.message });
+  }
+});
+
 // Get current user profile
 router.get('/me', protect, (req: AuthRequest, res: Response) => {
   if (!req.user) {
@@ -200,3 +308,4 @@ router.get('/me', protect, (req: AuthRequest, res: Response) => {
 });
 
 export default router;
+

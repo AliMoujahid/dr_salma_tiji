@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { Settings as SettingsIcon, Save, UploadCloud, Database, Download, CheckCircle2, User, Camera, Key, Lock, Clock, RefreshCw } from 'lucide-react';
+import { Settings as SettingsIcon, Save, UploadCloud, Database, Download, CheckCircle2, User, Camera, Key, Lock, Clock, RefreshCw, Users, UserPlus, Trash2, Edit2, Shield, Sparkles, Building2, AlertTriangle, Printer, Phone, MapPin, Mail, Globe } from 'lucide-react';
 import { ClinicConfig } from '../types';
 
 export const Settings: React.FC = () => {
@@ -24,6 +24,31 @@ export const Settings: React.FC = () => {
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [profileMessage, setProfileMessage] = useState('');
 
+  // Team Management State
+  const [usersList, setUsersList] = useState<any[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [userModalOpen, setUserModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<any | null>(null);
+  const [userFormName, setUserFormName] = useState('');
+  const [userFormEmail, setUserFormEmail] = useState('');
+  const [userFormRole, setUserFormRole] = useState<'DOCTOR' | 'ADMIN' | 'ASSISTANT' | 'RECEPTIONIST'>('ASSISTANT');
+  const [userFormPassword, setUserFormPassword] = useState('');
+  const [savingUser, setSavingUser] = useState(false);
+
+  // New Cabinet Setup / Reset Wizard State
+  const [onboardingModalOpen, setOnboardingModalOpen] = useState(false);
+  const [wizardMode, setWizardMode] = useState<'WIPE_ONLY' | 'FULL_SETUP'>('FULL_SETUP');
+  const [wizardCabinetFr, setWizardCabinetFr] = useState('');
+  const [wizardCabinetAr, setWizardCabinetAr] = useState('');
+  const [wizardDrFr, setWizardDrFr] = useState('');
+  const [wizardDrAr, setWizardDrAr] = useState('');
+  const [wizardSpecialty, setWizardSpecialty] = useState('Implantologie - Esthétique Dentaire - Orthodontie');
+  const [wizardAddress, setWizardAddress] = useState('');
+  const [wizardPhone, setWizardPhone] = useState('');
+  const [wizardEmail, setWizardEmail] = useState('');
+  const [wizardPassword, setWizardPassword] = useState('password123');
+  const [runningWizard, setRunningWizard] = useState(false);
+
   // Backup files upload trigger
   const [backupFile, setBackupFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
@@ -39,7 +64,9 @@ export const Settings: React.FC = () => {
     fetchClinicConfig();
     fetchBackupStatus();
     fetchAuditLogs();
-  }, []);
+    if (isAdmin) fetchUsersList();
+  }, [isAdmin]);
+
 
   useEffect(() => {
     if (user) {
@@ -161,6 +188,197 @@ export const Settings: React.FC = () => {
     }
   };
 
+  const fetchUsersList = () => {
+    setLoadingUsers(true);
+    fetch(`${API_URL}/auth/users`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) setUsersList(data);
+      })
+      .catch((err) => console.error('Error fetching users:', err))
+      .finally(() => setLoadingUsers(false));
+  };
+
+  const handleOpenUserModal = (u?: any) => {
+    if (u) {
+      setEditingUser(u);
+      setUserFormName(u.name);
+      setUserFormEmail(u.email);
+      setUserFormRole(u.role);
+      setUserFormPassword('');
+    } else {
+      setEditingUser(null);
+      setUserFormName('');
+      setUserFormEmail('');
+      setUserFormRole('ASSISTANT');
+      setUserFormPassword('');
+    }
+    setUserModalOpen(true);
+  };
+
+  const handleSaveUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!userFormName || !userFormEmail || (!editingUser && !userFormPassword)) {
+      toast.error('Champs requis', 'Veuillez renseigner le nom, l\'email et le mot de passe.');
+      return;
+    }
+
+    setSavingUser(true);
+    try {
+      const url = editingUser ? `${API_URL}/auth/users/${editingUser._id}` : `${API_URL}/auth/users`;
+      const method = editingUser ? 'PUT' : 'POST';
+      const body: any = {
+        name: userFormName,
+        email: userFormEmail,
+        role: userFormRole,
+      };
+      if (userFormPassword) body.password = userFormPassword;
+
+      const res = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(body),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Erreur lors de l\'enregistrement');
+
+      toast.success(
+        editingUser ? 'Utilisateur modifié' : 'Utilisateur créé',
+        editingUser ? 'Le compte a été mis à jour.' : 'Nouveau compte ajouté avec succès.'
+      );
+      setUserModalOpen(false);
+      fetchUsersList();
+    } catch (err: any) {
+      toast.error('Erreur', err.message || 'Impossible de sauvegarder l\'utilisateur.');
+    } finally {
+      setSavingUser(false);
+    }
+  };
+
+  const handleDeleteUser = async (userId: string, userName: string) => {
+    const confirmed = await confirm({
+      title: 'Supprimer cet utilisateur ?',
+      message: `Êtes-vous sûr de vouloir supprimer le compte de ${userName} ? Cette action est irréversible.`,
+      variant: 'danger',
+      confirmText: 'Supprimer définitivement',
+      cancelText: 'Annuler',
+    });
+    if (!confirmed) return;
+
+    try {
+      const res = await fetch(`${API_URL}/auth/users/${userId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Échec de la suppression');
+
+      toast.success('Utilisateur supprimé', 'Le compte a été supprimé.');
+      fetchUsersList();
+    } catch (err: any) {
+      toast.error('Erreur', err.message || 'Impossible de supprimer l\'utilisateur.');
+    }
+  };
+
+  const handleOpenOnboardingWizard = () => {
+    if (config) {
+      setWizardCabinetFr(config.cabinetFr || '');
+      setWizardCabinetAr(config.cabinetAr || '');
+      setWizardDrFr(config.drFr || '');
+      setWizardDrAr(config.drAr || '');
+      setWizardSpecialty(config.specsFr || 'Implantologie - Esthétique Dentaire - Orthodontie');
+      setWizardAddress(config.address || '');
+      setWizardPhone(config.phones || '');
+      setWizardEmail(config.email || '');
+    }
+    setWizardMode('FULL_SETUP');
+    setOnboardingModalOpen(true);
+  };
+
+  const handleRunOnboardingWizard = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const isWipeOnly = wizardMode === 'WIPE_ONLY';
+
+    const confirmed = await confirm({
+      title: isWipeOnly ? 'Vider les données de test ?' : 'Initialiser le Nouveau Cabinet ?',
+      message: isWipeOnly
+        ? '⚠️ Attention : Tous les patients, rendez-vous, factures, schémas dentaires et historiques de test seront DÉFINITIVEMENT supprimés. Cette action prépare le logiciel pour un démarrage clinique à 0.'
+        : '⚠️ Attention : Cette action va configurer les informations officielles du nouveau cabinet et vider toutes les données de test antérieures.',
+      variant: 'danger',
+      confirmText: isWipeOnly ? 'Vider et Initialiser' : 'Déployer le Cabinet',
+      cancelText: 'Annuler',
+    });
+    if (!confirmed) return;
+
+    setRunningWizard(true);
+    try {
+      const payload: any = {
+        wipeData: true,
+      };
+
+      if (!isWipeOnly) {
+        payload.newClinicData = {
+          cabinetFr: wizardCabinetFr,
+          cabinetAr: wizardCabinetAr,
+          drFr: wizardDrFr,
+          drAr: wizardDrAr,
+          specsFr: wizardSpecialty,
+          address: wizardAddress,
+          phones: wizardPhone,
+          email: wizardEmail,
+        };
+        if (wizardEmail && wizardPassword) {
+          payload.newDoctorAccount = {
+            name: wizardDrFr,
+            email: wizardEmail,
+            password: wizardPassword,
+          };
+        }
+      }
+
+      const res = await fetch(`${API_URL}/clinic/reset-for-new-cabinet`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Échec de l\'initialisation');
+
+      toast.success(
+        'Cabinet Prêt ! 🎉',
+        'Le système a été réinitialisé avec succès et configuré pour le nouveau praticien.'
+      );
+      setOnboardingModalOpen(false);
+      fetchClinicConfig();
+      fetchUsersList();
+    } catch (err: any) {
+      toast.error('Erreur', err.message || 'Impossible d\'initialiser le cabinet.');
+    } finally {
+      setRunningWizard(false);
+    }
+  };
+
+  const getFullAssetUrl = (url?: string) => {
+    if (!url) return '';
+    if (url.startsWith('/uploads') || url.startsWith('uploads/')) {
+      const baseUrl = API_URL.replace('/api', '');
+      const cleanPath = url.startsWith('/') ? url : `/${url}`;
+      return `${baseUrl}${cleanPath}`;
+    }
+    return url;
+  };
+
   const fetchClinicConfig = () => {
     setLoading(true);
     fetch(`${API_URL}/clinic/config`, {
@@ -171,6 +389,7 @@ export const Settings: React.FC = () => {
       .catch((err) => console.error('Error loading config:', err))
       .finally(() => setLoading(false));
   };
+
 
   const handleSaveConfig = (e: React.FormEvent) => {
     e.preventDefault();
@@ -329,12 +548,45 @@ export const Settings: React.FC = () => {
         </div>
       )}
 
+      {/* Multi-Cabinet Deployment & White-Label Assistant Banner (Admin Only) */}
+      {isAdmin && (
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-blue-900/40 via-indigo-900/30 to-purple-900/40 border border-blue-500/30 p-5 shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5 z-10">
+            <div className="w-12 h-12 rounded-xl bg-blue-600/20 border border-blue-400/30 flex items-center justify-center text-blue-400 shrink-0 shadow-md">
+              <Building2 className="w-6 h-6 animate-pulse" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-extrabold text-white tracking-wide">Assistant Déploiement & Multi-Cabinet</h3>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                  Prêt à Vendre 🚀
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">
+                Configurez instantanément l'application pour un <strong>Nouveau Cabinet</strong> (Nom du Dr, en-têtes, ville) ou videz les données de test pour démarrer à zéro.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5 shrink-0 z-10 w-full md:w-auto">
+            <button
+              type="button"
+              onClick={handleOpenOnboardingWizard}
+              className="flex-1 md:flex-initial flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md shadow-blue-600/30 transition-all cursor-pointer"
+            >
+              <Sparkles className="w-4 h-4" />
+              <span>⚡ Configurer Nouveau Cabinet</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Practitioner Profile & Avatar Management Card */}
       <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 p-6 shadow-sm flex flex-col gap-6">
         <div className="flex justify-between items-center border-b border-slate-100 dark:border-white/5 pb-3">
           <div className="flex items-center gap-2">
             <User className="w-5 h-5 text-indigo-500" />
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">Profil Praticien & Compte</h3>
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">Profil Praticien & Compte Connecté</h3>
           </div>
           {profileMessage && (
             <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-200 dark:border-emerald-500/20">
@@ -467,163 +719,329 @@ export const Settings: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-        
-        {/* Left Columns: Config Form Fields */}
-        <form onSubmit={handleSaveConfig} className="lg:col-span-2 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 p-6 shadow-sm flex flex-col gap-6">
-          <div className="flex justify-between items-center border-b border-slate-100 dark:border-white/5 pb-3">
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">Identité du Cabinet</h3>
+      {/* Staff / Team Management Card */}
+      {isAdmin && (
+        <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 p-6 shadow-sm flex flex-col gap-4">
+          <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 border-b border-slate-100 dark:border-white/5 pb-3">
+            <div className="flex items-center gap-2">
+              <Users className="w-5 h-5 text-blue-500" />
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">Équipe & Comptes Utilisateurs</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Gérez les accès pour les médecins, assistants et secrétaires du cabinet.</p>
+              </div>
+            </div>
             <button
-              type="submit"
-              disabled={saving}
-              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition-all shadow-md shadow-blue-600/20 cursor-pointer disabled:opacity-50"
+              type="button"
+              onClick={() => handleOpenUserModal()}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-sm transition-all cursor-pointer"
             >
-              <Save className="w-4 h-4" />
-              <span>{saving ? 'Enregistrement...' : 'Enregistrer'}</span>
+              <UserPlus className="w-4 h-4" />
+              <span>Ajouter un Membre</span>
             </button>
           </div>
 
-          <div className="flex flex-col gap-5">
-            {/* FR & AR Name input */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pl-0.5">Nom du Cabinet (FR)</label>
-                <input
-                  type="text"
-                  value={config.cabinetFr}
-                  onChange={(e) => handleFieldChange('cabinetFr', e.target.value)}
-                  className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
-                />
-              </div>
-
-              <div className="flex flex-col gap-1.5 text-right">
-                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pr-0.5">Nom du Cabinet (AR)</label>
-                <input
-                  type="text"
-                  value={config.cabinetAr}
-                  onChange={(e) => handleFieldChange('cabinetAr', e.target.value)}
-                  className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-right focus:outline-none focus:border-blue-500 shadow-xs"
-                  dir="rtl"
-                />
-              </div>
-            </div>
-
-            {/* FR & AR Doctor titles */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pl-0.5">Nom du Praticien & Titre (FR)</label>
-                <input
-                  type="text"
-                  value={config.drFr}
-                  onChange={(e) => handleFieldChange('drFr', e.target.value)}
-                  className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
-                />
-              </div>
-
-              <div className="flex flex-col gap-1.5 text-right">
-                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pr-0.5">Nom du Praticien & Titre (AR)</label>
-                <input
-                  type="text"
-                  value={config.drAr}
-                  onChange={(e) => handleFieldChange('drAr', e.target.value)}
-                  className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-right focus:outline-none focus:border-blue-500 shadow-xs"
-                  dir="rtl"
-                />
-              </div>
-            </div>
-
-            {/* FR & AR Specialties Textarea */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pl-0.5">Spécialités (FR) - retours à la ligne</label>
-                <textarea
-                  rows={3}
-                  value={config.specsFr}
-                  onChange={(e) => handleFieldChange('specsFr', e.target.value)}
-                  className="p-4 rounded-xl text-xs border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white resize-none focus:outline-none focus:border-blue-500 shadow-xs"
-                ></textarea>
-              </div>
-
-              <div className="flex flex-col gap-1.5 text-right">
-                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pr-0.5">Spécialités (AR)</label>
-                <textarea
-                  rows={3}
-                  value={config.specsAr}
-                  onChange={(e) => handleFieldChange('specsAr', e.target.value)}
-                  className="p-4 rounded-xl text-xs border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white resize-none text-right focus:outline-none focus:border-blue-500 shadow-xs"
-                  dir="rtl"
-                ></textarea>
-              </div>
-            </div>
-
-            {/* Address, phones and email */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pl-0.5">Adresse Physique du Cabinet</label>
-              <input
-                type="text"
-                value={config.address}
-                onChange={(e) => handleFieldChange('address', e.target.value)}
-                className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pl-0.5">Téléphones</label>
-                <input
-                  type="text"
-                  value={config.phones}
-                  onChange={(e) => handleFieldChange('phones', e.target.value)}
-                  className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
-                />
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pl-0.5">Email du cabinet</label>
-                <input
-                  type="email"
-                  value={config.email}
-                  onChange={(e) => handleFieldChange('email', e.target.value)}
-                  className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
-                />
-              </div>
-            </div>
-
-            {/* Tax IDs / ICE / IF */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-slate-100 dark:border-white/5 pt-5">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pl-0.5">ICE</label>
-                <input
-                  type="text"
-                  value={config.ice || ''}
-                  onChange={(e) => handleFieldChange('ice', e.target.value)}
-                  className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
-                />
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pl-0.5">INBE</label>
-                <input
-                  type="text"
-                  value={config.inbe || ''}
-                  onChange={(e) => handleFieldChange('inbe', e.target.value)}
-                  className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
-                />
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pl-0.5">IF (Identifiant Fiscal)</label>
-                <input
-                  type="text"
-                  value={config.ifVal || ''}
-                  onChange={(e) => handleFieldChange('ifVal', e.target.value)}
-                  className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
-                />
-              </div>
-            </div>
-
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs text-slate-700 dark:text-slate-300">
+              <thead className="bg-slate-50 dark:bg-slate-950/80 text-slate-600 dark:text-slate-400 uppercase tracking-wider font-bold border-b border-slate-200 dark:border-white/5">
+                <tr>
+                  <th className="p-3">Nom & Prénom</th>
+                  <th className="p-3">Email de Connexion</th>
+                  <th className="p-3">Rôle & Permissions</th>
+                  <th className="p-3">Statut</th>
+                  <th className="p-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                {loadingUsers ? (
+                  <tr>
+                    <td colSpan={5} className="p-6 text-center text-slate-400">
+                      Chargement des membres de l'équipe...
+                    </td>
+                  </tr>
+                ) : usersList.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="p-6 text-center text-slate-400">
+                      Aucun utilisateur enregistré.
+                    </td>
+                  </tr>
+                ) : (
+                  usersList.map((u) => (
+                    <tr key={u._id} className="hover:bg-slate-50 dark:hover:bg-white/3 transition-all">
+                      <td className="p-3 font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                        <img
+                          src={getAvatarDisplaySrc(u.avatarUrl, u.name)}
+                          alt={u.name}
+                          className="w-7 h-7 rounded-full object-cover border border-slate-300 dark:border-white/10"
+                        />
+                        <span>{u.name}</span>
+                      </td>
+                      <td className="p-3 font-mono text-[11px] text-slate-600 dark:text-slate-300">{u.email}</td>
+                      <td className="p-3">
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                          u.role === 'ADMIN'
+                            ? 'bg-purple-50 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300 border border-purple-200 dark:border-purple-500/30'
+                            : u.role === 'DOCTOR'
+                            ? 'bg-blue-50 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300 border border-blue-200 dark:border-blue-500/30'
+                            : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30'
+                        }`}>
+                          {u.role}
+                        </span>
+                      </td>
+                      <td className="p-3">
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Actif
+                        </span>
+                      </td>
+                      <td className="p-3 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenUserModal(u)}
+                            className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-600 dark:text-slate-300 cursor-pointer"
+                            title="Modifier"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          {u._id !== user?.id && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteUser(u._id, u.name)}
+                              className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/10 dark:hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 cursor-pointer"
+                              title="Supprimer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
-        </form>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+        
+        {/* Left Columns: Config Form Fields & Live A4 Print Preview */}
+        <div className="lg:col-span-2 flex flex-col gap-6">
+          <form onSubmit={handleSaveConfig} className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 p-6 shadow-sm flex flex-col gap-6">
+            <div className="flex justify-between items-center border-b border-slate-100 dark:border-white/5 pb-3">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">Identité & En-têtes Officiels du Cabinet</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Renseignez les données en Français et en Arabe pour vos factures et ordonnances.</p>
+              </div>
+              <button
+                type="submit"
+                disabled={saving}
+                className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition-all shadow-md shadow-blue-600/20 cursor-pointer disabled:opacity-50"
+              >
+                <Save className="w-4 h-4" />
+                <span>{saving ? 'Enregistrement...' : 'Enregistrer'}</span>
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-5">
+              {/* FR & AR Name input */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pl-0.5">Nom du Cabinet (FR)</label>
+                  <input
+                    type="text"
+                    value={config.cabinetFr}
+                    onChange={(e) => handleFieldChange('cabinetFr', e.target.value)}
+                    className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5 text-right">
+                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pr-0.5">Nom du Cabinet (AR)</label>
+                  <input
+                    type="text"
+                    value={config.cabinetAr}
+                    onChange={(e) => handleFieldChange('cabinetAr', e.target.value)}
+                    className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-right focus:outline-none focus:border-blue-500 shadow-xs"
+                    dir="rtl"
+                  />
+                </div>
+              </div>
+
+              {/* FR & AR Doctor titles */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pl-0.5">Nom du Praticien & Titre (FR)</label>
+                  <input
+                    type="text"
+                    value={config.drFr}
+                    onChange={(e) => handleFieldChange('drFr', e.target.value)}
+                    className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5 text-right">
+                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pr-0.5">Nom du Praticien & Titre (AR)</label>
+                  <input
+                    type="text"
+                    value={config.drAr}
+                    onChange={(e) => handleFieldChange('drAr', e.target.value)}
+                    className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-right focus:outline-none focus:border-blue-500 shadow-xs"
+                    dir="rtl"
+                  />
+                </div>
+              </div>
+
+              {/* FR & AR Specialties Textarea */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pl-0.5">Spécialités (FR) - retours à la ligne</label>
+                  <textarea
+                    rows={3}
+                    value={config.specsFr}
+                    onChange={(e) => handleFieldChange('specsFr', e.target.value)}
+                    className="p-4 rounded-xl text-xs border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white resize-none focus:outline-none focus:border-blue-500 shadow-xs"
+                  ></textarea>
+                </div>
+
+                <div className="flex flex-col gap-1.5 text-right">
+                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pr-0.5">Spécialités (AR)</label>
+                  <textarea
+                    rows={3}
+                    value={config.specsAr}
+                    onChange={(e) => handleFieldChange('specsAr', e.target.value)}
+                    className="p-4 rounded-xl text-xs border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white resize-none text-right focus:outline-none focus:border-blue-500 shadow-xs"
+                    dir="rtl"
+                  ></textarea>
+                </div>
+              </div>
+
+              {/* Address, phones and email */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pl-0.5">Adresse Physique du Cabinet</label>
+                <input
+                  type="text"
+                  value={config.address}
+                  onChange={(e) => handleFieldChange('address', e.target.value)}
+                  className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pl-0.5">Téléphones & WhatsApp</label>
+                  <input
+                    type="text"
+                    value={config.phones}
+                    onChange={(e) => handleFieldChange('phones', e.target.value)}
+                    className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pl-0.5">Email du cabinet</label>
+                  <input
+                    type="email"
+                    value={config.email}
+                    onChange={(e) => handleFieldChange('email', e.target.value)}
+                    className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
+                  />
+                </div>
+              </div>
+
+              {/* Tax IDs / ICE / IF */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-slate-100 dark:border-white/5 pt-5">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pl-0.5">ICE</label>
+                  <input
+                    type="text"
+                    value={config.ice || ''}
+                    onChange={(e) => handleFieldChange('ice', e.target.value)}
+                    className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pl-0.5">INPE</label>
+                  <input
+                    type="text"
+                    value={config.inbe || ''}
+                    onChange={(e) => handleFieldChange('inbe', e.target.value)}
+                    className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pl-0.5">IF (Identifiant Fiscal)</label>
+                  <input
+                    type="text"
+                    value={config.ifVal || ''}
+                    onChange={(e) => handleFieldChange('ifVal', e.target.value)}
+                    className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
+                  />
+                </div>
+              </div>
+
+            </div>
+          </form>
+
+          {/* Live A4 Print Header Preview Card */}
+          <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 p-6 shadow-sm flex flex-col gap-4">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-white/5 pb-3">
+              <div className="flex items-center gap-2">
+                <Printer className="w-5 h-5 text-indigo-500" />
+                <h3 className="text-xs font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+                  Aperçu Direct En-tête A4 (Factures & Ordonnances)
+                </h3>
+              </div>
+              <span className="text-[11px] font-semibold text-slate-400">Rendu d'impression officiel</span>
+            </div>
+
+            <div className="p-6 bg-white text-slate-900 rounded-xl border border-slate-300 shadow-inner flex flex-col justify-between gap-6 font-sans">
+              <div className="flex justify-between items-start gap-4">
+                {/* French info */}
+                <div className="flex flex-col text-left max-w-[40%]">
+                  <span className="text-base font-extrabold text-blue-900 tracking-tight">{config.drFr || 'Dr. Nom Prénom'}</span>
+                  <span className="text-xs font-bold text-slate-700">{config.cabinetFr || 'Cabinet Dentaire'}</span>
+                  <span className="text-[10px] text-slate-500 whitespace-pre-line mt-1 font-medium leading-tight">
+                    {config.specsFr}
+                  </span>
+                </div>
+
+                {/* Center Logo */}
+                <div className="flex flex-col items-center justify-center shrink-0">
+                  {config.logoUrl ? (
+                    <img
+                      src={getFullAssetUrl(config.logoUrl)}
+                      alt="Logo"
+                      className="w-16 h-16 object-contain"
+                    />
+                  ) : (
+                    <div className="w-14 h-14 rounded-full border border-dashed border-slate-300 flex items-center justify-center text-slate-400 text-xxs font-bold text-center p-1">
+                      Logo Cabinet
+                    </div>
+                  )}
+                </div>
+
+                {/* Arabic info */}
+                <div className="flex flex-col text-right max-w-[40%]" dir="rtl">
+                  <span className="text-base font-extrabold text-blue-900">{config.drAr || 'طبيبة جراحة للأسنان'}</span>
+                  <span className="text-xs font-bold text-slate-700">{config.cabinetAr || 'عيادة طب الأسنان'}</span>
+                  <span className="text-[10px] text-slate-500 whitespace-pre-line mt-1 font-medium leading-tight">
+                    {config.specsAr}
+                  </span>
+                </div>
+              </div>
+
+              {/* Bottom Address bar */}
+              <div className="border-t border-slate-300 pt-2 flex justify-between items-center text-[9px] text-slate-600 font-medium">
+                <span>📍 {config.address}</span>
+                <span>📞 {config.phones}</span>
+                <span>ICE: {config.ice || '—'} | INPE: {config.inbe || '—'}</span>
+              </div>
+            </div>
+          </div>
+        </div>
 
         {/* Right Column: Upload Assets & Backups */}
         <div className="flex flex-col gap-6">
@@ -663,6 +1081,24 @@ export const Settings: React.FC = () => {
                 <input
                   type="file"
                   onChange={(e) => handleAssetUpload(e, 'stamp')}
+                  className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+                />
+              </div>
+            </div>
+
+            {/* Signature */}
+            <div className="flex justify-between items-center gap-4 py-2">
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-slate-900 dark:text-white">Signature numérique</span>
+                <span className="text-[10px] text-slate-500 font-medium">Optionnelle pour ordonnances</span>
+              </div>
+              <div className="relative">
+                <button type="button" className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 border border-slate-200 dark:border-white/5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer transition-all shadow-xs">
+                  <UploadCloud className="w-5 h-5" />
+                </button>
+                <input
+                  type="file"
+                  onChange={(e) => handleAssetUpload(e, 'signature')}
                   className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
                 />
               </div>
@@ -839,6 +1275,301 @@ export const Settings: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Staff User Add / Edit Modal */}
+      {userModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn">
+          <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl p-6 shadow-2xl flex flex-col gap-5">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-white/5 pb-3">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                {editingUser ? 'Modifier le compte' : 'Ajouter un nouveau membre'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setUserModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveUser} className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Nom & Prénom</label>
+                <input
+                  type="text"
+                  required
+                  value={userFormName}
+                  onChange={(e) => setUserFormName(e.target.value)}
+                  placeholder="ex: Dr. Mohamed Alami ou Asmae (Accueil)"
+                  className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Email professionnel</label>
+                <input
+                  type="email"
+                  required
+                  value={userFormEmail}
+                  onChange={(e) => setUserFormEmail(e.target.value)}
+                  placeholder="nom@cabinet.ma"
+                  className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Rôle & Droits d'Accès</label>
+                <select
+                  value={userFormRole}
+                  onChange={(e) => setUserFormRole(e.target.value as any)}
+                  className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
+                >
+                  <option value="DOCTOR">DOCTOR (Médecin Praticien - Accès Médical & Clinique Complet)</option>
+                  <option value="ADMIN">ADMIN (Administrateur - Accès Global & Paramètres)</option>
+                  <option value="ASSISTANT">ASSISTANT (Assistant(e) Médical(e))</option>
+                  <option value="RECEPTIONIST">RECEPTIONIST (Accueil & Salle d'Attente)</option>
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                  {editingUser ? 'Nouveau mot de passe (laisser vide pour ne pas changer)' : 'Mot de passe initial'}
+                </label>
+                <input
+                  type="password"
+                  required={!editingUser}
+                  value={userFormPassword}
+                  onChange={(e) => setUserFormPassword(e.target.value)}
+                  placeholder="••••••••••••"
+                  className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2.5 mt-2">
+                <button
+                  type="button"
+                  onClick={() => setUserModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 text-xs font-bold hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingUser}
+                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-md shadow-blue-600/30 cursor-pointer disabled:opacity-50"
+                >
+                  {savingUser ? 'Enregistrement...' : editingUser ? 'Mettre à jour' : 'Créer l\'utilisateur'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Onboarding & New Clinic Deployment Wizard Modal */}
+      {onboardingModalOpen && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn">
+          <div className="w-full max-w-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl p-6 md:p-8 shadow-2xl flex flex-col gap-6 max-h-[90vh] overflow-y-auto no-scrollbar">
+            
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-white/5 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
+                  <Building2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">Assistant Mise en Service Nouveau Cabinet</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Déployez l'application chez un nouveau médecin en 1 clic.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setOnboardingModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer text-lg font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Mode selection tabs */}
+            <div className="grid grid-cols-2 gap-3 p-1.5 bg-slate-100 dark:bg-slate-950/60 rounded-2xl border border-slate-200/80 dark:border-white/5">
+              <button
+                type="button"
+                onClick={() => setWizardMode('FULL_SETUP')}
+                className={`py-2.5 px-3 rounded-xl text-xs font-bold cursor-pointer transition-all ${
+                  wizardMode === 'FULL_SETUP'
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                ✨ Configuration Complète Express
+              </button>
+              <button
+                type="button"
+                onClick={() => setWizardMode('WIPE_ONLY')}
+                className={`py-2.5 px-3 rounded-xl text-xs font-bold cursor-pointer transition-all ${
+                  wizardMode === 'WIPE_ONLY'
+                    ? 'bg-rose-600 text-white shadow-md shadow-rose-600/30'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                🧹 Vider les Données de Démo
+              </button>
+            </div>
+
+            <form onSubmit={handleRunOnboardingWizard} className="flex flex-col gap-4">
+              {wizardMode === 'WIPE_ONLY' ? (
+                <div className="p-5 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-slate-700 dark:text-slate-300 text-xs leading-relaxed flex flex-col gap-3">
+                  <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400 font-bold text-sm">
+                    <AlertTriangle className="w-5 h-5" />
+                    <span>Remise à Zéro des Données Cliniques</span>
+                  </div>
+                  <p>
+                    Cette opération va supprimer tous les <strong>patients, rendez-vous, factures, schémas dentaires et historiques</strong> de démonstration.
+                  </p>
+                  <p>
+                    ✅ <strong>Ce qui reste conservé :</strong> La configuration de la clinique, les modèles de messages WhatsApp, les catégories de soins et les comptes administrateurs.
+                  </p>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs font-bold text-slate-600 dark:text-slate-400">Nom du Nouveau Cabinet (FR)</label>
+                      <input
+                        type="text"
+                        required
+                        value={wizardCabinetFr}
+                        onChange={(e) => setWizardCabinetFr(e.target.value)}
+                        placeholder="ex: Cabinet Dentaire Agdal"
+                        className="h-10 px-3.5 rounded-xl text-xs border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1 text-right">
+                      <label className="text-xs font-bold text-slate-600 dark:text-slate-400">Nom du Cabinet (AR)</label>
+                      <input
+                        type="text"
+                        value={wizardCabinetAr}
+                        onChange={(e) => setWizardCabinetAr(e.target.value)}
+                        placeholder="عيادة طب وجراحة الأسنان"
+                        dir="rtl"
+                        className="h-10 px-3.5 rounded-xl text-xs border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-right focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs font-bold text-slate-600 dark:text-slate-400">Nom du Médecin Titulaire (FR)</label>
+                      <input
+                        type="text"
+                        required
+                        value={wizardDrFr}
+                        onChange={(e) => setWizardDrFr(e.target.value)}
+                        placeholder="ex: Dr. Mohamed Alami"
+                        className="h-10 px-3.5 rounded-xl text-xs border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1 text-right">
+                      <label className="text-xs font-bold text-slate-600 dark:text-slate-400">Nom du Médecin Titulaire (AR)</label>
+                      <input
+                        type="text"
+                        value={wizardDrAr}
+                        onChange={(e) => setWizardDrAr(e.target.value)}
+                        placeholder="د. محمد العلمي"
+                        dir="rtl"
+                        className="h-10 px-3.5 rounded-xl text-xs border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-right focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-bold text-slate-600 dark:text-slate-400">Adresse du Cabinet</label>
+                    <input
+                      type="text"
+                      required
+                      value={wizardAddress}
+                      onChange={(e) => setWizardAddress(e.target.value)}
+                      placeholder="ex: Av. Fal Ould Oumeir, N° 45, Agdal - Rabat"
+                      className="h-10 px-3.5 rounded-xl text-xs border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs font-bold text-slate-600 dark:text-slate-400">Téléphone / WhatsApp</label>
+                      <input
+                        type="text"
+                        required
+                        value={wizardPhone}
+                        onChange={(e) => setWizardPhone(e.target.value)}
+                        placeholder="+212 6 XX XX XX XX"
+                        className="h-10 px-3.5 rounded-xl text-xs border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs font-bold text-slate-600 dark:text-slate-400">Email du Médecin</label>
+                      <input
+                        type="email"
+                        required
+                        value={wizardEmail}
+                        onChange={(e) => setWizardEmail(e.target.value)}
+                        placeholder="contact@cabinet-alami.ma"
+                        className="h-10 px-3.5 rounded-xl text-xs border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1 border-t border-slate-100 dark:border-white/5 pt-3">
+                    <label className="text-xs font-bold text-slate-600 dark:text-slate-400">Mot de passe du compte Médecin</label>
+                    <input
+                      type="password"
+                      required
+                      value={wizardPassword}
+                      onChange={(e) => setWizardPassword(e.target.value)}
+                      placeholder="••••••••••••"
+                      className="h-10 px-3.5 rounded-xl text-xs border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between border-t border-slate-100 dark:border-white/5 pt-4 mt-2">
+                <button
+                  type="button"
+                  onClick={() => setOnboardingModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 text-xs font-bold hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer"
+                >
+                  Fermer
+                </button>
+                <button
+                  type="submit"
+                  disabled={runningWizard}
+                  className={`px-6 py-2.5 rounded-xl text-white font-bold text-xs shadow-lg transition-all cursor-pointer flex items-center gap-2 disabled:opacity-50 ${
+                    wizardMode === 'WIPE_ONLY'
+                      ? 'bg-rose-600 hover:bg-rose-500 shadow-rose-600/30'
+                      : 'bg-blue-600 hover:bg-blue-500 shadow-blue-600/30'
+                  }`}
+                >
+                  {runningWizard ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      <span>Initialisation en cours...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4" />
+                      <span>{wizardMode === 'WIPE_ONLY' ? 'Vider les Données' : 'Initialiser pour ce Cabinet'}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
+

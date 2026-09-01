@@ -99,4 +99,97 @@ router.post(
   }
 );
 
+import Patient from '../models/Patient';
+import Appointment from '../models/Appointment';
+import Invoice from '../models/Invoice';
+import Payment from '../models/Payment';
+import Document from '../models/Document';
+import ToothHistory from '../models/ToothHistory';
+import FollowUpReminder from '../models/FollowUpReminder';
+import NotificationLog from '../models/NotificationLog';
+import AuditLog from '../models/AuditLog';
+import User from '../models/User';
+import bcrypt from 'bcryptjs';
+
+// Reset Database / Onboarding Wizard for a New Clinic (Admin only)
+router.post(
+  '/reset-for-new-cabinet',
+  protect,
+  restrictTo('ADMIN'),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { wipeData = true, newClinicData, newDoctorAccount } = req.body;
+
+      // 1. Wipe clinical & patient test records if requested
+      if (wipeData) {
+        await Promise.all([
+          Patient.deleteMany({}),
+          Appointment.deleteMany({}),
+          Invoice.deleteMany({}),
+          Payment.deleteMany({}),
+          Document.deleteMany({}),
+          ToothHistory.deleteMany({}),
+          FollowUpReminder.deleteMany({}),
+          NotificationLog.deleteMany({}),
+          AuditLog.deleteMany({}),
+        ]);
+      }
+
+
+      // 2. Update Clinic Config if provided
+      let config = await ClinicConfig.findOne();
+      if (!config) {
+        config = new ClinicConfig({});
+      }
+
+      if (newClinicData) {
+        if (newClinicData.cabinetFr) config.cabinetFr = newClinicData.cabinetFr;
+        if (newClinicData.cabinetAr) config.cabinetAr = newClinicData.cabinetAr;
+        if (newClinicData.drFr) config.drFr = newClinicData.drFr;
+        if (newClinicData.drAr) config.drAr = newClinicData.drAr;
+        if (newClinicData.specsFr) config.specsFr = newClinicData.specsFr;
+        if (newClinicData.specsAr) config.specsAr = newClinicData.specsAr;
+        if (newClinicData.address) config.address = newClinicData.address;
+        if (newClinicData.phones) config.phones = newClinicData.phones;
+        if (newClinicData.email) config.email = newClinicData.email;
+        if (newClinicData.ice !== undefined) config.ice = newClinicData.ice;
+        if (newClinicData.inbe !== undefined) config.inbe = newClinicData.inbe;
+        if (newClinicData.ifVal !== undefined) config.ifVal = newClinicData.ifVal;
+        await config.save();
+      }
+
+      // 3. Create or update doctor account if provided
+      if (newDoctorAccount?.email && newDoctorAccount?.password) {
+        const salt = await bcrypt.genSalt(10);
+        const passwordHash = await bcrypt.hash(newDoctorAccount.password, salt);
+
+        const existingDoctor = await User.findOne({ email: newDoctorAccount.email.toLowerCase().trim() });
+        if (existingDoctor) {
+          existingDoctor.name = newDoctorAccount.name || config.drFr;
+          existingDoctor.passwordHash = passwordHash;
+          existingDoctor.role = 'DOCTOR';
+          existingDoctor.active = true;
+          await existingDoctor.save();
+        } else {
+          await User.create({
+            name: newDoctorAccount.name || config.drFr,
+            email: newDoctorAccount.email.toLowerCase().trim(),
+            passwordHash,
+            role: 'DOCTOR',
+            active: true,
+          });
+        }
+      }
+
+      res.json({
+        message: 'Cabinet initialisé avec succès ! L\'application est prête pour le nouveau cabinet.',
+        config,
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: 'Erreur lors de l\'initialisation du cabinet.', error: error.message });
+    }
+  }
+);
+
 export default router;
+

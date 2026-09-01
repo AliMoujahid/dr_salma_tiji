@@ -14,6 +14,14 @@ export const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+  const [clinicConfig, setClinicConfig] = useState<{ cabinetFr?: string; drFr?: string; logoUrl?: string } | null>(null);
+
+  React.useEffect(() => {
+    fetch(`${API_URL}/clinic/config`)
+      .then((res) => res.json())
+      .then((data) => setClinicConfig(data))
+      .catch((err) => console.error('Error loading clinic branding on login:', err));
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,6 +60,18 @@ export const Login: React.FC = () => {
     setError('');
   };
 
+  const getLogoSrc = () => {
+    if (!clinicConfig?.logoUrl) return null;
+    if (clinicConfig.logoUrl.startsWith('/uploads') || clinicConfig.logoUrl.startsWith('uploads/')) {
+      const baseUrl = API_URL.replace('/api', '');
+      const cleanPath = clinicConfig.logoUrl.startsWith('/') ? clinicConfig.logoUrl : `/${clinicConfig.logoUrl}`;
+      return `${baseUrl}${cleanPath}`;
+    }
+    return clinicConfig.logoUrl;
+  };
+
+  const logoSrc = getLogoSrc();
+
   return (
     <div className="login-page w-full min-h-screen flex items-center justify-center bg-[#050811] relative overflow-hidden select-none">
       
@@ -66,12 +86,20 @@ export const Login: React.FC = () => {
         
         {/* Logo and Brand Heading */}
         <div className="flex flex-col items-center gap-3.5 mb-8">
-          <div className="w-16 h-16 rounded-2xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center shadow-xl shadow-blue-500/15">
-            <Activity className="w-8 h-8 text-blue-400 animate-pulse" />
+          <div className="w-16 h-16 rounded-2xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center shadow-xl shadow-blue-500/15 overflow-hidden p-2">
+            {logoSrc ? (
+              <img src={logoSrc} alt="Logo Cabinet" className="w-full h-full object-contain" />
+            ) : (
+              <Activity className="w-8 h-8 text-blue-400 animate-pulse" />
+            )}
           </div>
           <div className="text-center">
-            <h2 className="login-brand-title text-2xl font-extrabold text-white tracking-tight">Cabinet Dr. Salma Tijini</h2>
-            <p className="login-brand-subtitle text-xs text-slate-300 font-semibold mt-1 uppercase tracking-widest">Gestion de Clinique Dentaire</p>
+            <h2 className="login-brand-title text-2xl font-extrabold text-white tracking-tight">
+              {clinicConfig?.cabinetFr || 'Cabinet Dentaire'}
+            </h2>
+            <p className="login-brand-subtitle text-xs text-slate-300 font-semibold mt-1 uppercase tracking-widest">
+              {clinicConfig?.drFr || 'Gestion de Clinique Dentaire'}
+            </p>
           </div>
         </div>
 
