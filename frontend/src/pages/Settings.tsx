@@ -552,29 +552,35 @@ export const Settings: React.FC = () => {
 
       {/* Multi-Cabinet Deployment & White-Label Assistant Banner (Admin Only) */}
       {isAdmin && (
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-blue-900/40 via-indigo-900/30 to-purple-900/40 border border-blue-500/30 p-5 shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3.5 z-10">
-            <div className="w-12 h-12 rounded-xl bg-blue-600/20 border border-blue-400/30 flex items-center justify-center text-blue-400 shrink-0 shadow-md">
-              <Building2 className="w-6 h-6 animate-pulse" />
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-blue-950/70 via-indigo-950/60 to-purple-950/70 border border-blue-500/30 p-6 md:p-7 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-5 my-1">
+          {/* Subtle background glow decorative elements */}
+          <div className="absolute -top-12 -left-12 w-36 h-36 bg-blue-500/10 rounded-full blur-2xl pointer-events-none"></div>
+          <div className="absolute -bottom-12 -right-12 w-36 h-36 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none"></div>
+
+          <div className="flex items-start md:items-center gap-4 z-10 flex-1">
+            <div className="w-13 h-13 rounded-2xl bg-blue-600/20 border border-blue-400/30 flex items-center justify-center text-blue-400 shrink-0 shadow-lg shadow-blue-900/30">
+              <Building2 className="w-6.5 h-6.5 text-blue-400" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm font-extrabold text-white tracking-wide">Assistant Déploiement & Multi-Cabinet</h3>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">
+            <div className="flex flex-col gap-1">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <h3 className="text-sm md:text-base font-extrabold text-white tracking-wide">
+                  Assistant Déploiement & Multi-Cabinet
+                </h3>
+                <span className="px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">
                   Prêt à Vendre 🚀
                 </span>
               </div>
-              <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">
+              <p className="text-xs md:text-sm text-slate-300/90 leading-relaxed max-w-3xl">
                 Configurez instantanément l'application pour un <strong>Nouveau Cabinet</strong> (Nom du Dr, en-têtes, ville) ou videz les données de test pour démarrer à zéro.
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5 shrink-0 z-10 w-full md:w-auto">
+          <div className="flex items-center gap-3 shrink-0 z-10 w-full md:w-auto pt-2 md:pt-0">
             <button
               type="button"
               onClick={handleOpenOnboardingWizard}
-              className="flex-1 md:flex-initial flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md shadow-blue-600/30 transition-all cursor-pointer"
+              className="w-full md:w-auto flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-blue-600/30 hover:shadow-blue-600/50 transition-all cursor-pointer whitespace-nowrap"
             >
               <Sparkles className="w-4 h-4" />
               <span>⚡ Configurer Nouveau Cabinet</span>
@@ -582,6 +588,7 @@ export const Settings: React.FC = () => {
           </div>
         </div>
       )}
+
 
       {/* Practitioner Profile & Avatar Management Card */}
       <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 p-6 shadow-sm flex flex-col gap-6">
