@@ -23,6 +23,8 @@ import { ToothHistory, ToothStatusType, ToothMetadata, XRayMeasurement } from '.
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { XRayViewerModal } from './XRayViewerModal';
+import { formatDate } from '../utils/dateUtils';
+
 import { TreatmentAnimationModal } from './TreatmentAnimationModal';
 
 // --- ANATOMICAL METADATA DICTIONARY FOR ALL 32 ADULT & 20 CHILD TEETH ---
@@ -838,9 +840,10 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId }) => 
                   {toothHistoryList.map((item) => (
                     <div key={item._id} className="p-3 rounded-xl bg-white/5 border border-white/5 text-xs flex flex-col gap-1">
                       <div className="flex justify-between items-center">
-                        <span className="text-xxs font-bold text-blue-400">
-                          {new Date(item.date).toLocaleDateString('fr-FR')}
+                        <span className="text-xxs font-bold text-blue-400 font-mono">
+                          {formatDate(item.date)}
                         </span>
+
                         <span className="font-bold text-slate-200">{item.status}</span>
                       </div>
                       {item.notes && <p className="text-xxs text-slate-400 leading-snug">{item.notes}</p>}

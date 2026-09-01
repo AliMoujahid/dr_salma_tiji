@@ -30,6 +30,8 @@ import {
   MessageSquare,
 } from 'lucide-react';
 import { Patient, Invoice, PaymentTransaction, Appointment, Document } from '../types';
+import { formatDate, formatDateTime, formatBirthDateWithAge, formatRelativeDateTime } from '../utils/dateUtils';
+
 
 export const PatientProfile: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -387,11 +389,14 @@ export const PatientProfile: React.FC = () => {
                 {patient.isArchived ? 'Archivé' : 'Actif'}
               </span>
             </div>
-            <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-2 text-xs text-slate-600 dark:text-slate-400 font-medium">
-              <span>📱 {patient.phone}</span>
+            <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-2.5 text-xs text-slate-600 dark:text-slate-400 font-medium">
+              <span>📱 <strong className="text-slate-800 dark:text-slate-200 font-mono">{patient.phone}</strong></span>
               {patient.email && <span>✉️ {patient.email}</span>}
-              {patient.nationalId && <span>🪪 CNI : <strong>{patient.nationalId}</strong></span>}
+              {patient.nationalId && <span>🪪 CNIE : <strong className="text-slate-800 dark:text-slate-200 font-mono">{patient.nationalId}</strong></span>}
+              <span className="text-blue-600 dark:text-blue-400 font-semibold">🎂 Né(e) le : <strong>{formatBirthDateWithAge(patient.birthDate)}</strong></span>
+              <span>📅 Créé le : <strong>{formatDate(patient.createdAt)}</strong></span>
             </div>
+
           </div>
         </div>
 
@@ -464,9 +469,10 @@ export const PatientProfile: React.FC = () => {
                   {appointments.slice(0, 3).map((appt) => (
                     <div key={appt._id} className="flex gap-4 items-start border-l-2 border-blue-500 pl-4 py-1">
                       <div className="flex-1">
-                        <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400">
-                          {new Date(appt.dateTime).toLocaleDateString('fr-FR')}
+                        <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 font-mono">
+                          {formatDateTime(appt.dateTime)}
                         </span>
+
                         <h4 className="text-xs font-bold text-slate-900 dark:text-white mt-0.5">Rendez-vous planifié</h4>
                         <p className="text-xs text-slate-500 dark:text-slate-400 leading-normal">{appt.notes || 'Consultation de contrôle'}</p>
                       </div>
@@ -622,7 +628,7 @@ export const PatientProfile: React.FC = () => {
                       <div>
                         <h4 className="text-xs font-bold text-slate-900 dark:text-white font-mono">FACTURE N° {inv.invoiceNumber}</h4>
                         <p className="text-xxs text-slate-500 dark:text-slate-400 mt-1">
-                          Date : {new Date(inv.date).toLocaleDateString('fr-FR')} • {inv.items.length} acte(s)
+                          Date : <strong className="text-slate-700 dark:text-slate-300 font-mono">{formatDate(inv.date)}</strong> • {inv.items.length} acte(s)
                         </p>
                       </div>
                     </div>
@@ -684,7 +690,7 @@ export const PatientProfile: React.FC = () => {
                       <div>
                         <h4 className="text-xs font-bold text-slate-900 dark:text-white">Reçu en {p.paymentMethod}</h4>
                         <p className="text-xxs text-slate-500 dark:text-slate-400 mt-1">
-                          Date : {new Date(p.date).toLocaleDateString('fr-FR')} • Réf Fact : {p.invoiceId?.invoiceNumber || 'FACT'}
+                          Date : <strong className="text-slate-700 dark:text-slate-300 font-mono">{formatDate(p.date)}</strong> • Réf Fact : {p.invoiceId?.invoiceNumber || 'FACT'}
                         </p>
                       </div>
                     </div>
@@ -714,12 +720,13 @@ export const PatientProfile: React.FC = () => {
                         <Calendar className="w-4.5 h-4.5" />
                       </div>
                       <div>
-                        <h4 className="text-xs font-bold text-slate-900 dark:text-white">
-                          {new Date(appt.dateTime).toLocaleDateString('fr-FR')} à {new Date(appt.dateTime).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                        <h4 className="text-xs font-bold text-slate-900 dark:text-white font-mono">
+                          {formatRelativeDateTime(appt.dateTime)}
                         </h4>
                         <p className="text-xxs text-slate-500 dark:text-slate-400 mt-1">Durée : {appt.duration} min</p>
                       </div>
                     </div>
+
                     <span className={`text-[9px] font-extrabold uppercase px-2.5 py-0.5 rounded-full ${
                       appt.status === 'Completed'
                         ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20'

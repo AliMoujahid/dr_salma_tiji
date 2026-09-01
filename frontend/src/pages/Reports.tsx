@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { BarChart3, TrendingUp, Download, CheckSquare, Users, CreditCard } from 'lucide-react';
+import { formatDate, calculateAge } from '../utils/dateUtils';
+
+
+
 
 export const Reports: React.FC = () => {
   const { token } = useAuth();
@@ -39,19 +43,21 @@ export const Reports: React.FC = () => {
         let csvContent = 'data:text/csv;charset=utf-8,';
         
         if (type === 'patients') {
-          csvContent += 'Nom,Telephone,Email,CNIE,Genre,Age\n';
+          csvContent += 'Nom,Telephone,Email,CNIE,Genre,Date_Naissance,Age\n';
           const list = data.patients || [];
           list.forEach((p: any) => {
-            const age = p.birthDate ? new Date().getFullYear() - new Date(p.birthDate).getFullYear() : '';
-            csvContent += `"${p.name}","${p.phone}","${p.email || ''}","${p.nationalId || ''}","${p.gender}",${age}\n`;
+            const bDate = formatDate(p.birthDate);
+            const age = calculateAge(p.birthDate);
+            csvContent += `"${p.name}","${p.phone}","${p.email || ''}","${p.nationalId || ''}","${p.gender}","${bDate}",${age}\n`;
           });
         } else if (type === 'invoices') {
-          csvContent += 'Numero,Patient,Total,Remise,Net,Statut\n';
+          csvContent += 'Numero,Patient,Date,Total,Remise,Net,Statut\n';
           const list = data.invoices || [];
           list.forEach((i: any) => {
-            csvContent += `"${i.invoiceNumber}","${i.patientId?.name || ''}",${i.totalAmount},${i.discount},${i.netAmount},"${i.paymentStatus}"\n`;
+            csvContent += `"${i.invoiceNumber}","${i.patientId?.name || ''}","${formatDate(i.date)}",${i.totalAmount},${i.discount},${i.netAmount},"${i.paymentStatus}"\n`;
           });
         }
+
 
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement('a');

@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Plus, UserPlus, Heart, Trash2, Archive, UserCheck, Eye } from 'lucide-react';
+import { Search, Plus, UserPlus, Heart, Trash2, Archive, UserCheck, Eye, Calendar } from 'lucide-react';
 import { Patient } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { formatDate, formatBirthDateWithAge, calculateAge } from '../utils/dateUtils';
+
 
 export const Patients: React.FC = () => {
   const { token } = useAuth();
@@ -338,18 +340,24 @@ export const Patients: React.FC = () => {
                     {patient.name}
                   </h3>
                   
-                  <div className="flex gap-2 mt-1.5 text-xxs font-bold text-slate-500 dark:text-slate-400">
-                    <span className="bg-slate-100 dark:bg-white/5 px-2 py-0.5 rounded border border-slate-200 dark:border-white/5">{patient.gender}</span>
-                    <span className="bg-slate-100 dark:bg-white/5 px-2 py-0.5 rounded border border-slate-200 dark:border-white/5">{calculateAge(patient.birthDate)} ans</span>
+                  <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                    <span className="bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-300 px-2 py-0.5 rounded-md text-[10px] font-bold border border-slate-200/80 dark:border-white/5">
+                      {patient.gender === 'Male' ? 'Homme' : patient.gender === 'Female' ? 'Femme' : patient.gender}
+                    </span>
+                    <span className="bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-md text-[10px] font-bold border border-blue-200/80 dark:border-blue-500/20 flex items-center gap-1">
+                      <Calendar className="w-3 h-3" />
+                      <span>{formatBirthDateWithAge(patient.birthDate)}</span>
+                    </span>
                   </div>
 
-                  <div className="mt-4 flex flex-col gap-1 text-[11px] text-slate-600 dark:text-slate-400">
-                    <span>📱 Tél : <strong className="text-slate-800 dark:text-slate-200">{patient.phone}</strong></span>
-                    {patient.nationalId && <span>🪪 CNIE : <strong className="text-slate-800 dark:text-slate-200">{patient.nationalId}</strong></span>}
+                  <div className="mt-3.5 flex flex-col gap-1.5 text-[11px] text-slate-600 dark:text-slate-400">
+                    <span>📱 Tél : <strong className="text-slate-800 dark:text-slate-200 font-mono">{patient.phone}</strong></span>
+                    {patient.nationalId && <span>🪪 CNIE : <strong className="text-slate-800 dark:text-slate-200 font-mono">{patient.nationalId}</strong></span>}
                     {patient.insurance?.provider && (
                       <span className="text-indigo-600 dark:text-indigo-300">🛡️ Mutuelle : <strong>{patient.insurance.provider}</strong></span>
                     )}
                   </div>
+
                 </div>
 
                 {/* Operations overlay */}

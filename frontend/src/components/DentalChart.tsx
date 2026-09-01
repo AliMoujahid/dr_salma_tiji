@@ -3,6 +3,8 @@ import { Plus, X, FileText, Camera, Eye, Trash2 } from 'lucide-react';
 import { ToothHistory } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { formatDate } from '../utils/dateUtils';
+
 
 interface DentalChartProps {
   patientId: string;
@@ -337,9 +339,10 @@ export const DentalChart: React.FC<DentalChartProps> = ({ patientId }) => {
                         className="flex flex-col gap-2 p-4 rounded-2xl bg-white/5 border border-white/5 hover:border-white/10 transition-all group"
                       >
                         <div className="flex justify-between items-center">
-                          <span className="text-xxs font-bold text-blue-400">
-                            {new Date(item.date).toLocaleDateString('fr-FR')}
+                          <span className="text-xxs font-bold text-blue-400 font-mono">
+                            {formatDate(item.date)}
                           </span>
+
                           <span className="text-xs font-extrabold text-slate-300">
                             {statusOptions.find((o) => o.value === item.status)?.label || item.status}
                           </span>

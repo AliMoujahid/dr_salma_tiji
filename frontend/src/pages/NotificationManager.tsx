@@ -28,6 +28,9 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { NotificationLog, MessageTemplate, NotificationSettings, Patient } from '../types';
+import { formatDate, formatDateTime } from '../utils/dateUtils';
+
+
 
 export const NotificationManager: React.FC = () => {
   const { token, isAdmin } = useAuth();
@@ -269,8 +272,9 @@ export const NotificationManager: React.FC = () => {
     const inv = patientAttachments.invoices.find((i) => i._id === invId);
     if (inv) {
       const patient = patients.find((p) => p._id === selectedPatients[0]);
-      const invDateStr = new Date(inv.date || inv.createdAt).toLocaleDateString('fr-FR');
+      const invDateStr = formatDate(inv.date || inv.createdAt);
       const itemsText = inv.items?.map((it: any) => `  • ${it.description}${it.tooth ? ` (Dent ${it.tooth})` : ''} : ${it.amount.toLocaleString('fr-FR')} MAD`).join('\n') || '';
+
       const due = Math.max(0, inv.netAmount - (inv.paidAmount || 0));
 
       setSendBody(
@@ -550,8 +554,9 @@ export const NotificationManager: React.FC = () => {
                           </span>
                         </td>
                         <td className="p-4 text-slate-500 dark:text-slate-400 text-xxs font-mono">
-                          {new Date(log.createdAt).toLocaleString('fr-FR')}
+                          {formatDateTime(log.createdAt)}
                         </td>
+
                         <td className="p-4 text-right">
                           {log.status === 'Failed' && (
                             <button
@@ -690,9 +695,10 @@ export const NotificationManager: React.FC = () => {
                       >
                         {patientAttachments.invoices.map((inv) => (
                           <option key={inv._id} value={inv._id}>
-                            Facture N° {inv.invoiceNumber} - {inv.netAmount.toLocaleString('fr-FR')} MAD ({new Date(inv.date || inv.createdAt).toLocaleDateString('fr-FR')}) • {inv.paymentStatus}
+                            Facture N° {inv.invoiceNumber} - {inv.netAmount.toLocaleString('fr-FR')} MAD ({formatDate(inv.date || inv.createdAt)}) • {inv.paymentStatus}
                           </option>
                         ))}
+
                       </select>
 
                       <button

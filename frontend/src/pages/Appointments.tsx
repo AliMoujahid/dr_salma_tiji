@@ -21,6 +21,8 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { Appointment, Patient } from '../types';
 import { SearchablePatientSelect } from '../components/SearchablePatientSelect';
+import { formatDate, formatDateTime, formatTime, formatRelativeDateTime } from '../utils/dateUtils';
+
 
 export const Appointments: React.FC = () => {
   const { token } = useAuth();
@@ -166,9 +168,10 @@ export const Appointments: React.FC = () => {
       return;
     }
 
-    const apptDateStr = new Date(appt.dateTime).toLocaleDateString('fr-FR');
-    const apptTimeStr = new Date(appt.dateTime).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    const apptDateStr = formatDate(appt.dateTime);
+    const apptTimeStr = formatTime(appt.dateTime);
     const message = `Bonjour ${patientObj.name},\n\nRappel : Votre rendez-vous au Cabinet Dentaire Dr. Salma Tijini est prévu le ${apptDateStr} à ${apptTimeStr}.\n\nMerci de nous contacter en cas d'empêchement.`;
+
 
     fetch(`${API_URL}/notifications/send-manual`, {
       method: 'POST',
@@ -371,9 +374,6 @@ export const Appointments: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredAppts.map((appt) => {
-            const dateObj = new Date(appt.dateTime);
-            const timeStr = dateObj.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-            const dateStr = dateObj.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
             const patientObj = appt.patientId && typeof appt.patientId === 'object' ? (appt.patientId as Patient) : null;
             const patientName = patientObj?.name || 'Patient';
 
@@ -385,9 +385,9 @@ export const Appointments: React.FC = () => {
                 <div>
                   {/* Top Status & Date Header */}
                   <div className="flex justify-between items-center mb-3">
-                    <span className="text-xs font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1.5 font-mono">
                       <CalendarIcon className="w-4 h-4 text-blue-500" />
-                      {dateStr}
+                      {formatDate(appt.dateTime)}
                     </span>
 
                     <span
@@ -415,10 +415,11 @@ export const Appointments: React.FC = () => {
                   {/* Time & Duration Details */}
                   <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
                     <Clock className="w-4 h-4 text-blue-500" />
-                    <strong className="text-slate-800 dark:text-white font-mono">{timeStr}</strong>
+                    <strong className="text-slate-800 dark:text-white font-mono">{formatTime(appt.dateTime)}</strong>
                     <span className="text-slate-400">•</span>
                     <span className="text-slate-500 dark:text-slate-400 font-medium">Durée : {appt.duration} min</span>
                   </div>
+
 
                   {appt.notes && (
                     <p className="mt-3 text-xs leading-relaxed bg-slate-50 dark:bg-white/5 p-3 rounded-xl border border-slate-100 dark:border-white/5 text-slate-600 dark:text-slate-300">
