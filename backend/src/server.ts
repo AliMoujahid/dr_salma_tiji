@@ -40,15 +40,70 @@ fs.mkdirSync(tempDir, { recursive: true });
 // Static file hosting for uploaded patient documents
 app.use('/uploads', express.static(uploadsDir));
 
-// Connect to MongoDB
+import bcrypt from 'bcryptjs';
+import User from './models/User';
+import ClinicConfig from './models/ClinicConfig';
+
+// Connect to MongoDB & Auto-Bootstrap default admin
 mongoose
   .connect(MONGODB_URI)
-  .then(() => {
+  .then(async () => {
     console.log('MongoDB connected successfully.');
+    try {
+      // Ensure Admin Account Exists
+      const adminUser = await User.findOne({ username: 'admin' });
+      const salt = await bcrypt.genSalt(10);
+      const passwordHash = await bcrypt.hash('Moujahid@97', salt);
+
+      if (!adminUser) {
+        await User.create({
+          username: 'admin',
+          email: 'admin@tijini.com',
+          passwordHash,
+          name: 'Moujahid Ali',
+          role: 'ADMIN',
+          active: true,
+        });
+        console.log('⚡ Initialisation automatique du compte Administrateur (admin / Moujahid@97).');
+      } else {
+        // Guarantee password and role are active
+        const isMatch = await bcrypt.compare('Moujahid@97', adminUser.passwordHash);
+        if (!isMatch || !adminUser.active || adminUser.role !== 'ADMIN') {
+          adminUser.passwordHash = passwordHash;
+          adminUser.role = 'ADMIN';
+          adminUser.active = true;
+          await adminUser.save();
+          console.log('⚡ Synchronisation du compte Administrateur (admin / Moujahid@97).');
+        }
+      }
+
+      // Ensure Clinic Configuration Exists
+      const configCount = await ClinicConfig.countDocuments();
+      if (configCount === 0) {
+        await ClinicConfig.create({
+          cabinetFr: 'Cabinet Dentaire Dr. Salma Tijini',
+          cabinetAr: 'عيادة الدكتورة سلمى التيجيني لطب وجراحة الأسنان',
+          drFr: 'Dr. Salma Tijini',
+          drAr: 'الدكتورة سلمى التيجيني',
+          specsFr: 'Implantologie - Esthétique dentaire - Chirurgie buccale\nOrthodontie - Soins & Prothèses - Radio Panoramique 3D',
+          specsAr: 'علاج وتجميل الأسنان - زراعة الأسنان - تقويم الأسنان\nجراحة الفم والأسنان - تركيبات الزيركون - راديو بانوراميك',
+          address: 'Angle Av. Hassan II & Rue Al Qods, Imm. Al Andalous, 1er Étage, Skhirat',
+          phones: '+212 6 13 11 71 31',
+          email: 'dr.salmatijini@gmail.com',
+          ice: '003291823000045',
+          inbe: '102938475',
+          ifVal: '54321098',
+        });
+        console.log('⚡ Configuration clinique initiale créée.');
+      }
+    } catch (bootErr) {
+      console.error('Erreur initialisation données par défaut:', bootErr);
+    }
   })
   .catch((err) => {
     console.error('MongoDB connection error:', err);
   });
+
 
 // License API routes (must be available without license block)
 app.use('/api/license', licenseRoutes);

