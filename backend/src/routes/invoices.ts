@@ -1,9 +1,19 @@
 import { Router, Response } from 'express';
+import mongoose from 'mongoose';
 import Invoice from '../models/Invoice';
 import Patient from '../models/Patient';
 import { protect, AuthRequest } from '../middleware/auth';
 
 const router = Router();
+
+// Helper to escape special regex characters and prevent ReDoS/syntax errors
+const escapeRegex = (text: string): string => {
+  return text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+};
+
+const isValidObjectId = (id: any): boolean => {
+  return typeof id === 'string' && mongoose.Types.ObjectId.isValid(id);
+};
 
 // Get all invoices with filter options
 router.get('/', protect, async (req: AuthRequest, res: Response) => {
@@ -11,7 +21,7 @@ router.get('/', protect, async (req: AuthRequest, res: Response) => {
     const { patientId, status, search, limit = '20', page = '1' } = req.query;
     const query: any = {};
 
-    if (patientId) {
+    if (isValidObjectId(patientId)) {
       query.patientId = patientId;
     }
 
@@ -19,13 +29,13 @@ router.get('/', protect, async (req: AuthRequest, res: Response) => {
       query.paymentStatus = status;
     }
 
-    if (search) {
-      // Find invoices by number directly
-      query.invoiceNumber = new RegExp(search as string, 'i');
+    if (search && typeof search === 'string' && search.trim()) {
+      // Find invoices by number directly using escaped regex
+      query.invoiceNumber = new RegExp(escapeRegex(search.trim()), 'i');
     }
 
-    const pageSize = parseInt(limit as string, 10);
-    const pageNum = parseInt(page as string, 10);
+    const pageSize = Math.max(1, parseInt(limit as string, 10) || 20);
+    const pageNum = Math.max(1, parseInt(page as string, 10) || 1);
 
     const total = await Invoice.countDocuments(query);
     const list = await Invoice.find(query)
@@ -38,7 +48,7 @@ router.get('/', protect, async (req: AuthRequest, res: Response) => {
     res.json({
       invoices: list,
       total,
-      pages: Math.ceil(total / pageSize),
+      pages: Math.max(1, Math.ceil(total / pageSize)),
       currentPage: pageNum,
     });
   } catch (error: any) {
@@ -49,6 +59,11 @@ router.get('/', protect, async (req: AuthRequest, res: Response) => {
 // Get invoice by ID
 router.get('/:id', protect, async (req: AuthRequest, res: Response) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      res.status(400).json({ message: 'Identifiant de facture invalide.' });
+      return;
+    }
+
     const invoice = await Invoice.findById(req.params.id)
       .populate('patientId', 'name phone nationalId address email insurance')
       .populate('createdBy', 'name');
@@ -74,13 +89,19 @@ router.post('/', protect, async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    // Calculate total amount from items
-    const totalAmount = items.reduce((sum: number, item: any) => sum + (parseFloat(item.amount) || 0), 0);
-    const disc = parseFloat(discount) || 0;
+    if (!isValidObjectId(patientId)) {
+      res.status(400).json({ message: 'Identifiant patient invalide.' });
+      return;
+    }
+
+    // Calculate total amount from items safely
+    const totalAmount = items.reduce((sum: number, item: any) => sum + Math.max(0, parseFloat(item.amount) || 0), 0);
+    const disc = Math.max(0, parseFloat(discount) || 0);
     const netAmount = Math.max(0, totalAmount - disc);
 
     // Auto-generate invoice number (format: [num]/[year])
-    const currentYear = new Date(date || Date.now()).getFullYear();
+    const invoiceDateObj = date && !isNaN(new Date(date).getTime()) ? new Date(date) : new Date();
+    const currentYear = invoiceDateObj.getFullYear();
     const countInvoices = await Invoice.countDocuments({
       date: {
         $gte: new Date(`${currentYear}-01-01`),
@@ -88,20 +109,20 @@ router.post('/', protect, async (req: AuthRequest, res: Response) => {
       },
     });
 
-    const nextNumber = countInvoices + 1026; // Start from 1026 to match facture.html context
+    const nextNumber = countInvoices + 1026; // Start from 1026 to match facture context
     const invoiceNumber = `${nextNumber}/${currentYear}`;
 
     const newInvoice = await Invoice.create({
       invoiceNumber,
       patientId,
-      date: date ? new Date(date) : new Date(),
+      date: invoiceDateObj,
       items,
       totalAmount,
       discount: disc,
       netAmount,
       paymentMode: paymentMode || 'espèces',
       paymentStatus: paymentStatus || 'Unpaid',
-      paidAmount: parseFloat(paidAmount) || 0,
+      paidAmount: Math.max(0, parseFloat(paidAmount) || 0),
       createdBy: req.user?._id,
     });
 
@@ -118,6 +139,11 @@ router.post('/', protect, async (req: AuthRequest, res: Response) => {
 // Edit/update invoice (e.g., adjustments, logs)
 router.put('/:id', protect, async (req: AuthRequest, res: Response) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      res.status(400).json({ message: 'Identifiant de facture invalide.' });
+      return;
+    }
+
     const { items, discount, paymentMode, paymentStatus, paidAmount, date } = req.body;
     const invoice = await Invoice.findById(req.params.id);
 
@@ -126,21 +152,21 @@ router.put('/:id', protect, async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    if (items) {
+    if (items && Array.isArray(items)) {
       invoice.items = items;
-      invoice.totalAmount = items.reduce((sum: number, item: any) => sum + (parseFloat(item.amount) || 0), 0);
+      invoice.totalAmount = items.reduce((sum: number, item: any) => sum + Math.max(0, parseFloat(item.amount) || 0), 0);
     }
 
     if (discount !== undefined) {
-      invoice.discount = parseFloat(discount) || 0;
+      invoice.discount = Math.max(0, parseFloat(discount) || 0);
     }
 
     invoice.netAmount = Math.max(0, invoice.totalAmount - invoice.discount);
 
     if (paymentMode) invoice.paymentMode = paymentMode;
     if (paymentStatus) invoice.paymentStatus = paymentStatus;
-    if (paidAmount !== undefined) invoice.paidAmount = parseFloat(paidAmount) || 0;
-    if (date) invoice.date = new Date(date);
+    if (paidAmount !== undefined) invoice.paidAmount = Math.max(0, parseFloat(paidAmount) || 0);
+    if (date && !isNaN(new Date(date).getTime())) invoice.date = new Date(date);
 
     await invoice.save();
     const populated = await Invoice.findById(invoice._id)
@@ -156,6 +182,11 @@ router.put('/:id', protect, async (req: AuthRequest, res: Response) => {
 // Delete invoice
 router.delete('/:id', protect, async (req: AuthRequest, res: Response) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      res.status(400).json({ message: 'Identifiant de facture invalide.' });
+      return;
+    }
+
     const deleted = await Invoice.findByIdAndDelete(req.params.id);
     if (!deleted) {
       res.status(404).json({ message: 'Facture introuvable.' });

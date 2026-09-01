@@ -135,164 +135,283 @@ export const InvoicePrintLayout: React.FC<InvoicePrintLayoutProps> = ({ invoice,
     return `${day}/${month}/${year}`;
   };
 
-  const filledCount = invoice.items.length;
-  const blankRowsNeeded = Math.max(0, 10 - filledCount);
-  const blankRows = Array(blankRowsNeeded).fill(null);
+  const rawItems = invoice.items && invoice.items.length > 0 ? invoice.items : [
+    { date: formattedDate().slice(0, 5), tooth: '-', description: 'Consultation & Soins', amount: invoice.totalAmount || 0 }
+  ];
+
+  // Dynamic Chunking for Multi-Page Invoices
+  // If items <= 8, fits on 1 page with header + totals + signature
+  // If items > 8, splits smartly across pages
+  const calculatePages = () => {
+    const SINGLE_PAGE_MAX = 8;
+    const PAGE_1_MULTI_MAX = 11;
+    const LAST_PAGE_MAX = 7;
+    const MIDDLE_PAGE_MAX = 13;
+
+    if (rawItems.length <= SINGLE_PAGE_MAX) {
+      return [rawItems];
+    }
+
+    const pages: any[][] = [];
+    const remaining = [...rawItems];
+
+    // Page 1
+    pages.push(remaining.splice(0, PAGE_1_MULTI_MAX));
+
+    // Remaining pages
+    while (remaining.length > 0) {
+      if (remaining.length <= LAST_PAGE_MAX) {
+        pages.push(remaining.splice(0, remaining.length));
+        break;
+      } else if (remaining.length <= MIDDLE_PAGE_MAX + LAST_PAGE_MAX) {
+        const half = Math.ceil(remaining.length / 2);
+        pages.push(remaining.splice(0, half));
+        pages.push(remaining.splice(0, remaining.length));
+        break;
+      } else {
+        pages.push(remaining.splice(0, MIDDLE_PAGE_MAX));
+      }
+    }
+
+    return pages;
+  };
+
+  const pages = calculatePages();
+  const totalPages = pages.length;
 
   return (
-    <div id="invoice-template" className="print-container text-black bg-white w-[794px] p-[57px] md:p-[76px] mx-auto font-sans leading-relaxed text-left block">
-      
-      {/* Clinic A4 Header */}
-      <div className="print-header-pro flex justify-between items-start mb-6 border-b border-black/5 pb-6 text-[#1e3a5f]">
-        
-        {/* Left Side: French */}
-        <div className="w-[33%] text-left text-[11px] leading-[1.4]">
-          <h2 className="font-serif italic text-2xl font-normal mb-1.5 text-[#1e3a5f]">{config.cabinetFr}</h2>
-          <div className="text-[10px] font-bold uppercase tracking-wider text-black mb-1.5">{config.drFr}</div>
-          <div className="text-[10px] text-slate-700 whitespace-pre-line">{config.specsFr}</div>
-        </div>
+    <div id="invoice-template" className="print-container text-black bg-white w-full max-w-[760px] mx-auto font-sans text-left block box-border">
+      {pages.map((pageItems, pageIndex) => {
+        const isFirstPage = pageIndex === 0;
+        const isLastPage = pageIndex === totalPages - 1;
 
-        {/* Center: Logo */}
-        <div className="w-[33%] flex justify-center items-center">
-          {config.logoUrl ? (
-            <img src={`${UPLOADS_URL}${config.logoUrl}`} alt="Logo" className="h-[100px] object-contain block mx-auto" />
-          ) : (
-            <img src="/logo.png" alt="Logo" className="h-[100px] object-contain block mx-auto" onError={(e) => {
-              (e.target as HTMLImageElement).src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='48' height='48' fill='none' stroke='%231e3a5f' stroke-width='2'><path d='M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5'></path></svg>";
-            }} />
-          )}
-        </div>
+        return (
+          <div
+            key={`page-${pageIndex}`}
+            className="print-page w-full p-6 box-border flex flex-col justify-between min-h-[1050px]"
+            style={{
+              pageBreakAfter: isLastPage ? 'auto' : 'always',
+              breakAfter: isLastPage ? 'auto' : 'page',
+            }}
+          >
+            {/* TOP CONTENT WRAPPER */}
+            <div className="w-full">
+              {/* --- HEADER --- */}
+              {isFirstPage ? (
+                /* Full Header on Page 1 */
+                <>
+                  <div className="flex justify-between items-start mb-3 border-b border-black/10 pb-3 text-[#1e3a5f]">
+                    {/* Left: French */}
+                    <div className="w-[34%] text-left text-[11px] leading-[1.35]">
+                      <h2 className="font-serif italic text-xl font-bold mb-1 text-[#1e3a5f]">
+                        {config.cabinetFr || 'Cabinet Tijini'}
+                      </h2>
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-black mb-1">
+                        {config.drFr || 'DR. SALMA TIJINI'}
+                      </div>
+                      <div className="text-[10px] text-slate-700 whitespace-pre-line leading-tight">
+                        {config.specsFr || 'Chirurgien Dentiste\nImplantologie - Esthétique Dentaire'}
+                      </div>
+                    </div>
 
-        {/* Right Side: Arabic */}
-        <div className="w-[33%] text-right text-xs leading-[1.5] font-serif" dir="rtl">
-          <h2 className="text-3xl font-bold mb-1 text-[#1e3a5f]">{config.cabinetAr}</h2>
-          <div className="text-sm font-bold text-black mb-1.5">{config.drAr}</div>
-          <div className="text-[11px] text-slate-700 whitespace-pre-line leading-normal">{config.specsAr}</div>
-        </div>
+                    {/* Center: Logo */}
+                    <div className="w-[30%] flex justify-center items-center">
+                      {config.logoUrl ? (
+                        <img
+                          src={`${UPLOADS_URL}${config.logoUrl}`}
+                          alt="Logo"
+                          className="h-16 max-w-[120px] object-contain block mx-auto"
+                        />
+                      ) : (
+                        <img
+                          src="/logo.png"
+                          alt="Logo"
+                          className="h-16 max-w-[120px] object-contain block mx-auto"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src =
+                              "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='40' height='40' fill='none' stroke='%231e3a5f' stroke-width='2'><path d='M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5'></path></svg>";
+                          }}
+                        />
+                      )}
+                    </div>
 
-      </div>
+                    {/* Right: Arabic */}
+                    <div className="w-[34%] text-right text-xs leading-[1.4] font-serif" dir="rtl">
+                      <h2 className="text-2xl font-bold mb-1 text-[#1e3a5f]">
+                        {config.cabinetAr || 'عيادة التيجيني'}
+                      </h2>
+                      <div className="text-sm font-bold text-black mb-1">
+                        {config.drAr || 'طبيبة جراحة الأسنان'}
+                      </div>
+                      <div className="text-[10px] text-slate-700 whitespace-pre-line leading-tight">
+                        {config.specsAr || 'علاج وتجميل الأسنان - زراعة الأسنان'}
+                      </div>
+                    </div>
+                  </div>
 
-      {/* Info details under header */}
-      <div className="w-full text-[10px] bg-slate-50 border border-slate-300 rounded-lg overflow-hidden flex flex-col items-center mb-8">
-        <div className="w-full flex justify-center items-center gap-3 py-1.5 border-b border-slate-300 px-4">
-          <span>📍 {config.address}</span>
-        </div>
-        <div className="w-full flex justify-center items-center gap-3 py-1.5 px-4 border-b border-slate-300 text-slate-800">
-          <span>📱 {config.phones}</span>
-          <span className="text-slate-300">|</span>
-          <span>✉️ {config.email}</span>
-        </div>
-        <div className="w-full flex justify-center items-center gap-6 py-1 bg-slate-100 text-slate-700 font-medium">
-          <span><strong>ICE:</strong> {config.ice || '28103818'}</span>
-          <span>•</span>
-          <span><strong>INBE:</strong> {config.inbe || '044215820'}</span>
-          <span>•</span>
-          <span><strong>IF:</strong> {config.ifVal || '28103818'}</span>
-        </div>
-      </div>
+                  {/* Info details box */}
+                  <div className="w-full text-[10px] bg-slate-50 border border-slate-300 rounded-lg overflow-hidden flex flex-col items-center mb-4">
+                    <div className="w-full flex justify-center items-center gap-3 py-1 border-b border-slate-300 px-3">
+                      <span>📍 {config.address || 'Résidence Al Manar, Bd Al Qods, Casablanca'}</span>
+                    </div>
+                    <div className="w-full flex justify-center items-center gap-3 py-1 px-3 border-b border-slate-300 text-slate-800">
+                      <span>📱 {config.phones || '+212 5 22 00 00 00'}</span>
+                      <span className="text-slate-300">|</span>
+                      <span>✉️ {config.email || 'dr.salma.tijini@gmail.com'}</span>
+                    </div>
+                    <div className="w-full flex justify-center items-center gap-6 py-0.5 bg-slate-100 text-slate-700 font-medium text-[9.5px]">
+                      <span><strong>ICE:</strong> {config.ice || '28103818'}</span>
+                      <span>•</span>
+                      <span><strong>INBE:</strong> {config.inbe || '044215820'}</span>
+                      <span>•</span>
+                      <span><strong>IF:</strong> {config.ifVal || '28103818'}</span>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                /* Sub-Header on Subsequent Pages (Page 2, 3...) */
+                <div className="flex justify-between items-center border-b-2 border-black pb-2 mb-4">
+                  <div className="flex items-center gap-3">
+                    <span className="font-serif italic font-bold text-base text-[#1e3a5f]">
+                      {config.cabinetFr || 'Cabinet Tijini'}
+                    </span>
+                    <span className="text-xs font-bold text-slate-600">
+                      — Facture N° {invoice.invoiceNumber} (Suite)
+                    </span>
+                  </div>
+                  <div className="text-xs font-semibold text-black">
+                    Patient : <span className="font-bold uppercase">{invoice.patientId?.name || 'Patient'}</span>
+                  </div>
+                </div>
+              )}
 
-      {/* Invoice Title */}
-      <h1 className="text-center font-bold text-xl uppercase tracking-widest underline mb-6 text-black">
-        FACTURE
-      </h1>
+              {/* Title & Metadata on Page 1 */}
+              {isFirstPage && (
+                <>
+                  <h1 className="text-center font-bold text-lg uppercase tracking-widest underline mb-3 text-black">
+                    FACTURE
+                  </h1>
+                  <div className="w-full flex justify-between text-xs font-semibold text-black mb-3">
+                    <div>
+                      N° : <span className="font-bold text-sm mr-6">{invoice.invoiceNumber}</span>
+                      Au nom de :{' '}
+                      <span className="font-bold text-sm bg-slate-100 px-2 py-0.5 rounded">
+                        {invoice.patientId?.name || 'Patient'}
+                      </span>
+                    </div>
+                    <div>
+                      Fait le : <span className="font-bold text-sm">{formattedDate()}</span>
+                    </div>
+                  </div>
+                </>
+              )}
 
-      {/* Metadata */}
-      <div className="w-full flex justify-between text-xs font-semibold text-black mb-6">
-        <div>
-          N° : <span className="font-bold text-sm mr-6">{invoice.invoiceNumber}</span>
-          Au nom de : <span className="font-bold text-sm bg-slate-100 px-2 py-0.5 rounded">{invoice.patientId?.name}</span>
-        </div>
-        <div>
-          Fait le : <span className="font-bold text-sm">{formattedDate()}</span>
-        </div>
-      </div>
+              {/* --- ITEMS TABLE --- */}
+              <table className="w-full border-collapse border-2 border-black text-xs text-black text-center mb-4">
+                <thead>
+                  <tr className="bg-slate-100 font-bold border-b-2 border-black">
+                    <th className="border-r border-black p-2 w-[15%] uppercase">Date</th>
+                    <th className="border-r border-black p-2 w-[12%] uppercase">Dent</th>
+                    <th className="border-r border-black p-2 w-[53%] uppercase text-left pl-3">Acte / Soin</th>
+                    <th className="p-2 w-[20%] uppercase text-right pr-3">Montant (DH)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pageItems.map((item, index) => (
+                    <tr
+                      key={item._id || index}
+                      className={index < pageItems.length - 1 ? 'border-b border-black' : ''}
+                    >
+                      <td className="border-r border-black p-2 text-center">{item.date}</td>
+                      <td className="border-r border-black p-2 text-center">{item.tooth || '-'}</td>
+                      <td className="border-r border-black p-2 text-left pl-3 font-medium">{item.description}</td>
+                      <td className="p-2 text-right pr-3 font-mono font-semibold">
+                        {item.amount > 0 ? item.amount.toFixed(2).replace('.', ',') : '0,00'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
 
-      {/* Table grid */}
-      <table className="w-full border-collapse border border-black text-xs text-black text-center mb-6">
-        <thead>
-          <tr className="bg-slate-50">
-            <th className="border border-black p-2 w-[15%] font-bold uppercase">Date</th>
-            <th className="border border-black p-2 w-[15%] font-bold uppercase">Dent</th>
-            <th className="border border-black p-2 w-[50%] font-bold uppercase text-left pl-4">Acte</th>
-            <th className="border border-black p-2 w-[20%] font-bold uppercase">Montant (DH)</th>
-          </tr>
-        </thead>
-        <tbody>
-          {invoice.items.map((item, index) => (
-            <tr key={item._id || index} className="h-7">
-              <td className="border-l border-r border-black px-2">{item.date}</td>
-              <td className="border-l border-r border-black px-2">{item.tooth || ''}</td>
-              <td className="border-l border-r border-black px-4 text-left">{item.description}</td>
-              <td className="border-l border-r border-black px-2 font-mono">
-                {item.amount > 0 ? item.amount.toFixed(2).replace('.', ',') : ''}
-              </td>
-            </tr>
-          ))}
+              {/* Indicator if more items on next page */}
+              {!isLastPage && (
+                <div className="text-right text-[11px] italic font-semibold text-slate-600 mb-2">
+                  ... Suite des soins sur la page suivante ({pageIndex + 2}/{totalPages})
+                </div>
+              )}
 
-          {/* Padding blank lines */}
-          {blankRows.map((_, i) => (
-            <tr key={`blank-${i}`} className="h-7">
-              <td className="border-l border-r border-black"></td>
-              <td className="border-l border-r border-black"></td>
-              <td className="border-l border-r border-black"></td>
-              <td className="border-l border-r border-black"></td>
-            </tr>
-          ))}
-          {/* Border line separator */}
-          <tr>
-            <td colSpan={4} className="border-t border-black h-px p-0"></td>
-          </tr>
-        </tbody>
-      </table>
+              {/* --- TOTALS & NUMBER TO WORDS (ONLY ON LAST PAGE) --- */}
+              {isLastPage && (
+                <>
+                  {/* Totals Table */}
+                  <div className="w-full flex justify-end mb-3">
+                    <table className="w-[280px] border-2 border-black text-xs font-bold text-black border-collapse">
+                      <tbody>
+                        <tr className="border-b border-black">
+                          <td className="border-r border-black p-1.5 pl-2.5 font-bold">Total Brut</td>
+                          <td className="p-1.5 pr-2.5 text-right font-mono">
+                            {invoice.totalAmount.toFixed(2).replace('.', ',')} DH
+                          </td>
+                        </tr>
+                        <tr className="border-b border-black">
+                          <td className="border-r border-black p-1.5 pl-2.5 font-bold">Remise</td>
+                          <td className="p-1.5 pr-2.5 text-right font-mono">
+                            {invoice.discount.toFixed(2).replace('.', ',')} DH
+                          </td>
+                        </tr>
+                        <tr className="bg-slate-100 font-extrabold text-sm">
+                          <td className="border-r border-black p-1.5 pl-2.5 uppercase text-xs">
+                            Net à payer [{invoice.paymentMode || 'espèces'}]
+                          </td>
+                          <td className="p-1.5 pr-2.5 text-right font-mono text-[#1e3a5f]">
+                            {invoice.netAmount.toFixed(2).replace('.', ',')} DH
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
 
-      {/* Totals table aligned to right */}
-      <div className="w-full flex justify-end mb-8">
-        <table className="w-[260px] border border-black text-xs font-bold text-black">
-          <tbody>
-            <tr>
-              <td className="border border-black p-2">Total Brut</td>
-              <td className="border border-black p-2 text-right font-mono">
-                {invoice.totalAmount.toFixed(2).replace('.', ',')} DH
-              </td>
-            </tr>
-            <tr>
-              <td className="border border-black p-2">Remise</td>
-              <td className="border border-black p-2 text-right font-mono">
-                {invoice.discount.toFixed(2).replace('.', ',')} DH
-              </td>
-            </tr>
-            <tr className="bg-slate-50">
-              <td className="border border-black p-2 uppercase">Net à payer [{invoice.paymentMode}]</td>
-              <td className="border border-black p-2 text-right font-mono text-sm">
-                {invoice.netAmount.toFixed(2).replace('.', ',')} DH
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+                  {/* Number to words text */}
+                  <div className="text-[11px] font-bold text-black uppercase tracking-wider mb-4 bg-slate-50 p-2.5 border border-black rounded-md">
+                    Arrêtée la présente facture à la somme de :<br />
+                    <span className="text-xs font-extrabold text-[#1e3a5f] mt-1 block tracking-normal">
+                      {formatNumberToWordsWithCentimes(invoice.netAmount)}
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
 
-      {/* Number to words text */}
-      <div className="text-xs font-bold text-black uppercase tracking-wider mb-6 bg-slate-50 p-3.5 border border-slate-300 rounded-lg">
-        Arrêtée la présente facture à la somme de :<br />
-        <span className="text-sm font-extrabold text-[#1e3a5f] mt-1.5 block">
-          {formatNumberToWordsWithCentimes(invoice.netAmount)}
-        </span>
-      </div>
+            {/* --- BOTTOM SIGNATURE & PAGE NUMBER FOOTER --- */}
+            <div className="w-full pt-2 border-t border-black/10 mt-auto">
+              {isLastPage ? (
+                /* Doctor Declaration & Signature Space on Final Page */
+                <div className="w-full flex justify-between items-start text-[11px] text-black mb-3">
+                  <div className="w-[50%] leading-relaxed pt-1">
+                    Je, soussigné, certifie avoir effectué les actes attestés dans le<br />
+                    présent document et avoir perçu les honoraires y afférentes.
+                  </div>
 
-      {/* Footer practitioner declaration */}
-      <div className="w-full flex justify-between items-start text-[11px] text-black">
-        <div className="w-[60%] leading-relaxed pt-2">
-          Je, soussigné, certifie avoir effectué les actes attestés dans le<br />
-          présent document et avoir perçu les honoraires y afférentes.
-        </div>
-        <div className="text-right pr-6 pt-2 font-semibold">
-          Signature et Cachet du praticien
-          {config.stampUrl && (
-            <img src={`${UPLOADS_URL}${config.stampUrl}`} alt="Signature Stamp" className="h-20 object-contain block ml-auto mt-2 opacity-90" />
-          )}
-        </div>
-      </div>
+                  {/* Espace blanc naturel pour la signature et le cachet physique de la docteure */}
+                  <div className="w-[45%] text-right pr-2">
+                    <div className="font-bold text-xs text-black mb-1">
+                      Signature et Cachet du praticien
+                    </div>
+                    <div className="h-16"></div>
+                  </div>
+                </div>
+              ) : null}
 
+              {/* Page Numbering Footer on every page */}
+              <div className="w-full flex justify-between items-center text-[10px] text-slate-500 pt-1">
+                <span>Cabinet Dentaire Dr. Salma Tijini • Facture N° {invoice.invoiceNumber}</span>
+                <span className="font-bold text-black">Page {pageIndex + 1} / {totalPages}</span>
+              </div>
+            </div>
+
+          </div>
+        );
+      })}
     </div>
   );
 };

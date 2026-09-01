@@ -52,6 +52,16 @@ router.put('/config', protect, restrictTo('ADMIN', 'DOCTOR'), async (req: AuthRe
   }
 });
 
+// Helper to reliably compute relative upload path
+const getRelativeUploadPath = (fullPath: string): string => {
+  const normalized = fullPath.replace(/\\/g, '/');
+  const match = normalized.match(/\/uploads\/(.+)$/i);
+  if (match && match[1]) {
+    return match[1];
+  }
+  return path.basename(fullPath);
+};
+
 // Upload logo, stamp, or signature
 router.post(
   '/config/upload-asset',
@@ -72,16 +82,13 @@ router.post(
       const files = req.files as { [fieldname: string]: Express.Multer.File[] };
 
       if (files?.logo?.[0]) {
-        const parts = files.logo[0].path.split('uploads');
-        config.logoUrl = parts.length > 1 ? parts[1].replace(/\\/g, '/') : files.logo[0].path;
+        config.logoUrl = getRelativeUploadPath(files.logo[0].path);
       }
       if (files?.stamp?.[0]) {
-        const parts = files.stamp[0].path.split('uploads');
-        config.stampUrl = parts.length > 1 ? parts[1].replace(/\\/g, '/') : files.stamp[0].path;
+        config.stampUrl = getRelativeUploadPath(files.stamp[0].path);
       }
       if (files?.signature?.[0]) {
-        const parts = files.signature[0].path.split('uploads');
-        config.signatureUrl = parts.length > 1 ? parts[1].replace(/\\/g, '/') : files.signature[0].path;
+        config.signatureUrl = getRelativeUploadPath(files.signature[0].path);
       }
 
       await config.save();

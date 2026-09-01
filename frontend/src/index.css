@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --bg-app: #f4f6fa;
   --bg-panel: rgba(255, 255, 255, 0.7);
@@ -57,75 +59,200 @@
 
 /* Premium light theme overrides for a unified Apple-like professional look */
 html:not(.dark) {
-  --bg-app: #f3f4f6;
+  --bg-app: #f8fafc;
   --bg-panel: #ffffff;
-  --border-panel: rgba(0, 0, 0, 0.06);
+  --border-panel: rgba(0, 0, 0, 0.08);
   --bg-card: #ffffff;
-  --border-card: rgba(0, 0, 0, 0.05);
-  --text-primary: #111827;
-  --text-secondary: #4b5563;
+  --border-card: rgba(0, 0, 0, 0.06);
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
   --bg-input: #ffffff;
   --border-input: rgba(0, 0, 0, 0.12);
 }
 
 /* Force light backgrounds on containers */
 html:not(.dark) body {
-  background-color: #f3f4f6 !important;
-  color: #111827 !important;
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
 }
 
 html:not(.dark) aside {
   background-color: #ffffff !important;
-  border-right: 1px solid rgba(0, 0, 0, 0.06) !important;
-  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.01) !important;
+  border-right: 1px solid rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.02) !important;
 }
 
 html:not(.dark) header {
-  background-color: rgba(255, 255, 255, 0.7) !important;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
+  background-color: rgba(255, 255, 255, 0.85) !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
   backdrop-filter: blur(20px) !important;
   -webkit-backdrop-filter: blur(20px) !important;
+}
+
+/* Cards & panels */
+html:not(.dark) .glass-card,
+html:not(.dark) .glass-panel {
+  background-color: #ffffff !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02) !important;
+}
+
+html:not(.dark) [class*="border-white/5"],
+html:not(.dark) [class*="border-white/10"],
+html:not(.dark) [class*="border-white/20"] {
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Default dark typography in light mode */
+html:not(.dark) h1:not(.login-page *):not([data-theme="dark"] *),
+html:not(.dark) h2:not(.login-page *):not([data-theme="dark"] *),
+html:not(.dark) h3:not(.login-page *):not([data-theme="dark"] *),
+html:not(.dark) h4:not(.login-page *):not([data-theme="dark"] *),
+html:not(.dark) h5:not(.login-page *):not([data-theme="dark"] *),
+html:not(.dark) h6:not(.login-page *):not([data-theme="dark"] *) {
+  color: #0f172a !important;
+}
+
+html:not(.dark) .text-white:not(.bg-blue-600):not(.bg-blue-500):not(.bg-emerald-600):not(.bg-rose-600):not(.bg-indigo-600):not(.nav-active):not(button.bg-blue-600):not(button.bg-blue-500):not(button.bg-emerald-600):not(button.bg-rose-600):not(.login-page *):not([data-theme="dark"] *) {
+  color: #0f172a;
+}
+
+/* Fix hover:text-white in light mode on neutral/light elements */
+html:not(.dark) [class*="hover:text-white"]:hover:not(.bg-blue-600):not(.bg-blue-500):not(.bg-emerald-600):not(.bg-rose-600):not(.bg-indigo-600):not(button.bg-blue-600):not(button.bg-blue-500):not(button.bg-emerald-600):not(button.bg-rose-600):not(.nav-active):not(.nav-active *):not(.login-page *):not([data-theme="dark"] *) {
+  color: #0f172a !important;
+}
+
+html:not(.dark) [class*="group-hover:text-white"]:hover:not(.bg-blue-600):not(.bg-blue-500):not(.bg-emerald-600):not(.bg-rose-600):not(.bg-indigo-600):not(.login-page *):not([data-theme="dark"] *) {
+  color: #0f172a !important;
+}
+
+html:not(.dark) .text-slate-100:not(.login-page *):not([data-theme="dark"] *),
+html:not(.dark) .text-slate-200:not(.login-page *):not([data-theme="dark"] *),
+html:not(.dark) .text-slate-300:not(.login-page *):not([data-theme="dark"] *) {
+  color: #1e293b !important;
+}
+
+html:not(.dark) .text-slate-400:not(.login-page *):not([data-theme="dark"] *),
+html:not(.dark) .text-slate-500:not(.login-page *):not([data-theme="dark"] *) {
+  color: #64748b !important;
+}
+
+/* =========================================================
+   LOGIN PAGE - DEDICATED CRISP HIGH-CONTRAST DARK THEME
+   ========================================================= */
+.login-page {
+  background-color: #050811 !important;
+  color: #f1f5f9 !important;
+}
+
+.login-page h1,
+.login-page h2,
+.login-page h3,
+.login-page h4,
+.login-page h5,
+.login-page h6 {
+  color: #ffffff !important;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+}
+
+.login-page .login-brand-title {
+  color: #ffffff !important;
+}
+
+.login-page .login-brand-subtitle {
+  color: #cbd5e1 !important;
+}
+
+.login-page .login-card {
+  background: rgba(13, 20, 36, 0.75) !important;
+  backdrop-filter: blur(24px) !important;
+  -webkit-backdrop-filter: blur(24px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05) !important;
+}
+
+.login-page .login-card h3 {
+  color: #ffffff !important;
+}
+
+.login-page .login-card p {
+  color: #94a3b8 !important;
+}
+
+.login-page label {
+  color: #cbd5e1 !important;
+}
+
+.login-page input.glass-input {
+  background-color: rgba(15, 23, 42, 0.85) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  color: #ffffff !important;
+}
+
+.login-page input.glass-input:focus {
+  background-color: rgba(15, 23, 42, 0.98) !important;
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.35) !important;
+  outline: none !important;
+}
+
+.login-page input.glass-input::placeholder {
+  color: #64748b !important;
+}
+
+.login-page .login-section-title {
+  color: #cbd5e1 !important;
+}
+
+.login-page .test-account-btn {
+  background-color: rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  color: #e2e8f0 !important;
+  transition: all 0.2s ease;
+}
+
+.login-page .test-account-btn:hover {
+  background-color: rgba(255, 255, 255, 0.15) !important;
+  border-color: rgba(255, 255, 255, 0.22) !important;
+  color: #ffffff !important;
+}
+
+.login-page .test-account-admin {
+  background-color: rgba(99, 102, 241, 0.18) !important;
+  border: 1px solid rgba(129, 140, 248, 0.35) !important;
+  color: #e0e7ff !important;
+  transition: all 0.2s ease;
+}
+
+.login-page .test-account-admin:hover {
+  background-color: rgba(99, 102, 241, 0.3) !important;
+  border-color: rgba(129, 140, 248, 0.55) !important;
+  color: #ffffff !important;
+}
+
+/* Sub-panels and inner backgrounds */
+html:not(.dark) .bg-white\/3,
+html:not(.dark) .bg-white\/5,
+html:not(.dark) .bg-white\/6,
+html:not(.dark) .bg-white\/8,
+html:not(.dark) .bg-white\/10 {
+  background-color: #f8fafc !important;
+  border-color: rgba(0, 0, 0, 0.06) !important;
 }
 
 /* Form inputs & interactive widgets */
 html:not(.dark) input,
 html:not(.dark) select,
-html:not(.dark) textarea {
+html:not(.dark) textarea,
+html:not(.dark) .glass-input {
   background-color: #ffffff !important;
-  border-color: rgba(0, 0, 0, 0.12) !important;
-  color: #111827 !important;
+  border: 1px solid rgba(0, 0, 0, 0.14) !important;
+  color: #0f172a !important;
 }
 
 html:not(.dark) input::placeholder,
 html:not(.dark) textarea::placeholder {
-  color: #9ca3af !important;
-}
-
-/* Cards & panels */
-html:not(.dark) .glass-card,
-html:not(.dark) .bg-slate-900\/40,
-html:not(.dark) .bg-slate-950\/20,
-html:not(.dark) .bg-slate-900 {
-  background-color: #ffffff !important;
-  border: 1px solid rgba(0, 0, 0, 0.06) !important;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02) !important;
-}
-
-/* Text visibility overrides */
-html:not(.dark) .text-white {
-  color: #111827 !important;
-}
-
-html:not(.dark) .text-slate-100 {
-  color: #111827 !important;
-}
-
-html:not(.dark) .text-slate-300 {
-  color: #374151 !important;
-}
-
-html:not(.dark) .text-slate-400 {
-  color: #4b5563 !important; /* Darker Slate for high contrast */
+  color: #94a3b8 !important;
 }
 
 /* Focus Ring Outline Override (Globally clean up buttons & links focus) */
@@ -149,16 +276,13 @@ button:focus-visible {
   background-color: #1d4ed8 !important;
   color: #ffffff !important;
 }
-.nav-active:hover * {
-  color: #ffffff !important;
-}
 
 html:not(.dark) aside nav a:not(.nav-active) {
-  color: #4b5563 !important;
+  color: #475569 !important;
   background-color: transparent !important;
 }
 html:not(.dark) aside nav a:not(.nav-active) * {
-  color: #4b5563 !important;
+  color: #475569 !important;
 }
 
 html:not(.dark) aside nav a:not(.nav-active):hover {
@@ -169,55 +293,64 @@ html:not(.dark) aside nav a:not(.nav-active):hover * {
   color: #2563eb !important;
 }
 
-/* Ensure white text inside colored action panels/buttons is preserved */
-html:not(.dark) .bg-blue-600 *,
-html:not(.dark) .bg-emerald-600 *,
-html:not(.dark) .bg-rose-600 *,
-html:not(.dark) .bg-indigo-600 *,
+/* Ensure white text inside colored action buttons/pills is preserved */
+html:not(.dark) button.bg-blue-600,
+html:not(.dark) button.bg-blue-500,
+html:not(.dark) button.bg-emerald-600,
+html:not(.dark) button.bg-rose-600,
+html:not(.dark) button.bg-indigo-600,
 html:not(.dark) .bg-blue-600,
+html:not(.dark) .bg-blue-500,
 html:not(.dark) .bg-emerald-600,
 html:not(.dark) .bg-rose-600,
-html:not(.dark) .bg-indigo-600,
-html:not(.dark) button.bg-blue-600,
-html:not(.dark) button.bg-emerald-600,
-html:not(.dark) button.bg-rose-600 {
+html:not(.dark) .bg-indigo-600 {
+  color: #ffffff !important;
+}
+
+html:not(.dark) button.bg-blue-600 *,
+html:not(.dark) button.bg-blue-500 *,
+html:not(.dark) button.bg-emerald-600 *,
+html:not(.dark) button.bg-rose-600 *,
+html:not(.dark) button.bg-indigo-600 *,
+html:not(.dark) .bg-blue-600 *,
+html:not(.dark) .bg-blue-500 *,
+html:not(.dark) .bg-emerald-600 *,
+html:not(.dark) .bg-rose-600 *,
+html:not(.dark) .bg-indigo-600 * {
   color: #ffffff !important;
 }
 
 /* Brand colored links */
-html:not(.dark) .text-indigo-400,
-html:not(.dark) .text-indigo-300 {
+html:not(.dark) .text-indigo-600,
+html:not(.dark) .text-indigo-500,
+html:not(.dark) .text-indigo-400 {
   color: #4f46e5 !important;
 }
 
-html:not(.dark) .text-blue-400,
-html:not(.dark) .text-blue-300 {
+html:not(.dark) .text-blue-600,
+html:not(.dark) .text-blue-500,
+html:not(.dark) .text-blue-400 {
   color: #2563eb !important;
 }
 
-html:not(.dark) .text-emerald-400,
-html:not(.dark) .text-emerald-300 {
+html:not(.dark) .text-emerald-600,
+html:not(.dark) .text-emerald-500,
+html:not(.dark) .text-emerald-400 {
   color: #059669 !important;
 }
 
-/* Sub-panels and inner backgrounds */
-html:not(.dark) .bg-white\/3,
-html:not(.dark) .bg-white\/5,
-html:not(.dark) .bg-slate-950\/20,
-html:not(.dark) .bg-slate-950\/80 {
-  background-color: rgba(0, 0, 0, 0.02) !important;
-  border-color: rgba(0, 0, 0, 0.05) !important;
-}
-
 /* Modal layers */
-html:not(.dark) .fixed.bg-black\/60 {
-  background-color: rgba(0, 0, 0, 0.3) !important;
+html:not(.dark) .fixed.bg-black\/50,
+html:not(.dark) .fixed.bg-black\/60,
+html:not(.dark) .fixed.bg-black\/70 {
+  background-color: rgba(0, 0, 0, 0.4) !important;
 }
 
-html:not(.dark) .fixed .bg-slate-900 {
+html:not(.dark) .fixed .bg-slate-900,
+html:not(.dark) .fixed .bg-white {
   background-color: #ffffff !important;
   border-color: rgba(0, 0, 0, 0.08) !important;
-  box-shadow: 0 20px 25px -5px rgba(0,0,0,0.05), 0 10px 10px -5px rgba(0,0,0,0.02) !important;
+  box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04) !important;
 }
 
 .glass-input:focus {
@@ -263,15 +396,21 @@ html {
 /* Custom print media queries matching facture.html A4 layout precisely */
 @media print {
   @page {
-    size: A4;
-    margin: 0 !important; /* Hides default browser header and footer (URL, date, title, page numbers) */
+    size: A4 portrait;
+    margin: 8mm 10mm !important;
   }
 
-  body {
+  html, body {
     margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+    color: black !important;
+    height: auto !important;
   }
 
-  .no-print {
+  .no-print,
+  aside,
+  header {
     display: none !important;
   }
   
@@ -280,12 +419,21 @@ html {
     position: static !important;
     transform: none !important;
     box-shadow: none !important;
-    padding: 20mm 15mm !important; /* Re-applies clean A4 margins on the template itself */
+    padding: 0 !important;
     margin: 0 auto !important;
-    width: 210mm !important; /* Exact A4 width */
-    height: 297mm !important; /* Exact A4 height */
-    box-sizing: border-box !important;
+    width: 100% !important;
+    max-width: 100% !important;
     background: white !important;
     color: black !important;
+  }
+
+  .print-page {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    min-height: 275mm !important;
+    box-sizing: border-box !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
   }
 }

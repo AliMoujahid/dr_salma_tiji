@@ -1,9 +1,14 @@
 import { Router, Response } from 'express';
+import mongoose from 'mongoose';
 import Appointment from '../models/Appointment';
 import Patient from '../models/Patient';
 import { protect, AuthRequest } from '../middleware/auth';
 
 const router = Router();
+
+const isValidObjectId = (id: any): boolean => {
+  return typeof id === 'string' && mongoose.Types.ObjectId.isValid(id);
+};
 
 // Get all appointments (with optional date range)
 router.get('/', protect, async (req: AuthRequest, res: Response) => {
@@ -12,10 +17,14 @@ router.get('/', protect, async (req: AuthRequest, res: Response) => {
     const query: any = {};
 
     if (start && end) {
-      query.dateTime = {
-        $gte: new Date(start as string),
-        $lte: new Date(end as string),
-      };
+      const startDate = new Date(start as string);
+      const endDate = new Date(end as string);
+      if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime())) {
+        query.dateTime = {
+          $gte: startDate,
+          $lte: endDate,
+        };
+      }
     }
 
     const list = await Appointment.find(query)
@@ -47,7 +56,6 @@ router.get('/waiting-room', protect, async (req: AuthRequest, res: Response) => 
     const finished = appointmentsToday.filter((a) => a.status === 'Completed');
 
     // Calculate dummy average waiting time or mock it based on created vs completed
-    // e.g. 15 minutes average
     const avgWaitingTimeMinutes = 18;
 
     res.json({
@@ -73,16 +81,27 @@ router.post('/', protect, async (req: AuthRequest, res: Response) => {
       return;
     }
 
+    if (!isValidObjectId(patientId)) {
+      res.status(400).json({ message: 'Identifiant patient invalide.' });
+      return;
+    }
+
+    const apptDate = new Date(dateTime);
+    if (isNaN(apptDate.getTime())) {
+      res.status(400).json({ message: 'Date ou heure de rendez-vous invalide.' });
+      return;
+    }
+
     // Fallback doctorId to logged in user if not provided or invalid
-    if (!doctorId || typeof doctorId !== 'string' || doctorId.length !== 24) {
+    if (!isValidObjectId(doctorId)) {
       doctorId = req.user?._id;
     }
 
     const newAppt = await Appointment.create({
       patientId,
       doctorId,
-      dateTime: new Date(dateTime),
-      duration: duration || 30,
+      dateTime: apptDate,
+      duration: Math.max(5, parseInt(duration, 10) || 30),
       chair,
       notes,
       status: status || 'Scheduled',
@@ -101,15 +120,23 @@ router.post('/', protect, async (req: AuthRequest, res: Response) => {
 // Update appointment (handles status change and drag & drop resizing/moving)
 router.put('/:id', protect, async (req: AuthRequest, res: Response) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      res.status(400).json({ message: 'Identifiant de rendez-vous invalide.' });
+      return;
+    }
+
     const { dateTime, duration, status, chair, notes, doctorId } = req.body;
     const updateFields: any = {};
 
-    if (dateTime) updateFields.dateTime = new Date(dateTime);
-    if (duration !== undefined) updateFields.duration = duration;
+    if (dateTime) {
+      const parsedDate = new Date(dateTime);
+      if (!isNaN(parsedDate.getTime())) updateFields.dateTime = parsedDate;
+    }
+    if (duration !== undefined) updateFields.duration = Math.max(5, parseInt(duration, 10) || 30);
     if (status) updateFields.status = status;
     if (chair) updateFields.chair = chair;
     if (notes !== undefined) updateFields.notes = notes;
-    if (doctorId) updateFields.doctorId = doctorId;
+    if (isValidObjectId(doctorId)) updateFields.doctorId = doctorId;
 
     const updatedAppt = await Appointment.findByIdAndUpdate(req.params.id, updateFields, { new: true })
       .populate('patientId', 'name phone email profilePictureUrl')
@@ -129,6 +156,11 @@ router.put('/:id', protect, async (req: AuthRequest, res: Response) => {
 // Delete appointment
 router.delete('/:id', protect, async (req: AuthRequest, res: Response) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      res.status(400).json({ message: 'Identifiant de rendez-vous invalide.' });
+      return;
+    }
+
     const deleted = await Appointment.findByIdAndDelete(req.params.id);
     if (!deleted) {
       res.status(404).json({ message: 'Rendez-vous introuvable.' });

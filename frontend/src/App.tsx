@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ToastProvider } from './context/ToastContext';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { LicenseActivationModal } from './components/LicenseActivationModal';
@@ -85,7 +86,7 @@ const AppLayout: React.FC = () => {
             <Route path="/appointments" element={<Appointments />} />
             <Route path="/waiting-room" element={<WaitingRoom />} />
             <Route path="/invoices" element={<InvoiceEditor />} />
-            <Route path="/payments" element={<InvoiceEditor />} /> {/* Linked view */}
+            <Route path="/payments" element={<Navigate to="/invoices" replace />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/notifications" element={<NotificationManager />} />
             <Route path="/settings" element={<Settings />} />
@@ -110,11 +111,14 @@ export const App: React.FC = () => {
       setLicenseStatus(data);
     } catch (err) {
       console.error('Error checking license status:', err);
-      // If server unreachable, allow offline checking state
+      const isDev = import.meta.env.DEV;
+      // If server unreachable, inform user that backend needs to be started
       setLicenseStatus({
         active: false,
-        machineId: 'Connexion au serveur...',
-        message: 'Impossible de contacter le serveur de licence local.',
+        machineId: isDev ? 'Backend Hors Ligne (Port 5000)' : 'Connexion au serveur...',
+        message: isDev 
+          ? 'Le serveur Backend local est hors ligne. Lancez "npm run dev" dans la racine du projet pour démarrer simultanément le Backend (Port 5000) et le Frontend.' 
+          : 'Impossible de contacter le serveur de licence local.',
       });
     } finally {
       setCheckingLicense(false);
@@ -152,17 +156,19 @@ export const App: React.FC = () => {
 
       <BrowserRouter>
         <AuthProvider>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route
-              path="/*"
-              element={
-                <ProtectedRoute>
-                  <AppLayout />
-                </ProtectedRoute>
-              }
-            />
-          </Routes>
+          <ToastProvider>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route
+                path="/*"
+                element={
+                  <ProtectedRoute>
+                    <AppLayout />
+                  </ProtectedRoute>
+                }
+              />
+            </Routes>
+          </ToastProvider>
         </AuthProvider>
       </BrowserRouter>
     </QueryClientProvider>

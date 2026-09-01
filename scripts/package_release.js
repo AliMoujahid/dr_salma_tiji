@@ -27,7 +27,11 @@ console.log('✅ Frontend compilé avec succès (frontend/dist).\n');
 console.log('3️⃣  Préparation du dossier de Release...');
 if (fs.existsSync(RELEASE_DIR)) {
   console.log('Nettoyage de l\'ancien dossier Release...');
-  fs.rmSync(RELEASE_DIR, { recursive: true, force: true });
+  try {
+    fs.rmSync(RELEASE_DIR, { recursive: true, force: true });
+  } catch (err) {
+    console.warn('⚠️  Note : Certains fichiers en cours d\'utilisation sont conservés.');
+  }
 }
 
 fs.mkdirSync(RELEASE_DIR, { recursive: true });
@@ -81,7 +85,6 @@ console.log('7️⃣  Génération des scripts de lancement et d\'installation W
 const lancerAppBat = `@echo off
 title Cabinet Dentaire Dr. Salma Tijini - Demarrage
 color 0B
-chcp 65001 >nul
 cls
 
 echo =======================================================================
@@ -93,7 +96,7 @@ echo.
 where node >nul 2>nul
 if %errorlevel% neq 0 (
     echo [ERREUR] Node.js n'est pas installe sur cet ordinateur.
-    echo Veuillez installer Node.js depuis https://nodejs.org/ (Version LTS).
+    echo Veuillez installer Node.js depuis 1_INSTALLATEURS_PREREQUIS.
     pause
     exit /b 1
 )
@@ -146,11 +149,44 @@ exit
 `;
 fs.writeFileSync(path.join(RELEASE_DIR, 'Lancer_Application.bat'), lancerAppBat, 'utf8');
 
-// 7.2 Installer_Cabinet.bat (Desktop Shortcut + Windows Startup on Boot)
+// 7.2 CreateShortcut.vbs & Installer_Cabinet.bat
+const createShortcutVbs = `Set oWS = CreateObject("WScript.Shell")
+
+sCurDir = oWS.CurrentDirectory
+If Right(sCurDir, 1) <> "\\" Then sCurDir = sCurDir & "\\"
+
+sTarget = sCurDir & "Lancer_Application.bat"
+
+' Desktop Shortcut
+sDesktop = oWS.SpecialFolders("Desktop")
+sDesktopLink = sDesktop & "\\Cabinet Dr Salma Tijini.lnk"
+Set oLink = oWS.CreateShortcut(sDesktopLink)
+oLink.TargetPath = sTarget
+oLink.WorkingDirectory = sCurDir
+oLink.Description = "Gestion Clinique - Cabinet Dr. Salma Tijini"
+If FileExists(sCurDir & "logo.png") Then oLink.IconLocation = sCurDir & "logo.png"
+oLink.Save
+
+' Startup Shortcut
+sStartup = oWS.SpecialFolders("Startup")
+sStartupLink = sStartup & "\\Cabinet_Dr_Salma_Tijini.lnk"
+Set oStartupLink = oWS.CreateShortcut(sStartupLink)
+oStartupLink.TargetPath = sTarget
+oStartupLink.WorkingDirectory = sCurDir
+oStartupLink.Description = "Demarrage Automatique Cabinet Dr Salma Tijini"
+If FileExists(sCurDir & "logo.png") Then oStartupLink.IconLocation = sCurDir & "logo.png"
+oStartupLink.Save
+
+Function FileExists(filePath)
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    FileExists = fso.FileExists(filePath)
+End Function
+`;
+fs.writeFileSync(path.join(RELEASE_DIR, 'CreateShortcut.vbs'), createShortcutVbs, 'utf8');
+
 const installerCabinetBat = `@echo off
 title Installation Cabinet Dr. Salma Tijini
 color 0A
-chcp 65001 >nul
 cls
 
 echo =======================================================================
@@ -159,48 +195,23 @@ echo =======================================================================
 echo.
 echo Cette operation va :
 echo  1. Creer un raccourci direct sur le Bureau de l'ordinateur
-echo  2. Configurer le demarrage automatique avec Windows (apres coupure de courant / allumage)
-echo  3. Initialiser les dossiers de stockage et de sauvegarde automatique.
+echo  2. Configurer le demarrage automatique avec Windows
 echo.
 
-set TARGET_SCRIPT=%~dp0Lancer_Application.bat
-set SHORTCUT_PATH=%USERPROFILE%\\Desktop\\Cabinet Dr Salma Tijini.lnk
-set STARTUP_SHORTCUT=%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\Cabinet_Dr_Salma_Tijini.lnk
-set ICON_PATH=%~dp0logo.png
-
-:: Creation du raccourci sur le Bureau et dans le dossier de Demarrage Windows
-echo [1/2] Creation du raccourci sur votre Bureau...
-(
-    echo Set oWS = WScript.CreateObject^("WScript.Shell"^)
-    echo sLinkFile = "%SHORTCUT_PATH%"
-    echo Set oLink = oWS.CreateShortcut^(sLinkFile^)
-    echo oLink.TargetPath = "%TARGET_SCRIPT%"
-    echo oLink.WorkingDirectory = "%~dp0"
-    echo oLink.Description = "Gestion Clinique - Cabinet Dr. Salma Tijini"
-    echo oLink.Save
-    
-    echo sStartupFile = "%STARTUP_SHORTCUT%"
-    echo Set oStartupLink = oWS.CreateShortcut^(sStartupFile^)
-    echo oStartupLink.TargetPath = "%TARGET_SCRIPT%"
-    echo oStartupLink.WorkingDirectory = "%~dp0"
-    echo oStartupLink.Description = "Demarrage Automatique Cabinet Dr Salma Tijini"
-    echo oStartupLink.Save
-) > "%TEMP%\\CreateShortcut.vbs"
-
-cscript //nologo "%TEMP%\\CreateShortcut.vbs"
-del "%TEMP%\\CreateShortcut.vbs"
+echo [1/2] Creation du raccourci sur votre Bureau et au demarrage...
+cscript //nologo "%~dp0CreateShortcut.vbs"
 
 echo [2/2] Configuration du demarrage automatique avec Windows validee.
 
 echo.
 echo =======================================================================
-echo   ✅ INSTALLATION ET DEMARRAGE AUTOMATIQUE CONFIGURES AVEC SUCCES !
+echo   [OK] INSTALLATION ET DEMARRAGE AUTOMATIQUE CONFIGURES AVEC SUCCES !
 echo.
 echo   - Raccourci ajoute sur votre Bureau : "Cabinet Dr Salma Tijini"
 echo   - Demarrage automatique au redemarrage du PC : ACTIVE
 echo.
-echo   Meme en cas de coupure de courant, des que le PC se rallume,
-echo   l'application et la base de donnees se lancent toutes seules !
+echo   Des que le PC se rallume, l'application et la base de donnees
+echo   se lancent toutes seules !
 echo =======================================================================
 echo.
 pause
@@ -211,7 +222,6 @@ fs.writeFileSync(path.join(RELEASE_DIR, 'Installer_Cabinet.bat'), installerCabin
 const arreterAppBat = `@echo off
 title Arreter l'Application Cabinet Dr. Salma Tijini
 color 0C
-chcp 65001 >nul
 cls
 
 echo =======================================================================
@@ -236,7 +246,6 @@ fs.writeFileSync(path.join(RELEASE_DIR, 'Arreter_Application.bat'), arreterAppBa
 const backupBat = `@echo off
 title Sauvegarde des Donnees du Cabinet
 color 0E
-chcp 65001 >nul
 cls
 
 echo =======================================================================
@@ -260,7 +269,7 @@ copy "%~dp0license.key" "%BACKUP_DEST%\\" >nul 2>nul
 
 echo.
 echo =======================================================================
-echo   ✅ SAUVEGARDE TERMINEE AVEC SUCCES DANS :
+echo   [OK] SAUVEGARDE TERMINEE AVEC SUCCES DANS :
 echo   %BACKUP_DEST%
 echo =======================================================================
 echo.

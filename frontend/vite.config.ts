@@ -8,4 +8,25 @@ export default defineConfig({
   server: {
     host: true,
   },
+  build: {
+    chunkSizeWarningLimit: 800,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('three') || id.includes('@react-three')) {
+              return 'three-vendor';
+            }
+            if (id.includes('lucide-react') || id.includes('framer-motion')) {
+              return 'ui-vendor';
+            }
+            if (id.includes('react') || id.includes('@tanstack')) {
+              return 'react-vendor';
+            }
+          }
+        },
+      },
+    },
+  },
 })
+

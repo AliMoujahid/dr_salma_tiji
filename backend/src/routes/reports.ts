@@ -76,37 +76,59 @@ router.get('/dashboard-stats', protect, async (req: AuthRequest, res: Response) 
 router.get('/financials', protect, async (req: AuthRequest, res: Response) => {
   try {
     const currentYear = new Date().getFullYear();
-    const startOfYear = new Date(`${currentYear}-01-01`);
+    const startOfYear = new Date(currentYear, 0, 1, 0, 0, 0, 0);
 
     const payments = await PaymentTransaction.find({
       date: { $gte: startOfYear },
     });
 
-    // Group by month
-    const monthlyRevenue = Array(12)
-      .fill(0)
-      .map((_, i) => ({
-        month: new Date(currentYear, i).toLocaleString('fr-FR', { month: 'short' }),
-        revenue: 0,
-      }));
+    const monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'];
+    const monthlyRevenue = monthNames.map((month) => ({
+      month,
+      revenue: 0,
+    }));
 
     payments.forEach((payment) => {
-      const monthIndex = new Date(payment.date).getMonth();
-      if (monthIndex >= 0 && monthIndex < 12) {
-        monthlyRevenue[monthIndex].revenue += payment.amount;
+      const pDate = new Date(payment.date);
+      if (pDate.getFullYear() === currentYear) {
+        const monthIndex = pDate.getMonth();
+        if (monthIndex >= 0 && monthIndex < 12) {
+          monthlyRevenue[monthIndex].revenue += payment.amount;
+        }
       }
     });
 
+    // Translation dictionary for clinical conditions
+    const treatmentLabels: Record<string, string> = {
+      Healthy: 'Dents Saines / Bilan',
+      Filling: 'Obturation / Composite',
+      Crown: 'Couronne Zircone',
+      'Root Canal': 'Dévitalisation / Endodontie',
+      Implant: 'Implant Dentaire',
+      Extracted: 'Extraction Chirurgicale',
+      Bridge: 'Bridge Céramique',
+      Fracture: 'Fracture Dentaire',
+      Missing: 'Dent Manquante',
+      'Wisdom Tooth': 'Dent de Sagesse',
+      Mobile: 'Dent Mobile',
+    };
+
     // Common treatments count
-    const commonTreatments = await ToothHistory.aggregate([
+    const rawTreatments = await ToothHistory.aggregate([
       { $group: { _id: '$status', count: { $sum: 1 } } },
       { $sort: { count: -1 } },
       { $limit: 6 },
     ]);
 
+    const commonTreatments = rawTreatments.map((t) => ({
+      name: treatmentLabels[t._id] || t._id,
+      rawStatus: t._id,
+      value: t.count,
+    }));
+
     res.json({
       monthlyRevenue,
-      commonTreatments: commonTreatments.map((t) => ({ name: t._id, value: t.count })),
+      commonTreatments,
     });
   } catch (error: any) {
     res.status(500).json({ message: 'Erreur lors du calcul des rapports financiers.', error: error.message });

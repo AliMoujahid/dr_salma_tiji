@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Plus, X, FileText, Camera, Eye, Trash2 } from 'lucide-react';
 import { ToothHistory } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 
 interface DentalChartProps {
   patientId: string;
@@ -23,6 +24,7 @@ const statusOptions = [
 
 export const DentalChart: React.FC<DentalChartProps> = ({ patientId }) => {
   const { token } = useAuth();
+  const { toast, confirm } = useToast();
   const [odontogram, setOdontogram] = useState<any[]>([]);
   const [selectedTooth, setSelectedTooth] = useState<number | null>(null);
   const [toothHistoryList, setToothHistoryList] = useState<ToothHistory[]>([]);
@@ -96,8 +98,15 @@ export const DentalChart: React.FC<DentalChartProps> = ({ patientId }) => {
       .finally(() => setSubmitting(false));
   };
 
-  const handleDeleteHistory = (id: string) => {
-    if (!confirm('Supprimer cette intervention ?')) return;
+  const handleDeleteHistory = async (id: string) => {
+    const confirmed = await confirm({
+      title: 'Supprimer cette intervention ?',
+      message: 'Cette intervention dentaire sera définitivement retirée de l\'historique du patient.',
+      variant: 'danger',
+      confirmText: 'Supprimer',
+      cancelText: 'Annuler',
+    });
+    if (!confirmed) return;
 
     fetch(`${API_URL}/teeth/${id}`, {
       method: 'DELETE',
@@ -106,8 +115,12 @@ export const DentalChart: React.FC<DentalChartProps> = ({ patientId }) => {
       .then(() => {
         setToothHistoryList(toothHistoryList.filter((item) => item._id !== id));
         fetchOdontogram();
+        toast.success('Intervention supprimée', 'L\'acte a été retiré de la fiche.');
       })
-      .catch((err) => console.error('Error deleting record:', err));
+      .catch((err) => {
+        console.error('Error deleting record:', err);
+        toast.error('Erreur', 'Impossible de supprimer l\'intervention.');
+      });
   };
 
   const getToothClass = (toothNum: number) => {

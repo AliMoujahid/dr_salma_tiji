@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { ToothHistory, ToothStatusType, ToothMetadata, XRayMeasurement } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { XRayViewerModal } from './XRayViewerModal';
 import { TreatmentAnimationModal } from './TreatmentAnimationModal';
 
@@ -131,60 +132,65 @@ const ToothMesh3D: React.FC<{
   const statusCfg = STATUS_CONFIGS[status] || STATUS_CONFIGS.Healthy;
   const isUpper = meta.jaw === 'Maxillary';
 
-  // Photorealistic anatomical crown & root geometry generators
+  // High-definition anatomical crown & root geometry generators
   const { crownGeo, rootGeo, implantGeo } = useMemo(() => {
     let cGeo: THREE.BufferGeometry;
 
     if (meta.type === 'Incisor') {
-      // Natural human spade incisor with curved labial surface & rounded incisal edge
+      // Natural human spade incisor with curved labial face, rounded corners & sculpted incisal edge
       const shape = new THREE.Shape();
-      shape.moveTo(-0.24, -0.3);
-      shape.bezierCurveTo(-0.26, 0.0, -0.25, 0.25, -0.22, 0.32); // left edge
-      shape.lineTo(0.22, 0.32); // incisal edge
-      shape.bezierCurveTo(0.25, 0.25, 0.26, 0.0, 0.24, -0.3); // right edge
-      shape.bezierCurveTo(0.12, -0.35, -0.12, -0.35, -0.24, -0.3); // cervical neck
+      shape.moveTo(-0.25, -0.32);
+      shape.bezierCurveTo(-0.27, -0.1, -0.27, 0.22, -0.24, 0.35); // mesial curved contour
+      shape.bezierCurveTo(-0.12, 0.38, 0.12, 0.38, 0.24, 0.35);  // rounded incisal edge
+      shape.bezierCurveTo(0.27, 0.22, 0.27, -0.1, 0.25, -0.32);  // distal curved contour
+      shape.bezierCurveTo(0.13, -0.38, -0.13, -0.38, -0.25, -0.32); // cervical line
       
-      const extrudeSettings = { depth: 0.22, bevelEnabled: true, bevelSegments: 5, steps: 2, bevelSize: 0.05, bevelThickness: 0.05 };
+      const extrudeSettings = { depth: 0.24, bevelEnabled: true, bevelSegments: 8, steps: 3, bevelSize: 0.08, bevelThickness: 0.08 };
       cGeo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
       cGeo.center();
     } else if (meta.type === 'Canine') {
-      // Natural human canine with anatomical cusp tip
+      // Natural sharp canine crown with distinct labial ridge, pointed cusp tip & prominent cingulum
       const shape = new THREE.Shape();
-      shape.moveTo(-0.25, -0.32);
-      shape.lineTo(-0.26, 0.1);
-      shape.lineTo(0.0, 0.38); // Cusp tip
-      shape.lineTo(0.26, 0.1);
-      shape.lineTo(0.25, -0.32);
-      shape.bezierCurveTo(0.12, -0.37, -0.12, -0.37, -0.25, -0.32);
+      shape.moveTo(-0.26, -0.34);
+      shape.bezierCurveTo(-0.28, -0.1, -0.28, 0.12, -0.18, 0.26);
+      shape.lineTo(0.0, 0.44); // prominent sharp cusp tip
+      shape.lineTo(0.18, 0.26);
+      shape.bezierCurveTo(0.28, 0.12, 0.28, -0.1, 0.26, -0.34);
+      shape.bezierCurveTo(0.13, -0.4, -0.13, -0.4, -0.26, -0.34);
 
-      const extrudeSettings = { depth: 0.26, bevelEnabled: true, bevelSegments: 6, steps: 2, bevelSize: 0.06, bevelThickness: 0.06 };
+      const extrudeSettings = { depth: 0.3, bevelEnabled: true, bevelSegments: 8, steps: 3, bevelSize: 0.09, bevelThickness: 0.09 };
       cGeo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
       cGeo.center();
     } else if (meta.type === 'Premolar') {
-      // Bicuspid oval crown with 2 cusps
+      // Bicuspid crown with buccal and lingual anatomical cusps & central groove
       const shape = new THREE.Shape();
-      shape.absellipse(0, 0, 0.28, 0.26, 0, Math.PI * 2, false, 0);
-      const extrudeSettings = { depth: 0.55, bevelEnabled: true, bevelSegments: 6, steps: 2, bevelSize: 0.08, bevelThickness: 0.08 };
+      shape.moveTo(-0.3, -0.28);
+      shape.bezierCurveTo(-0.34, 0, -0.34, 0.28, -0.3, 0.28);
+      shape.bezierCurveTo(0, 0.34, 0.3, 0.34, 0.3, 0.28);
+      shape.bezierCurveTo(0.34, 0, 0.34, -0.28, 0.3, -0.28);
+      shape.bezierCurveTo(0, -0.34, -0.3, -0.34, -0.3, -0.28);
+
+      const extrudeSettings = { depth: 0.52, bevelEnabled: true, bevelSegments: 8, steps: 3, bevelSize: 0.11, bevelThickness: 0.11 };
       cGeo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
       cGeo.center();
     } else {
-      // Quadcuspid Molar crown with rounded corners & occlusal surface
+      // Molar crown: quadricuspid occlusal table with rounded cusps and central occlusal pit
       const shape = new THREE.Shape();
-      shape.moveTo(-0.35, -0.35);
-      shape.bezierCurveTo(-0.38, 0, -0.38, 0.35, -0.35, 0.35);
-      shape.bezierCurveTo(0, 0.38, 0.35, 0.38, 0.35, 0.35);
-      shape.bezierCurveTo(0.38, 0, 0.38, -0.35, 0.35, -0.35);
-      shape.bezierCurveTo(0, -0.38, -0.35, -0.38, -0.35, -0.35);
+      shape.moveTo(-0.38, -0.36);
+      shape.bezierCurveTo(-0.42, 0, -0.42, 0.36, -0.38, 0.36);
+      shape.bezierCurveTo(0, 0.42, 0.38, 0.42, 0.38, 0.36);
+      shape.bezierCurveTo(0.42, 0, 0.42, -0.36, 0.38, -0.36);
+      shape.bezierCurveTo(0, -0.42, -0.38, -0.42, -0.38, -0.36);
 
-      const extrudeSettings = { depth: 0.52, bevelEnabled: true, bevelSegments: 8, steps: 3, bevelSize: 0.1, bevelThickness: 0.1 };
+      const extrudeSettings = { depth: 0.54, bevelEnabled: true, bevelSegments: 10, steps: 4, bevelSize: 0.13, bevelThickness: 0.13 };
       cGeo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
       cGeo.center();
     }
 
-    // Anatomical tapered root
-    const rGeo = new THREE.CylinderGeometry(0.22, 0.06, 0.95, 12);
+    // Anatomical tapered root with realistic apical curve
+    const rGeo = new THREE.CylinderGeometry(0.2, 0.05, 0.95, 16);
     // Titanium implant screw
-    const impGeo = new THREE.CylinderGeometry(0.2, 0.15, 1.0, 12);
+    const impGeo = new THREE.CylinderGeometry(0.2, 0.14, 1.0, 16);
 
     return { crownGeo: cGeo, rootGeo: rGeo, implantGeo: impGeo };
   }, [meta]);
@@ -194,6 +200,9 @@ const ToothMesh3D: React.FC<{
 
   const crownYOffset = isUpper ? -0.34 : 0.34;
   const rootYOffset = isUpper ? 0.48 : -0.48;
+
+  // Realistic natural enamel color
+  const enamelColor = status === 'Healthy' ? '#fffef4' : statusCfg.hex;
 
   return (
     <group
@@ -207,32 +216,45 @@ const ToothMesh3D: React.FC<{
     >
       {/* Photorealistic Enamel Crown Mesh */}
       {!isMissingOrExtracted && (
-        <mesh position={[0, crownYOffset, 0]} geometry={crownGeo}>
+        <mesh position={[0, crownYOffset, 0]} geometry={crownGeo} castShadow receiveShadow>
           <meshStandardMaterial
-            color={isSelected ? '#3b82f6' : statusCfg.hex}
-            roughness={statusCfg.roughness ?? 0.15}
-            metalness={statusCfg.metalness ?? 0.0}
+            color={isSelected ? '#2563eb' : enamelColor}
+            roughness={isSelected ? 0.2 : (statusCfg.roughness ?? 0.12)}
+            metalness={isSelected ? 0.1 : (statusCfg.metalness ?? 0.02)}
             transparent={Boolean(statusCfg.opacity)}
             opacity={statusCfg.opacity ?? 1.0}
           />
         </mesh>
       )}
 
-      {/* Root Mesh(es) */}
+      {/* Anatomical Root Mesh(es) */}
       {!isMissingOrExtracted && !isImplant && (
         <group position={[0, rootYOffset, 0]}>
           {meta.rootCount === 1 && (
-            <mesh rotation={[isUpper ? 0 : Math.PI, 0, 0]} geometry={rootGeo}>
-              <meshStandardMaterial color="#fffdfa" roughness={0.35} />
+            <mesh rotation={[isUpper ? 0 : Math.PI, 0, 0]} geometry={rootGeo} castShadow>
+              <meshStandardMaterial color="#fefaf2" roughness={0.38} />
             </mesh>
           )}
-          {meta.rootCount >= 2 && (
+          {meta.rootCount === 2 && (
             <>
-              <mesh position={[-0.14, 0, 0]} rotation={[isUpper ? 0 : Math.PI, 0, -0.12]} geometry={rootGeo}>
-                <meshStandardMaterial color="#fffdfa" roughness={0.35} />
+              <mesh position={[-0.14, 0, 0]} rotation={[isUpper ? 0 : Math.PI, 0, -0.15]} geometry={rootGeo} castShadow>
+                <meshStandardMaterial color="#fefaf2" roughness={0.38} />
               </mesh>
-              <mesh position={[0.14, 0, 0]} rotation={[isUpper ? 0 : Math.PI, 0, 0.12]} geometry={rootGeo}>
-                <meshStandardMaterial color="#fffdfa" roughness={0.35} />
+              <mesh position={[0.14, 0, 0]} rotation={[isUpper ? 0 : Math.PI, 0, 0.15]} geometry={rootGeo} castShadow>
+                <meshStandardMaterial color="#fefaf2" roughness={0.38} />
+              </mesh>
+            </>
+          )}
+          {meta.rootCount >= 3 && (
+            <>
+              <mesh position={[-0.14, 0, -0.08]} rotation={[isUpper ? 0 : Math.PI, -0.1, -0.15]} geometry={rootGeo} castShadow>
+                <meshStandardMaterial color="#fefaf2" roughness={0.38} />
+              </mesh>
+              <mesh position={[0.14, 0, -0.08]} rotation={[isUpper ? 0 : Math.PI, 0.1, 0.15]} geometry={rootGeo} castShadow>
+                <meshStandardMaterial color="#fefaf2" roughness={0.38} />
+              </mesh>
+              <mesh position={[0, 0, 0.12]} rotation={[isUpper ? 0 : Math.PI, 0.2, 0]} geometry={rootGeo} castShadow>
+                <meshStandardMaterial color="#fefaf2" roughness={0.38} />
               </mesh>
             </>
           )}
@@ -241,8 +263,8 @@ const ToothMesh3D: React.FC<{
 
       {/* Titanium Implant Screw */}
       {isImplant && (
-        <mesh position={[0, rootYOffset, 0]} geometry={implantGeo}>
-          <meshStandardMaterial color="#94a3b8" metalness={0.9} roughness={0.12} />
+        <mesh position={[0, rootYOffset, 0]} geometry={implantGeo} castShadow>
+          <meshStandardMaterial color="#94a3b8" metalness={0.92} roughness={0.15} />
         </mesh>
       )}
 
@@ -257,7 +279,7 @@ const ToothMesh3D: React.FC<{
             className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono font-bold transition-all shadow-lg cursor-pointer backdrop-blur-md ${
               isSelected
                 ? 'bg-blue-600 text-white ring-2 ring-blue-400 scale-110'
-                : 'bg-slate-900/80 text-slate-300 border border-white/10 hover:bg-blue-500 hover:text-white'
+                : 'bg-slate-900/85 text-slate-200 border border-white/10 hover:bg-blue-500 hover:text-white'
             }`}
           >
             {fdiNumber}
@@ -283,13 +305,13 @@ const GingivaArchMesh: React.FC<{ jaw: 'Maxillary' | 'Mandibular' }> = ({ jaw })
     return new THREE.CatmullRomCurve3(points);
   }, [jaw]);
 
-  const tubeGeo = useMemo(() => new THREE.TubeGeometry(curvePoints, 32, 0.48, 14, false), [curvePoints]);
+  const tubeGeo = useMemo(() => new THREE.TubeGeometry(curvePoints, 36, 0.52, 16, false), [curvePoints]);
 
   return (
     <group>
-      {/* Alveolar Ridge Gum Tube */}
-      <mesh geometry={tubeGeo}>
-        <meshStandardMaterial color="#e15b70" roughness={0.3} opacity={0.95} transparent />
+      {/* Alveolar Ridge Gum Tube with natural pink mucosal tone */}
+      <mesh geometry={tubeGeo} receiveShadow>
+        <meshStandardMaterial color="#dc687c" roughness={0.3} opacity={0.96} transparent />
       </mesh>
     </group>
   );
@@ -302,6 +324,7 @@ interface Dental3DViewerProps {
 
 export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId }) => {
   const { token } = useAuth();
+  const { toast, confirm } = useToast();
   const [odontogram, setOdontogram] = useState<any[]>([]);
   const [selectedTooth, setSelectedTooth] = useState<number | null>(null);
   const [toothHistoryList, setToothHistoryList] = useState<ToothHistory[]>([]);
@@ -311,6 +334,9 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId }) => 
   const [jawFilter, setJawFilter] = useState<'All' | 'Maxillary' | 'Mandibular'>('All');
   const [autoRotate, setAutoRotate] = useState<boolean>(false);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+
+  // Mouth Open / Close Articulator state (0 = closed occlusion, 1 = wide open occlusal view)
+  const [mouthOpening, setMouthOpening] = useState<number>(0.4);
 
   // Form states for adding intervention
   const [newStatus, setNewStatus] = useState<ToothStatusType>('Healthy');
@@ -390,8 +416,15 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId }) => 
       .finally(() => setSubmitting(false));
   };
 
-  const handleDeleteHistory = (id: string) => {
-    if (!confirm('Supprimer cette intervention ?')) return;
+  const handleDeleteHistory = async (id: string) => {
+    const confirmed = await confirm({
+      title: 'Supprimer cette intervention 3D ?',
+      message: 'Cette intervention dentaire sera retirée de l\'historique 3D du patient.',
+      variant: 'danger',
+      confirmText: 'Supprimer',
+      cancelText: 'Annuler',
+    });
+    if (!confirmed) return;
 
     fetch(`${API_URL}/teeth/${id}`, {
       method: 'DELETE',
@@ -400,8 +433,12 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId }) => 
       .then(() => {
         setToothHistoryList(toothHistoryList.filter((item) => item._id !== id));
         fetchOdontogram();
+        toast.success('Intervention supprimée', 'L\'acte a été retiré de la vue 3D.');
       })
-      .catch((err) => console.error('Error deleting record:', err));
+      .catch((err) => {
+        console.error('Error deleting record:', err);
+        toast.error('Erreur', 'Impossible de supprimer l\'intervention.');
+      });
   };
 
   const [showLabels, setShowLabels] = useState<boolean>(true);
@@ -450,144 +487,230 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId }) => 
 
   const selectedMeta = selectedTooth ? getToothMetadata(selectedTooth) : null;
 
+  // Maxillary & Mandibular teeth partition
+  const upperTeeth = useMemo(() => {
+    return Object.entries(toothPositions).filter(([numStr]) => {
+      const num = Number(numStr);
+      return getToothMetadata(num).jaw === 'Maxillary';
+    });
+  }, [toothPositions]);
+
+  const lowerTeeth = useMemo(() => {
+    return Object.entries(toothPositions).filter(([numStr]) => {
+      const num = Number(numStr);
+      return getToothMetadata(num).jaw === 'Mandibular';
+    });
+  }, [toothPositions]);
+
+  // Mandible kinematic opening calculation
+  const maxYOffset = mouthOpening * 0.35;
+  const mandYOffset = -mouthOpening * 1.55;
+  const mandZOffset = -mouthOpening * 0.55;
+  const mandRotX = -mouthOpening * 0.42;
+
   return (
     <div
       ref={containerRef}
       className={`relative w-full rounded-3xl bg-slate-950 border border-white/10 shadow-2xl overflow-hidden flex flex-col md:flex-row text-white ${
-        isFullscreen ? 'h-screen w-screen rounded-none' : 'h-[720px]'
+        isFullscreen ? 'h-screen w-screen rounded-none' : 'h-[740px]'
       }`}
     >
       {/* 3D WebGL Canvas Area */}
       <div className="flex-1 relative flex flex-col justify-between p-4">
         
         {/* Top Control Bar */}
-        <div className="flex flex-wrap justify-between items-center gap-3 z-10 bg-slate-900/80 backdrop-blur-md p-3 rounded-2xl border border-white/10">
+        <div className="flex items-center justify-between gap-3 z-10 bg-slate-900/90 backdrop-blur-md p-2.5 rounded-2xl border border-white/10 shadow-lg overflow-x-auto no-scrollbar">
           
-          {/* Arch Mode (Adult vs Child) */}
-          <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-white/5">
-            <button
-              onClick={() => setArchMode('Adult')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                archMode === 'Adult' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Adulte (32 Dents)
-            </button>
-            <button
-              onClick={() => setArchMode('Child')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                archMode === 'Child' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Enfant (20 Dents)
-            </button>
+          {/* Left: View & Arch Filters */}
+          <div className="flex items-center gap-2 shrink-0">
+            
+            {/* Arch Mode (Adult vs Child) */}
+            <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-white/10">
+              <button
+                onClick={() => setArchMode('Adult')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                  archMode === 'Adult' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-300 hover:text-white'
+                }`}
+              >
+                Adulte (32 Dents)
+              </button>
+              <button
+                onClick={() => setArchMode('Child')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                  archMode === 'Child' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-300 hover:text-white'
+                }`}
+              >
+                Enfant (20 Dents)
+              </button>
+            </div>
+
+            {/* Jaw Filter (Maxillary / Mandibular) */}
+            <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-white/10">
+              <button
+                onClick={() => setJawFilter('All')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                  jawFilter === 'All' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-300 hover:text-white'
+                }`}
+              >
+                Arcade Complète
+              </button>
+              <button
+                onClick={() => setJawFilter('Maxillary')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                  jawFilter === 'Maxillary' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-300 hover:text-white'
+                }`}
+              >
+                Maxillaire
+              </button>
+              <button
+                onClick={() => setJawFilter('Mandibular')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                  jawFilter === 'Mandibular' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-300 hover:text-white'
+                }`}
+              >
+                Mandibule
+              </button>
+            </div>
+
           </div>
 
-          {/* Jaw Filter (Maxillary / Mandibular) */}
-          <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-white/5">
-            <button
-              onClick={() => setJawFilter('All')}
-              className={`px-2.5 py-1 rounded-lg text-xxs font-bold transition-all cursor-pointer ${
-                jawFilter === 'All' ? 'bg-white/15 text-white' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Vue Complète
-            </button>
-            <button
-              onClick={() => setJawFilter('Maxillary')}
-              className={`px-2.5 py-1 rounded-lg text-xxs font-bold transition-all cursor-pointer ${
-                jawFilter === 'Maxillary' ? 'bg-white/15 text-white' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Maxillaire
-            </button>
-            <button
-              onClick={() => setJawFilter('Mandibular')}
-              className={`px-2.5 py-1 rounded-lg text-xxs font-bold transition-all cursor-pointer ${
-                jawFilter === 'Mandibular' ? 'bg-white/15 text-white' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Mandibule
-            </button>
-          </div>
+          {/* Right: Mouth Articulator & Action Buttons */}
+          <div className="flex items-center gap-2 shrink-0">
+            
+            {/* Interactive Mouth Opening Controls */}
+            <div className="flex items-center gap-2.5 bg-slate-950 px-3 py-1.5 rounded-xl border border-white/10">
+              <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5 select-none whitespace-nowrap">
+                👄 <span>Bouche :</span>
+              </span>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={mouthOpening}
+                onChange={(e) => setMouthOpening(parseFloat(e.target.value))}
+                className="w-20 md:w-28 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                title="Ajuster l'ouverture de la bouche"
+              />
+              <button
+                onClick={() => setMouthOpening(mouthOpening > 0.1 ? 0 : 0.85)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                  mouthOpening > 0.1
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700'
+                }`}
+              >
+                {mouthOpening > 0.1 ? 'Ouverte (Occlusale)' : 'Fermée (Occlusion)'}
+              </button>
+            </div>
 
-          {/* Action Icons */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowLabels(!showLabels)}
-              title="Afficher/Masquer Numéros FDI"
-              className={`px-2.5 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
-                showLabels ? 'bg-blue-600/20 border-blue-500 text-blue-400' : 'bg-white/5 border-white/5 text-slate-400 hover:text-white'
-              }`}
-            >
-              N° FDI
-            </button>
-            <button
-              onClick={() => setAutoRotate(!autoRotate)}
-              title="Rotation Automatique"
-              className={`p-2 rounded-xl border transition-all cursor-pointer ${
-                autoRotate ? 'bg-blue-600/20 border-blue-500 text-blue-400' : 'bg-white/5 border-white/5 text-slate-400 hover:text-white'
-              }`}
-            >
-              <Sparkles className="w-4 h-4" />
-            </button>
-            <button
-              onClick={toggleFullscreen}
-              title="Plein Écran"
-              className="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 text-slate-400 hover:text-white transition-all cursor-pointer"
-            >
-              {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-            </button>
+            {/* Action Icons */}
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setShowLabels(!showLabels)}
+                title="Afficher/Masquer Numéros FDI"
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                  showLabels
+                    ? 'bg-blue-600 text-white border-blue-500 shadow-xs'
+                    : 'bg-slate-950 text-slate-300 border-white/10 hover:text-white hover:bg-slate-900'
+                }`}
+              >
+                N° FDI
+              </button>
+              <button
+                onClick={() => setAutoRotate(!autoRotate)}
+                title="Rotation Automatique"
+                className={`p-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                  autoRotate
+                    ? 'bg-blue-600 text-white border-blue-500 shadow-xs'
+                    : 'bg-slate-950 text-slate-300 border-white/10 hover:text-white hover:bg-slate-900'
+                }`}
+              >
+                <Sparkles className="w-4 h-4" />
+              </button>
+              <button
+                onClick={toggleFullscreen}
+                title="Plein Écran"
+                className="p-2 rounded-xl bg-slate-950 hover:bg-slate-900 border border-white/10 text-slate-300 hover:text-white transition-all cursor-pointer"
+              >
+                {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+              </button>
+            </div>
+
           </div>
 
         </div>
 
         {/* Three.js R3F Scene Canvas */}
-        <Canvas camera={{ position: [0, 0, 8.2], fov: 42 }} className="w-full h-full">
-          <ambientLight intensity={1.1} />
-          <directionalLight position={[5, 10, 10]} intensity={1.8} castShadow />
-          <pointLight position={[-8, -5, -5]} intensity={0.6} />
+        <Canvas camera={{ position: [0, 0.4, 8.5], fov: 42 }} className="w-full h-full">
+          {/* Clinical Dental Studio Lighting */}
+          <ambientLight intensity={1.2} />
+          <directionalLight position={[4, 8, 8]} intensity={2.0} castShadow />
+          <directionalLight position={[-4, 8, 8]} intensity={1.4} />
+          <pointLight position={[0, -2, 4]} intensity={0.9} />
+          <pointLight position={[0, 4, -4]} intensity={0.5} />
 
           <OrbitControls
             enablePan={true}
             enableZoom={true}
             autoRotate={autoRotate}
             autoRotateSpeed={1.5}
-            maxPolarAngle={Math.PI / 1.5}
-            minPolarAngle={Math.PI / 4}
+            maxPolarAngle={Math.PI / 1.35}
+            minPolarAngle={Math.PI / 4.5}
           />
 
-          {/* Render Maxillary & Mandibular Gum Meshes */}
-          {(jawFilter === 'All' || jawFilter === 'Maxillary') && <GingivaArchMesh jaw="Maxillary" />}
-          {(jawFilter === 'All' || jawFilter === 'Mandibular') && <GingivaArchMesh jaw="Mandibular" />}
+          {/* MAXILLARY (UPPER JAW & TEETH) GROUP */}
+          {(jawFilter === 'All' || jawFilter === 'Maxillary') && (
+            <group position={[0, maxYOffset, 0]}>
+              <GingivaArchMesh jaw="Maxillary" />
+              {upperTeeth.map(([numStr, { pos, rot }]) => {
+                const num = Number(numStr);
+                const record = odontogram.find((t) => t.toothNumber === num);
+                return (
+                  <ToothMesh3D
+                    key={num}
+                    fdiNumber={num}
+                    position={pos}
+                    rotation={rot}
+                    status={record?.status || 'Healthy'}
+                    isSelected={selectedTooth === num}
+                    showLabels={showLabels}
+                    onClick={() => handleSelectTooth(num)}
+                  />
+                );
+              })}
+            </group>
+          )}
 
-          {/* Render 3D Teeth */}
-          {Object.entries(toothPositions).map(([numStr, { pos, rot }]) => {
-            const num = Number(numStr);
-            const meta = getToothMetadata(num);
-            if (jawFilter !== 'All' && meta.jaw !== jawFilter) return null;
-
-            const record = odontogram.find((t) => t.toothNumber === num);
-            return (
-              <ToothMesh3D
-                key={num}
-                fdiNumber={num}
-                position={pos}
-                rotation={rot}
-                status={record?.status || 'Healthy'}
-                isSelected={selectedTooth === num}
-                showLabels={showLabels}
-                onClick={() => handleSelectTooth(num)}
-              />
-            );
-          })}
+          {/* MANDIBULAR (LOWER JAW & TEETH) GROUP WITH REALISTIC TMJ ARTICULATOR OPENING */}
+          {(jawFilter === 'All' || jawFilter === 'Mandibular') && (
+            <group position={[0, mandYOffset, mandZOffset]} rotation={[mandRotX, 0, 0]}>
+              <GingivaArchMesh jaw="Mandibular" />
+              {lowerTeeth.map(([numStr, { pos, rot }]) => {
+                const num = Number(numStr);
+                const record = odontogram.find((t) => t.toothNumber === num);
+                return (
+                  <ToothMesh3D
+                    key={num}
+                    fdiNumber={num}
+                    position={pos}
+                    rotation={rot}
+                    status={record?.status || 'Healthy'}
+                    isSelected={selectedTooth === num}
+                    showLabels={showLabels}
+                    onClick={() => handleSelectTooth(num)}
+                  />
+                );
+              })}
+            </group>
+          )}
         </Canvas>
 
         {/* Legend Toolbar Footer */}
-        <div className="z-10 bg-slate-900/80 backdrop-blur-md p-3 rounded-2xl border border-white/10 flex items-center justify-between overflow-x-auto no-scrollbar gap-4">
+        <div className="z-10 bg-slate-900/85 backdrop-blur-md p-3 rounded-2xl border border-white/10 flex items-center justify-between overflow-x-auto no-scrollbar gap-4">
           <div className="flex items-center gap-3">
             <span className="text-xxs uppercase tracking-wider font-bold text-slate-400">Légende:</span>
-            {Object.entries(STATUS_CONFIGS).slice(0, 7).map(([key, cfg]) => (
+            {Object.entries(STATUS_CONFIGS).slice(0, 8).map(([key, cfg]) => (
               <div key={key} className="flex items-center gap-1.5 shrink-0">
                 <span className={`w-3 h-3 rounded-full ${cfg.color}`} />
                 <span className="text-xxs text-slate-300 font-semibold">{cfg.label}</span>

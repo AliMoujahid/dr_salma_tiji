@@ -173,18 +173,7 @@ export interface Document {
   patientId: string;
   fileName: string;
   fileType: 'Photo' | 'XRay' | 'Document' | 'Video' | 'Audio';
-  category:
-    | 'Before'
-    | 'After'
-    | 'Smile'
-    | 'Treatment'
-    | 'Face'
-    | 'Panoramic'
-    | 'Periapical'
-    | 'CBCT'
-    | '3D Scan'
-    | 'PDF'
-    | 'Others';
+  category: string;
   filePath: string;
   fileSize: number;
   uploadedAt: string;
@@ -247,7 +236,7 @@ export interface NotificationSettings {
   testMode: boolean;
   testPhoneNumber?: string;
   testEmail?: string;
-  whatsAppProvider: 'MetaCloud' | 'TwilioWhatsApp';
+  whatsAppProvider: 'WhatsAppWebJS' | 'MetaCloud' | 'TwilioWhatsApp';
   smsProvider: 'Twilio' | 'Vonage' | 'MessageBird' | 'AWSSNS';
   metaCloud?: {
     appId: string;

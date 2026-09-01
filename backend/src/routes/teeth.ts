@@ -5,10 +5,19 @@ import { protect, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
+const isValidObjectId = (id: any): boolean => {
+  return typeof id === 'string' && mongoose.Types.ObjectId.isValid(id);
+};
+
 // Get full odontogram tooth statuses for a patient (latest state for each tooth)
 router.get('/patient/:patientId', protect, async (req: AuthRequest, res: Response) => {
   try {
     const { patientId } = req.params;
+
+    if (!isValidObjectId(patientId)) {
+      res.status(400).json({ message: 'Identifiant patient invalide.' });
+      return;
+    }
 
     // Aggregate to get the latest status for each tooth of the patient
     const odontogram = await ToothHistory.aggregate([
@@ -36,9 +45,21 @@ router.get('/patient/:patientId', protect, async (req: AuthRequest, res: Respons
 router.get('/patient/:patientId/tooth/:toothNumber', protect, async (req: AuthRequest, res: Response) => {
   try {
     const { patientId, toothNumber } = req.params;
+
+    if (!isValidObjectId(patientId)) {
+      res.status(400).json({ message: 'Identifiant patient invalide.' });
+      return;
+    }
+
+    const tNum = parseInt(toothNumber as string, 10);
+    if (isNaN(tNum)) {
+      res.status(400).json({ message: 'Numéro de dent invalide.' });
+      return;
+    }
+
     const history = await ToothHistory.find({
       patientId: new mongoose.Types.ObjectId(patientId as string),
-      toothNumber: parseInt(toothNumber as string, 10),
+      toothNumber: tNum,
     })
       .populate('invoiceId', 'invoiceNumber')
       .sort({ date: -1 });
@@ -59,17 +80,28 @@ router.post('/', protect, async (req: AuthRequest, res: Response) => {
       return;
     }
 
+    if (!isValidObjectId(patientId)) {
+      res.status(400).json({ message: 'Identifiant patient invalide.' });
+      return;
+    }
+
+    const tNum = parseInt(toothNumber, 10);
+    if (isNaN(tNum)) {
+      res.status(400).json({ message: 'Numéro de dent invalide.' });
+      return;
+    }
+
     const record = await ToothHistory.create({
       patientId,
-      toothNumber: parseInt(toothNumber, 10),
+      toothNumber: tNum,
       status,
       notes,
-      cost: cost || 0,
-      invoiceId: invoiceId || undefined,
+      cost: parseFloat(cost) || 0,
+      invoiceId: isValidObjectId(invoiceId) ? invoiceId : undefined,
       date: date ? new Date(date) : new Date(),
-      photosBefore: photosBefore || [],
-      photosAfter: photosAfter || [],
-      xrays: xrays || [],
+      photosBefore: Array.isArray(photosBefore) ? photosBefore : [],
+      photosAfter: Array.isArray(photosAfter) ? photosAfter : [],
+      xrays: Array.isArray(xrays) ? xrays : [],
     });
 
     res.status(201).json(record);
@@ -81,6 +113,11 @@ router.post('/', protect, async (req: AuthRequest, res: Response) => {
 // Update a tooth history entry
 router.put('/:id', protect, async (req: AuthRequest, res: Response) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      res.status(400).json({ message: 'Identifiant d\'acte dentaire invalide.' });
+      return;
+    }
+
     const record = await ToothHistory.findByIdAndUpdate(req.params.id, req.body, { new: true });
     if (!record) {
       res.status(404).json({ message: 'Enregistrement de la dent introuvable.' });
@@ -95,6 +132,11 @@ router.put('/:id', protect, async (req: AuthRequest, res: Response) => {
 // Delete a tooth history entry
 router.delete('/:id', protect, async (req: AuthRequest, res: Response) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      res.status(400).json({ message: 'Identifiant d\'acte dentaire invalide.' });
+      return;
+    }
+
     const record = await ToothHistory.findByIdAndDelete(req.params.id);
     if (!record) {
       res.status(404).json({ message: 'Enregistrement introuvable.' });

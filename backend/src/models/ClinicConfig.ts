@@ -41,7 +41,7 @@ const ClinicConfigSchema: Schema = new Schema(
       default:
         'Av Hassan II, lot AIN AL HAYAT 1 ,N° 235 ,APPT N° 3, 1er Etage - SKHIRAT TEMARA',
     },
-    phones: { type: String, default: '+212 7 19 55 66 37 / +212 6 54 23 10 76' },
+    phones: { type: String, default: '+212 6 89 77 32 55 / +212 6 89 77 32 55' },
     email: { type: String, default: 'dr.salmatijini@gmail.com' },
     ice: { type: String, default: '28103818' },
     inbe: { type: String, default: '044215820' },

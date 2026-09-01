@@ -42,12 +42,22 @@ export const Sidebar: React.FC<SidebarProps> = ({ clinicNameFr = 'Cabinet Tijini
     { name: 'Patients', path: '/patients', icon: Users },
     { name: 'Rendez-vous', path: '/appointments', icon: Calendar },
     { name: 'Salle d\'attente', path: '/waiting-room', icon: MonitorPlay },
-    { name: 'Factures & Soins', path: '/invoices', icon: FileText },
-    { name: 'Paiements', path: '/payments', icon: CreditCard },
+    { name: 'Facturation & Paiements', path: '/invoices', icon: FileText },
     { name: 'Rapports & Stats', path: '/reports', icon: BarChart3 },
     { name: 'Notifications & Rappels', path: '/notifications', icon: MessageSquare },
     { name: 'Configuration', path: '/settings', icon: Settings },
   ];
+
+  const getAvatarSrc = (avatarUrl?: string, name?: string) => {
+    if (!avatarUrl) {
+      return `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name || 'User')}`;
+    }
+    if (avatarUrl.startsWith('/uploads')) {
+      const baseUrl = API_URL.replace('/api', '');
+      return `${baseUrl}${avatarUrl}`;
+    }
+    return avatarUrl;
+  };
 
   return (
     <>
@@ -117,8 +127,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ clinicNameFr = 'Cabinet Tijini
       <div className="flex flex-col gap-4 border-t border-white/5 pt-4">
         {user && (
           <div className="flex items-center gap-2 px-1">
-            <div className="w-10 h-10 rounded-full border border-white/10 overflow-hidden bg-slate-800">
-              <img src={user.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${user.name}`} alt={user.name} className="w-full h-full object-cover" />
+            <div className="w-10 h-10 rounded-full border border-white/10 overflow-hidden bg-slate-800 shrink-0">
+              <img src={getAvatarSrc(user.avatarUrl, user.name)} alt={user.name} className="w-full h-full object-cover" />
             </div>
             <div className="flex-1 min-w-0">
               <h4 className="text-sm font-semibold text-white truncate">{user.name}</h4>

@@ -94,17 +94,14 @@ router.post(
   restrictTo('ADMIN'),
   upload.single('file'),
   async (req: any, res: any) => {
-    try {
-      if (!req.file) {
-        return res.status(400).json({ message: 'Aucun fichier fourni.' });
-      }
+    if (!req.file) {
+      return res.status(400).json({ message: 'Aucun fichier fourni.' });
+    }
 
-      const filePath = req.file.path;
+    const filePath = req.file.path;
+    try {
       const fileData = fs.readFileSync(filePath, 'utf-8');
       const parsedData = JSON.parse(fileData);
-
-      // Clean up uploaded temp file
-      fs.unlinkSync(filePath);
 
       // Validate structure before proceeding
       if (
@@ -141,6 +138,12 @@ router.post(
       res.json({ message: 'Base de données restaurée avec succès.' });
     } catch (error: any) {
       res.status(500).json({ message: 'Erreur lors de la restauration de la base de données.', error: error.message });
+    } finally {
+      if (filePath) {
+        try {
+          if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        } catch {}
+      }
     }
   }
 );

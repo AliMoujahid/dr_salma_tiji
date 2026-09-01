@@ -1,14 +1,71 @@
 import express, { Request, Response } from 'express';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
 import NotificationLog from '../models/NotificationLog';
 import MessageTemplate from '../models/MessageTemplate';
 import NotificationSettings from '../models/NotificationSettings';
 import FollowUpReminder from '../models/FollowUpReminder';
 import Patient from '../models/Patient';
 import Appointment from '../models/Appointment';
+import Invoice from '../models/Invoice';
+import DocumentModel from '../models/Document';
 import { notificationProvider } from '../services/notificationProvider';
+import { whatsappService } from '../services/whatsappService';
 import { protect } from '../middleware/auth';
 
 const router = express.Router();
+
+// Configure temp upload for attachments
+const tempUploadDir = path.join(__dirname, '..', '..', 'uploads', 'temp');
+if (!fs.existsSync(tempUploadDir)) {
+  fs.mkdirSync(tempUploadDir, { recursive: true });
+}
+
+const upload = multer({
+  dest: tempUploadDir,
+  limits: { fileSize: 30 * 1024 * 1024 }, // 30 MB max
+});
+
+/**
+ * GET /api/notifications/whatsapp-status
+ * Fetch current WhatsApp Web connection status & QR code
+ */
+router.get('/whatsapp-status', protect, (req: Request, res: Response) => {
+  try {
+    const status = whatsappService.getStatus();
+    res.json(status);
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+/**
+ * POST /api/notifications/whatsapp-init
+ * Start WhatsApp Web headless client session
+ */
+router.post('/whatsapp-init', protect, async (req: Request, res: Response) => {
+  try {
+    await whatsappService.initClient(true);
+    const status = whatsappService.getStatus();
+    res.json({ message: 'Initialisation de WhatsApp Web lancée...', status });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+/**
+ * POST /api/notifications/whatsapp-logout
+ * Logout and clear WhatsApp Web session data
+ */
+router.post('/whatsapp-logout', protect, async (req: Request, res: Response) => {
+  try {
+    await whatsappService.logout();
+    res.json({ message: 'WhatsApp Web déconnecté et session réinitialisée.' });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
 
 /**
  * GET /api/notifications/logs
@@ -28,13 +85,14 @@ router.get('/logs', protect, async (req: Request, res: Response) => {
       .sort({ createdAt: -1 })
       .limit(Number(limit));
 
-    if (search) {
-      const q = String(search).toLowerCase();
+    if (search && typeof search === 'string' && search.trim()) {
+      const q = search.trim().toLowerCase();
       logs = logs.filter(
         (l: any) =>
-          l.recipient.toLowerCase().includes(q) ||
-          l.body.toLowerCase().includes(q) ||
-          l.patientId?.name?.toLowerCase().includes(q)
+          l.recipient?.toLowerCase()?.includes(q) ||
+          l.body?.toLowerCase()?.includes(q) ||
+          l.subject?.toLowerCase()?.includes(q) ||
+          l.patientId?.name?.toLowerCase()?.includes(q)
       );
     }
 
@@ -149,37 +207,168 @@ router.delete('/templates/:id', protect, async (req: Request, res: Response) => 
 });
 
 /**
- * POST /api/notifications/send-manual
- * Send single manual notification
+ * GET /api/notifications/patient-attachments/:patientId
+ * Fetch patient's invoices and medical documents for WhatsApp attachment selection
  */
-router.post('/send-manual', protect, async (req: Request, res: Response) => {
+router.get('/patient-attachments/:patientId', protect, async (req: Request, res: Response) => {
   try {
-    const { patientId, appointmentId, channel, recipient, subject, body } = req.body;
+    const { patientId } = req.params;
+    const [invoices, documents] = await Promise.all([
+      Invoice.find({ patientId }).sort({ date: -1, createdAt: -1 }),
+      DocumentModel.find({ patientId }).sort({ uploadedAt: -1 }),
+    ]);
+
+    res.json({ invoices, documents });
+  } catch (err: any) {
+    res.status(500).json({ message: 'Error fetching patient attachments', error: err.message });
+  }
+});
+
+/**
+ * POST /api/notifications/send-manual
+ * Send manual notification with optional invoice, document, or custom file attachment
+ */
+router.post('/send-manual', protect, upload.single('attachment'), async (req: any, res: Response) => {
+  try {
+    let { patientId, appointmentId, invoiceId, documentId, channel = 'WhatsApp', recipient, subject, body } = req.body;
+
+    let mediaPath: string | undefined;
+    let mediaFilename: string | undefined;
+    let mediaMimeType: string | undefined;
+
+    let targetPatientName = '';
+
+    // 1. If an invoiceId is specified, format complete invoice message breakdown
+    if (invoiceId) {
+      const inv = await Invoice.findById(invoiceId).populate('patientId');
+      if (inv) {
+        if (!recipient && (inv.patientId as any)?.phone) {
+          recipient = (inv.patientId as any).phone;
+        }
+        if (!patientId) {
+          patientId = (inv.patientId as any)?._id;
+        }
+        targetPatientName = (inv.patientId as any)?.name || '';
+
+        // If custom body wasn't supplied or is default, generate structured professional invoice text
+        if (!body || body.trim() === '') {
+          const invDateStr = new Date(inv.date || inv.createdAt).toLocaleDateString('fr-FR');
+          const itemsText = inv.items?.map((it) => `  • ${it.description}${it.tooth ? ` (Dent ${it.tooth})` : ''} : ${it.amount.toLocaleString('fr-FR')} MAD`).join('\n') || '';
+          const due = Math.max(0, inv.netAmount - (inv.paidAmount || 0));
+
+          body = `🧾 *FACTURE N° ${inv.invoiceNumber}*\n` +
+            `*Cabinet Dentaire Dr. Salma Tijini*\n` +
+            `━━━━━━━━━━━━━━━━━━━━━\n` +
+            `👤 Patient : *${targetPatientName || 'Client'}*\n` +
+            `📅 Date : *${invDateStr}*\n\n` +
+            `📋 *Détail des Soins :*\n${itemsText}\n\n` +
+            `━━━━━━━━━━━━━━━━━━━━━\n` +
+            `💰 Total Brut : *${inv.totalAmount.toLocaleString('fr-FR')} MAD*\n` +
+            (inv.discount > 0 ? `🏷️ Remise : *-${inv.discount.toLocaleString('fr-FR')} MAD*\n` : '') +
+            `💳 *Net à Payer : ${inv.netAmount.toLocaleString('fr-FR')} MAD*\n` +
+            `✅ Montant Réglé : *${(inv.paidAmount || 0).toLocaleString('fr-FR')} MAD*\n` +
+            `⏳ *Reste Dû : ${due.toLocaleString('fr-FR')} MAD*\n` +
+            `━━━━━━━━━━━━━━━━━━━━━\n` +
+            `Mode de règlement : ${inv.paymentMode}\n\n` +
+            `Merci pour votre confiance. 🦷✨\n` +
+            `_Cabinet Dr. Salma Tijini - Av Hassan II, Skhirat_`;
+        }
+      }
+    }
+
+    // 2. If a documentId is specified (uploaded patient document/X-Ray)
+    if (documentId) {
+      const doc = await DocumentModel.findById(documentId).populate('patientId');
+      if (doc) {
+        if (!recipient && (doc.patientId as any)?.phone) {
+          recipient = (doc.patientId as any).phone;
+        }
+        if (!patientId) {
+          patientId = (doc.patientId as any)?._id;
+        }
+        if (!targetPatientName) {
+          targetPatientName = (doc.patientId as any)?.name || '';
+        }
+
+        const fullPath = path.join(__dirname, '..', '..', 'uploads', doc.filePath.replace(/^\/+/, ''));
+        if (fs.existsSync(fullPath)) {
+          mediaPath = fullPath;
+          mediaFilename = doc.fileName;
+        }
+      }
+    }
+
+    // 3. If a custom file was uploaded directly in the request
+    if (req.file) {
+      mediaPath = req.file.path;
+      mediaFilename = req.file.originalname;
+      mediaMimeType = req.file.mimetype;
+    }
+
+    // Look up patient name and phone if patientId exists
+    if (patientId) {
+      const patient = await Patient.findById(patientId);
+      if (patient) {
+        if (!recipient) {
+          recipient = channel === 'Email' ? patient.email : patient.phone;
+        }
+        if (!targetPatientName) {
+          targetPatientName = patient.name;
+        }
+      }
+    }
+
+    // Interpolate variable {{patient_name}} with actual patient name
+    if (body) {
+      body = body.replace(/\{\{patient_name\}\}/g, targetPatientName || 'Cher patient');
+    }
+
+    if (!recipient) {
+      return res.status(400).json({ message: 'Numéro de téléphone / destinataire introuvable.' });
+    }
 
     const result = await notificationProvider.dispatch({
       channel,
       recipient,
-      subject,
-      body,
+      subject: subject || (invoiceId ? 'Facture' : documentId || req.file ? 'Document' : undefined),
+      body: body || 'Veuillez trouver votre document ci-joint.',
+      mediaPath,
+      mediaFilename,
+      mediaMimeType,
     });
 
-    const log = await NotificationLog.create({
-      patientId,
-      appointmentId,
-      channel,
-      provider: result.provider,
-      recipient,
-      messageType: 'Manual',
-      subject,
-      body,
-      status: result.success ? 'Sent' : 'Failed',
-      errorDetails: result.errorDetails,
-      sentAt: result.success ? new Date() : undefined,
-    });
+    let log = null;
+    try {
+      log = await NotificationLog.create({
+        patientId: patientId || undefined,
+        appointmentId: appointmentId || undefined,
+        channel,
+        provider: result.provider,
+        recipient,
+        messageType: invoiceId ? 'Invoice' : documentId || req.file ? 'Document' : 'Manual',
+        subject: subject || (invoiceId ? 'Facture Cabinet' : documentId || req.file ? 'Document Médical' : undefined),
+        body,
+        status: result.success ? 'Sent' : 'Failed',
+        errorDetails: result.errorDetails,
+        sentAt: result.success ? new Date() : undefined,
+      });
+    } catch (logErr) {
+      console.warn('[NotificationLog] Warning creating log:', logErr);
+    }
 
-    res.json({ result, log });
+    // Clean up temporary upload file if one was created
+    if (req.file && fs.existsSync(req.file.path)) {
+      setTimeout(() => {
+        try {
+          fs.unlinkSync(req.file.path);
+        } catch {}
+      }, 5000);
+    }
+
+    res.json({ result, log, message: result.success ? 'Message et document envoyés avec succès !' : 'Échec de l\'envoi' });
   } catch (err: any) {
-    res.status(500).json({ message: 'Error sending manual notification', error: err.message });
+    console.error('Error in send-manual notification:', err);
+    res.status(500).json({ message: 'Erreur lors de l\'envoi de la notification', error: err.message });
   }
 });
 
@@ -295,25 +484,6 @@ router.get('/confirm-appointment/:appointmentId/:action', async (req: Request, r
   } catch (err: any) {
     res.status(500).send('Erreur lors de la mise à jour.');
   }
-});
-
-/**
- * POST /api/notifications/webhook/whatsapp
- * Meta WhatsApp Cloud API Webhook receiver
- */
-router.post('/webhook/whatsapp', (req: Request, res: Response) => {
-  res.sendStatus(200);
-});
-
-router.get('/webhook/whatsapp', (req: Request, res: Response) => {
-  const mode = req.query['hub.mode'];
-  const token = req.query['hub.verify_token'];
-  const challenge = req.query['hub.challenge'];
-
-  if (mode === 'subscribe' && token === 'drtijini_verify_token') {
-    return res.status(200).send(challenge);
-  }
-  res.sendStatus(403);
 });
 
 export default router;

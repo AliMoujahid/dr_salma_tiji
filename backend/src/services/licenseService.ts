@@ -124,6 +124,20 @@ class LicenseService {
    */
   public verifyLicense(licenseString?: string): LicenseStatus {
     const machineId = this.getMachineId();
+
+    // Bypass license checks in development environment or when BYPASS_LICENSE=true
+    if (process.env.NODE_ENV !== 'production' || process.env.BYPASS_LICENSE === 'true') {
+      return {
+        active: true,
+        machineId,
+        clientName: 'Cabinet Dr. Salma Tijini (Mode Dev)',
+        type: 'DEVELOPMENT',
+        validUntil: 'LIFETIME',
+        daysRemaining: 99999,
+        message: 'Licence active (Mode Développement).',
+      };
+    }
+
     let rawKey = licenseString;
 
     // If not provided, try to read from license.key file in root, uploads, or current folder

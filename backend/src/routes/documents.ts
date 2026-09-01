@@ -2,11 +2,16 @@ import { Router, Response } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import mongoose from 'mongoose';
 import Patient from '../models/Patient';
 import DocumentModel from '../models/Document';
 import { protect, AuthRequest } from '../middleware/auth';
 
 const router = Router();
+
+const isValidObjectId = (id: any): boolean => {
+  return typeof id === 'string' && mongoose.Types.ObjectId.isValid(id);
+};
 
 // Configure dynamic disk storage based on patient details
 const storage = multer.diskStorage({
@@ -16,11 +21,11 @@ const storage = multer.diskStorage({
       const category = req.body.category || req.query.category || 'Documents'; // Photos, XRays, Documents, Videos, Audio
 
       let patientName = 'Unknown_Patient';
-      if (patientId) {
+      if (isValidObjectId(patientId)) {
         const patient = await Patient.findById(patientId);
         if (patient) {
           // Normalize patient name to be safe for directory naming on Windows/Linux
-          patientName = patient.name.replace(/[^a-zA-Z0-9\s-_]/g, '').replace(/\s+/g, '_').trim();
+          patientName = patient.name.replace(/[^a-zA-Z0-9\s-_]/g, '').replace(/\s+/g, '_').trim() || 'Patient';
         }
       }
 
@@ -38,13 +43,23 @@ const storage = multer.diskStorage({
   filename: function (req, file, cb) {
     // Keep original extension, append timestamp
     const ext = path.extname(file.originalname);
-    const basename = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9\s-_]/g, '').replace(/\s+/g, '_');
+    const basename = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9\s-_]/g, '').replace(/\s+/g, '_') || 'file';
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
     cb(null, `${basename}-${uniqueSuffix}${ext}`);
   },
 });
 
 const upload = multer({ storage: storage });
+
+// Helper to reliably compute relative upload path with leading slash
+const getRelativeUploadPath = (fullPath: string): string => {
+  const normalized = fullPath.replace(/\\/g, '/');
+  const match = normalized.match(/\/uploads\/(.+)$/i);
+  if (match && match[1]) {
+    return '/' + match[1].replace(/^\/+/, '');
+  }
+  return '/' + path.basename(fullPath);
+};
 
 // Upload a single file
 router.post('/upload', protect, upload.single('file'), async (req: AuthRequest, res: Response) => {
@@ -54,28 +69,46 @@ router.post('/upload', protect, upload.single('file'), async (req: AuthRequest, 
       return;
     }
 
-    const { patientId, category, fileType } = req.body;
-    if (!patientId) {
-      res.status(400).json({ message: 'L\'ID du patient est requis.' });
+    let { patientId, category, fileType } = req.body;
+    if (!isValidObjectId(patientId)) {
+      // Clean up uploaded file if patientId is invalid
+      try {
+        if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+      } catch {}
+      res.status(400).json({ message: 'L\'identifiant du patient est invalide ou manquant.' });
       return;
     }
 
-    // Save relative path for frontend asset access, e.g. "Patients/Amine_El_Amrani/XRays/file.png"
-    // Extract everything after the "uploads" directory
-    const parts = req.file.path.split('uploads');
-    const relativePath = parts.length > 1 ? parts[1].replace(/\\/g, '/') : req.file.path;
+    const relativePath = getRelativeUploadPath(req.file.path);
+    const ext = path.extname(req.file.originalname).toLowerCase().replace('.', '');
+
+    // Auto-detect exact category and fileType from extension
+    if (['mp4', 'avi', 'mov', 'mkv', 'webm'].includes(ext)) {
+      fileType = 'Video';
+      category = 'Videos';
+    } else if (['mp3', 'wav', 'ogg', 'm4a', 'flac', 'aac'].includes(ext)) {
+      fileType = 'Audio';
+      category = 'Audio';
+    } else if (['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'svg'].includes(ext)) {
+      fileType = category === 'XRays' ? 'XRay' : 'Photo';
+      category = category === 'XRays' ? 'XRays' : 'Photos';
+    } else {
+      fileType = 'Document';
+      category = 'Documents';
+    }
 
     const newDoc = await DocumentModel.create({
       patientId,
       fileName: req.file.originalname,
-      fileType: fileType || 'Document', // Photo, XRay, Document, Video, Audio
-      category: category || 'Others',
+      fileType,
+      category,
       filePath: relativePath,
       fileSize: req.file.size,
     });
 
     res.status(201).json(newDoc);
   } catch (error: any) {
+    console.error('Error in document upload route:', error);
     res.status(500).json({ message: 'Erreur lors du téléversement du fichier.', error: error.message });
   }
 });
@@ -84,8 +117,13 @@ router.post('/upload', protect, upload.single('file'), async (req: AuthRequest, 
 router.get('/patient/:patientId', protect, async (req: AuthRequest, res: Response) => {
   try {
     const { patientId } = req.params;
-    const { category, fileType } = req.query;
 
+    if (!isValidObjectId(patientId)) {
+      res.status(400).json({ message: 'Identifiant patient invalide.' });
+      return;
+    }
+
+    const { category, fileType } = req.query;
     const query: any = { patientId };
 
     if (category) {
@@ -105,8 +143,13 @@ router.get('/patient/:patientId', protect, async (req: AuthRequest, res: Respons
 // Rename file
 router.put('/:id/rename', protect, async (req: AuthRequest, res: Response) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      res.status(400).json({ message: 'Identifiant de fichier invalide.' });
+      return;
+    }
+
     const { newName } = req.body;
-    if (!newName) {
+    if (!newName || typeof newName !== 'string' || !newName.trim()) {
       res.status(400).json({ message: 'Le nouveau nom est requis.' });
       return;
     }
@@ -117,17 +160,22 @@ router.put('/:id/rename', protect, async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    // Rename file physically on disk
+    // Rename file physically on disk safely
     const absolutePath = path.join(__dirname, '..', '..', 'uploads', doc.filePath);
     const dir = path.dirname(absolutePath);
     const ext = path.extname(absolutePath);
     
     // Add extension if not present in the new name
-    const formattedNewName = newName.endsWith(ext) ? newName : newName + ext;
+    const trimmedName = newName.trim();
+    const formattedNewName = trimmedName.endsWith(ext) ? trimmedName : trimmedName + ext;
     const newAbsolutePath = path.join(dir, formattedNewName);
 
-    if (fs.existsSync(absolutePath)) {
-      fs.renameSync(absolutePath, newAbsolutePath);
+    try {
+      if (fs.existsSync(absolutePath)) {
+        fs.renameSync(absolutePath, newAbsolutePath);
+      }
+    } catch (fsErr: any) {
+      console.warn('Physical file rename warning:', fsErr.message);
     }
 
     // Update database reference
@@ -147,16 +195,25 @@ router.put('/:id/rename', protect, async (req: AuthRequest, res: Response) => {
 // Delete file
 router.delete('/:id', protect, async (req: AuthRequest, res: Response) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      res.status(400).json({ message: 'Identifiant de fichier invalide.' });
+      return;
+    }
+
     const doc = await DocumentModel.findById(req.params.id);
     if (!doc) {
       res.status(404).json({ message: 'Fichier introuvable.' });
       return;
     }
 
-    // Delete physical file on disk
-    const absolutePath = path.join(__dirname, '..', '..', 'uploads', doc.filePath);
-    if (fs.existsSync(absolutePath)) {
-      fs.unlinkSync(absolutePath);
+    // Delete physical file on disk safely
+    try {
+      const absolutePath = path.join(__dirname, '..', '..', 'uploads', doc.filePath);
+      if (fs.existsSync(absolutePath)) {
+        fs.unlinkSync(absolutePath);
+      }
+    } catch (fsErr: any) {
+      console.warn('Physical file delete warning:', fsErr.message);
     }
 
     await doc.deleteOne();

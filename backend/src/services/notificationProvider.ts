@@ -1,11 +1,16 @@
 import nodemailer from 'nodemailer';
 import NotificationSettings, { INotificationSettings } from '../models/NotificationSettings';
+import { whatsappService } from './whatsappService';
 
 export interface SendMessagePayload {
   channel: 'WhatsApp' | 'SMS' | 'Email' | 'InApp';
   recipient: string;
   subject?: string;
   body: string;
+  mediaPath?: string;
+  mediaFilename?: string;
+  mediaMimeType?: string;
+  mediaData?: { mimetype: string; data: string; filename?: string };
   buttons?: { label: string; urlOrPhone?: string }[];
 }
 
@@ -30,6 +35,7 @@ export class NotificationProviderService {
         enableInApp: true,
         enableScheduler: true,
         testMode: true,
+        testPhoneNumber: '+212613117131',
       });
     }
     return settings;
@@ -74,13 +80,34 @@ export class NotificationProviderService {
   }
 
   /**
-   * WhatsApp Multi-Provider dispatch (Meta Cloud API / Twilio)
+   * WhatsApp Multi-Provider dispatch (WhatsApp Web Client / Meta Cloud API)
    */
   private async sendWhatsApp(
     payload: SendMessagePayload,
     settings: INotificationSettings,
     recipient: string
   ): Promise<SendResult> {
+    // 1. Try sending via WhatsApp Web Client (100% Free local WhatsApp session)
+    const waStatus = whatsappService.getStatus();
+    if (waStatus.connected) {
+      let result;
+      if (payload.mediaPath || payload.mediaData) {
+        result = await whatsappService.sendMedia(
+          recipient,
+          payload.mediaPath || payload.mediaData!,
+          payload.body,
+          payload.mediaFilename,
+          payload.mediaMimeType
+        );
+      } else {
+        result = await whatsappService.sendMessage(recipient, payload.body);
+      }
+
+      if (result.success) {
+        return { success: true, provider: 'WhatsAppWebJS', messageId: result.messageId };
+      }
+    }
+
     if (settings.whatsAppProvider === 'MetaCloud') {
       // If Meta Cloud credentials exist, send HTTP payload to Meta Graph API
       if (settings.metaCloud.accessToken && settings.metaCloud.phoneNumberId && !settings.testMode) {
@@ -112,10 +139,10 @@ export class NotificationProviderService {
       }
     }
 
-    // Default simulation or test mode success response
+    // Fallback simulation mode
     return {
       success: true,
-      provider: settings.whatsAppProvider,
+      provider: settings.whatsAppProvider || 'WhatsAppWebJS',
       messageId: `wa-sim-${Date.now()}`,
     };
   }

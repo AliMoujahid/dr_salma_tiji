@@ -18,17 +18,18 @@ import {
   Filter,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { Appointment, Patient } from '../types';
 import { SearchablePatientSelect } from '../components/SearchablePatientSelect';
 
 export const Appointments: React.FC = () => {
   const { token } = useAuth();
+  const { toast, confirm } = useToast();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Filters state
-  const [selectedChair, setSelectedChair] = useState<'All' | 'Chair 1' | 'Chair 2'>('All');
   const [dateFilterMode, setDateFilterMode] = useState<'Today' | 'Week' | 'Month' | 'All'>('Today');
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [searchQuery, setSearchQuery] = useState('');
@@ -39,7 +40,7 @@ export const Appointments: React.FC = () => {
   const [selectedPatientId, setSelectedPatientId] = useState('');
   const [dateTime, setDateTime] = useState('');
   const [duration, setDuration] = useState('30');
-  const [chair, setChair] = useState('Chair 1');
+  const [chair, setChair] = useState('Fauteuil');
   const [status, setStatus] = useState<'Scheduled' | 'Confirmed' | 'In Treatment' | 'Completed' | 'Cancelled' | 'No Show'>('Scheduled');
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -84,7 +85,7 @@ export const Appointments: React.FC = () => {
 
     setDateTime(localISOTime);
     setDuration('30');
-    setChair('Chair 1');
+    setChair('Fauteuil');
     setStatus('Scheduled');
     setNotes('');
     setIsModalOpen(true);
@@ -100,7 +101,7 @@ export const Appointments: React.FC = () => {
     setDateTime(localISOTime);
 
     setDuration(appt.duration.toString());
-    setChair(appt.chair);
+    setChair(appt.chair || 'Fauteuil');
     setStatus(appt.status);
     setNotes(appt.notes || '');
     setIsModalOpen(true);
@@ -161,7 +162,7 @@ export const Appointments: React.FC = () => {
     e.stopPropagation();
     const patientObj: any = appt.patientId;
     if (!patientObj || !patientObj.phone) {
-      alert('Numéro de téléphone du patient introuvable.');
+      toast.warning('Numéro introuvable', 'Le patient ne possède pas de numéro de téléphone valide.');
       return;
     }
 
@@ -184,28 +185,41 @@ export const Appointments: React.FC = () => {
       }),
     })
       .then((res) => res.json())
-      .then(() => alert(`Rappel WhatsApp envoyé avec succès à ${patientObj.name} !`))
-      .catch((err) => console.error('Error sending WhatsApp reminder:', err));
+      .then(() => toast.success('Rappel WhatsApp envoyé', `Message envoyé avec succès à ${patientObj.name} !`))
+      .catch((err) => {
+        console.error('Error sending WhatsApp reminder:', err);
+        toast.error('Erreur d\'envoi', err.message || 'Impossible d\'envoyer le rappel.');
+      });
   };
 
-  const handleDeleteAppointment = (id: string, e: React.MouseEvent) => {
+  const handleDeleteAppointment = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm('Supprimer ce rendez-vous ?')) return;
+    const confirmed = await confirm({
+      title: 'Supprimer ce rendez-vous ?',
+      message: 'Voulez-vous vraiment annuler et supprimer ce rendez-vous du planning ?',
+      variant: 'danger',
+      confirmText: 'Supprimer',
+      cancelText: 'Annuler',
+    });
+    if (!confirmed) return;
 
     fetch(`${API_URL}/appointments/${id}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
     })
-      .then(() => fetchAppointments())
-      .catch((err) => console.error('Error deleting appointment:', err));
+      .then(() => {
+        toast.success('Rendez-vous supprimé', 'Le rendez-vous a été retiré de l\'agenda.');
+        fetchAppointments();
+      })
+      .catch((err) => {
+        console.error('Error deleting appointment:', err);
+        toast.error('Erreur', 'Impossible de supprimer le rendez-vous.');
+      });
   };
 
   // Filtered appointments computation
   const filteredAppts = useMemo(() => {
     return appointments.filter((appt) => {
-      // Chair filter
-      if (selectedChair !== 'All' && appt.chair !== selectedChair) return false;
-
       // Search filter
       const patientObj = appt.patientId && typeof appt.patientId === 'object' ? (appt.patientId as Patient) : null;
       const patientName = patientObj?.name ? patientObj.name.toLowerCase() : '';
@@ -240,23 +254,25 @@ export const Appointments: React.FC = () => {
 
       return true;
     });
-  }, [appointments, selectedChair, dateFilterMode, selectedDate, searchQuery]);
+  }, [appointments, dateFilterMode, selectedDate, searchQuery]);
 
   return (
-    <div className="flex-1 p-6 md:p-8 flex flex-col gap-6 overflow-y-auto no-scrollbar max-h-[calc(100vh-80px)] text-white font-sans">
+    <div className="flex-1 p-6 md:p-8 flex flex-col gap-6 overflow-y-auto no-scrollbar max-h-[calc(100vh-80px)] font-sans">
       
       {/* Top Header & Quick Actions */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-black text-white tracking-tight">Agenda Clinique & Rendez-vous</h1>
-          <p className="text-xs text-slate-400 mt-1">
-            Gérez le planning des consultations, l'attribution des fauteuils et l'envoi des rappels automatiques.
+          <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+            Agenda Clinique & Rendez-vous
+          </h1>
+          <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400 mt-1">
+            Gérez le planning des consultations, le suivi en direct et l'envoi des rappels automatiques.
           </p>
         </div>
 
         <button
           onClick={handleOpenCreateModal}
-          className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-500 font-bold text-xs text-white transition-all shadow-lg shadow-blue-600/25 cursor-pointer"
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 font-bold text-xs text-white transition-all shadow-md shadow-blue-500/20 hover:scale-102 active:scale-98 cursor-pointer"
         >
           <Plus className="w-4 h-4" />
           <span>Nouveau Rendez-vous</span>
@@ -264,39 +280,47 @@ export const Appointments: React.FC = () => {
       </div>
 
       {/* Control Toolbar (Date mode, Chair, Datepicker, Search) */}
-      <div className="p-4 rounded-3xl bg-slate-900/60 border border-white/10 shadow-xl flex flex-wrap gap-4 items-center justify-between">
+      <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-white/10 shadow-sm flex flex-wrap gap-4 items-center justify-between">
         
         {/* Date Mode Switcher & Date Picker */}
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center bg-slate-950 p-1 rounded-2xl border border-white/5">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-950/80 p-1 rounded-xl border border-slate-200 dark:border-white/5 shadow-xs">
             <button
               onClick={() => setDateFilterMode('Today')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                dateFilterMode === 'Today' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                dateFilterMode === 'Today'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/5'
               }`}
             >
               Aujourd'hui
             </button>
             <button
               onClick={() => setDateFilterMode('Week')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                dateFilterMode === 'Week' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                dateFilterMode === 'Week'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/5'
               }`}
             >
               Semaine
             </button>
             <button
               onClick={() => setDateFilterMode('Month')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                dateFilterMode === 'Month' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                dateFilterMode === 'Month'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/5'
               }`}
             >
               Mois
             </button>
             <button
               onClick={() => setDateFilterMode('All')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                dateFilterMode === 'All' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                dateFilterMode === 'All'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/5'
               }`}
             >
               Tout
@@ -311,47 +335,20 @@ export const Appointments: React.FC = () => {
               setSelectedDate(e.target.value);
               setDateFilterMode('Today');
             }}
-            className="h-10 px-3 rounded-xl border border-white/10 bg-slate-950 text-xs text-white"
+            className="h-9 px-3 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-950 text-xs text-slate-800 dark:text-white font-medium shadow-xs focus:outline-none focus:border-blue-500"
           />
         </div>
 
-        {/* Chair Filter & Search Bar */}
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-2xl border border-white/5">
-            <button
-              onClick={() => setSelectedChair('All')}
-              className={`px-3 py-1.5 rounded-xl text-xxs font-bold transition-all cursor-pointer ${
-                selectedChair === 'All' ? 'bg-white/15 text-white' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Tous Fauteuils
-            </button>
-            <button
-              onClick={() => setSelectedChair('Chair 1')}
-              className={`px-3 py-1.5 rounded-xl text-xxs font-bold transition-all cursor-pointer ${
-                selectedChair === 'Chair 1' ? 'bg-white/15 text-white' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Fauteuil 1
-            </button>
-            <button
-              onClick={() => setSelectedChair('Chair 2')}
-              className={`px-3 py-1.5 rounded-xl text-xxs font-bold transition-all cursor-pointer ${
-                selectedChair === 'Chair 2' ? 'bg-white/15 text-white' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Fauteuil 2
-            </button>
-          </div>
-
-          <div className="relative w-56">
-            <Search className="w-4 h-4 absolute left-3 top-3 text-slate-500" />
+        {/* Search Bar */}
+        <div className="flex items-center gap-3">
+          <div className="relative w-64 md:w-80">
+            <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
             <input
               type="text"
-              placeholder="Rechercher patient..."
+              placeholder="Rechercher un patient ou note..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full h-10 pl-9 pr-4 rounded-xl text-xs glass-input"
+              className="w-full h-9 pl-9 pr-3 rounded-xl text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-blue-500 shadow-xs"
             />
           </div>
         </div>
@@ -364,11 +361,11 @@ export const Appointments: React.FC = () => {
           <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
         </div>
       ) : filteredAppts.length === 0 ? (
-        <div className="p-12 rounded-3xl bg-slate-900/40 border border-white/5 text-center flex flex-col items-center justify-center gap-3">
-          <CalendarIcon className="w-12 h-12 text-slate-600" />
-          <h4 className="text-base font-bold text-white">Aucun rendez-vous consigné</h4>
-          <p className="text-xs text-slate-400 max-w-sm">
-            Aucune consultation ne correspond à la période ou au fauteuil sélectionné.
+        <div className="p-12 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-white/5 text-center flex flex-col items-center justify-center gap-3 shadow-sm">
+          <CalendarIcon className="w-12 h-12 text-slate-300 dark:text-slate-600" />
+          <h4 className="text-base font-bold text-slate-800 dark:text-white">Aucun rendez-vous consigné</h4>
+          <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm">
+            Aucune consultation ne correspond à la période sélectionnée.
           </p>
         </div>
       ) : (
@@ -383,27 +380,27 @@ export const Appointments: React.FC = () => {
             return (
               <div
                 key={appt._id}
-                className="rounded-3xl bg-slate-900/80 border border-white/10 hover:border-white/20 p-5 shadow-xl flex flex-col justify-between gap-4 transition-all group"
+                className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 p-5 shadow-sm hover:shadow-md hover:border-blue-300 dark:hover:border-blue-500/30 flex flex-col justify-between gap-4 transition-all group"
               >
                 <div>
                   {/* Top Status & Date Header */}
                   <div className="flex justify-between items-center mb-3">
-                    <span className="text-xs font-bold text-blue-400 flex items-center gap-1.5">
-                      <CalendarIcon className="w-4 h-4 text-blue-400" />
+                    <span className="text-xs font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
+                      <CalendarIcon className="w-4 h-4 text-blue-500" />
                       {dateStr}
                     </span>
 
                     <span
-                      className={`text-xxs font-extrabold uppercase px-2.5 py-1 rounded-full ${
+                      className={`text-xxs font-extrabold uppercase px-2.5 py-1 rounded-full border ${
                         appt.status === 'Completed'
-                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-400 dark:border-emerald-500/30'
                           : appt.status === 'Scheduled'
-                          ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                          ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/20 dark:text-blue-400 dark:border-blue-500/30'
                           : appt.status === 'Confirmed'
-                          ? 'bg-teal-500/20 text-teal-400 border border-teal-500/30'
+                          ? 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-500/20 dark:text-teal-400 dark:border-teal-500/30'
                           : appt.status === 'In Treatment'
-                          ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                          : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                          ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/20 dark:text-amber-400 dark:border-amber-500/30'
+                          : 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/20 dark:text-rose-400 dark:border-rose-500/30'
                       }`}
                     >
                       {appt.status}
@@ -411,50 +408,48 @@ export const Appointments: React.FC = () => {
                   </div>
 
                   {/* Patient Name */}
-                  <h3 className="text-base font-extrabold text-white mb-2">{patientName}</h3>
+                  <h3 className="text-base font-extrabold text-slate-900 dark:text-white mb-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                    {patientName}
+                  </h3>
 
-                  {/* Time & Chair Details */}
-                  <div className="flex flex-col gap-1.5 text-xs text-slate-300">
-                    <span className="flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-slate-500" />
-                      <strong>{timeStr}</strong> ({appt.duration} min)
-                    </span>
-                    <span className="flex items-center gap-2">
-                      <Armchair className="w-4 h-4 text-slate-500" />
-                      {appt.chair === 'Chair 1' ? 'Fauteuil 1' : 'Fauteuil 2'}
-                    </span>
+                  {/* Time & Duration Details */}
+                  <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+                    <Clock className="w-4 h-4 text-blue-500" />
+                    <strong className="text-slate-800 dark:text-white font-mono">{timeStr}</strong>
+                    <span className="text-slate-400">•</span>
+                    <span className="text-slate-500 dark:text-slate-400 font-medium">Durée : {appt.duration} min</span>
                   </div>
 
                   {appt.notes && (
-                    <p className="mt-3 text-xs leading-relaxed bg-white/5 p-3 rounded-2xl border border-white/5 text-slate-300">
+                    <p className="mt-3 text-xs leading-relaxed bg-slate-50 dark:bg-white/5 p-3 rounded-xl border border-slate-100 dark:border-white/5 text-slate-600 dark:text-slate-300">
                       {appt.notes}
                     </p>
                   )}
                 </div>
 
                 {/* Quick Action Transitions & WhatsApp Reminder Trigger */}
-                <div className="flex items-center justify-between border-t border-white/10 pt-3 mt-1">
+                <div className="flex items-center justify-between border-t border-slate-100 dark:border-white/10 pt-3 mt-1">
                   
                   {/* Status Fast Switchers */}
                   <div className="flex items-center gap-1">
                     <button
                       onClick={(e) => handleUpdateStatus(appt._id, 'Confirmed', e)}
                       title="Marquer Confirmé"
-                      className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 cursor-pointer"
+                      className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-200 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/20 dark:text-emerald-400 dark:border-emerald-500/20 cursor-pointer"
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" />
                     </button>
                     <button
                       onClick={(e) => handleUpdateStatus(appt._id, 'In Treatment', e)}
                       title="Marquer En Soin"
-                      className="p-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 cursor-pointer"
+                      className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-600 border border-amber-200 dark:bg-amber-500/10 dark:hover:bg-amber-500/20 dark:text-amber-400 dark:border-amber-500/20 cursor-pointer"
                     >
                       <Play className="w-3.5 h-3.5" />
                     </button>
                     <button
                       onClick={(e) => handleUpdateStatus(appt._id, 'Completed', e)}
                       title="Marquer Terminé"
-                      className="p-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 cursor-pointer"
+                      className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 dark:bg-blue-500/10 dark:hover:bg-blue-500/20 dark:text-blue-400 dark:border-blue-500/20 cursor-pointer"
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" />
                     </button>
@@ -465,19 +460,19 @@ export const Appointments: React.FC = () => {
                     <button
                       onClick={(e) => handleSendWhatsAppReminder(appt, e)}
                       title="Rappel WhatsApp"
-                      className="p-1.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 cursor-pointer flex items-center gap-1 text-xxs font-bold"
+                      className="px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-600/20 dark:hover:bg-emerald-600/30 dark:text-emerald-400 dark:border-emerald-500/30 cursor-pointer flex items-center gap-1 text-xxs font-bold shadow-xs"
                     >
-                      <MessageSquare className="w-3.5 h-3.5" /> WhatsApp
+                      <MessageSquare className="w-3.5 h-3.5 text-emerald-600" /> WhatsApp
                     </button>
                     <button
                       onClick={() => handleOpenEditModal(appt)}
-                      className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white cursor-pointer"
+                      className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer"
                     >
                       <Edit className="w-3.5 h-3.5" />
                     </button>
                     <button
                       onClick={(e) => handleDeleteAppointment(appt._id, e)}
-                      className="p-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 cursor-pointer"
+                      className="p-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/10 dark:hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 cursor-pointer"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -493,17 +488,17 @@ export const Appointments: React.FC = () => {
 
       {/* CREATE & EDIT APPOINTMENT MODAL */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="w-full max-w-md rounded-3xl bg-slate-900 border border-white/10 shadow-2xl p-6 flex flex-col gap-5">
-            <div className="flex justify-between items-center border-b border-white/10 pb-3">
-              <h3 className="text-base font-bold text-white">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="w-full max-w-md rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-2xl p-6 flex flex-col gap-5">
+            <div className="flex justify-between items-center border-b border-slate-200 dark:border-white/10 pb-3">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">
                 {editApptId ? 'Modifier le Rendez-vous' : 'Planifier un Rendez-vous'}
               </h3>
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="p-1.5 rounded-xl hover:bg-white/10 text-slate-400 hover:text-white cursor-pointer"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer"
               >
-                ✕
+                <XCircle className="w-5 h-5" />
               </button>
             </div>
 
@@ -511,7 +506,7 @@ export const Appointments: React.FC = () => {
               
               {/* Patient Selection */}
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Patient</label>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Patient</label>
                 <SearchablePatientSelect
                   patients={patients}
                   selectedId={selectedPatientId}
@@ -521,24 +516,24 @@ export const Appointments: React.FC = () => {
 
               {/* Date & Time Input */}
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Date et Heure</label>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Date et Heure</label>
                 <input
                   type="datetime-local"
                   required
                   value={dateTime}
                   onChange={(e) => setDateTime(e.target.value)}
-                  className="w-full h-11 px-4 rounded-xl text-xs glass-input text-white"
+                  className="w-full h-11 px-4 rounded-xl text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white"
                 />
               </div>
 
-              {/* Duration and Chair Grid */}
+              {/* Duration and Status Grid */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">Durée (min)</label>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Durée (min)</label>
                   <select
                     value={duration}
                     onChange={(e) => setDuration(e.target.value)}
-                    className="w-full h-11 px-3 rounded-xl border border-white/10 bg-slate-950 text-xs text-white"
+                    className="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-950 text-xs text-slate-900 dark:text-white font-medium"
                   >
                     <option value="15">15 min</option>
                     <option value="30">30 min</option>
@@ -549,60 +544,47 @@ export const Appointments: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">Fauteuil</label>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Statut</label>
                   <select
-                    value={chair}
-                    onChange={(e) => setChair(e.target.value)}
-                    className="w-full h-11 px-3 rounded-xl border border-white/10 bg-slate-950 text-xs text-white"
+                    value={status}
+                    onChange={(e: any) => setStatus(e.target.value)}
+                    className="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-950 text-xs text-slate-900 dark:text-white font-medium"
                   >
-                    <option value="Chair 1">Fauteuil 1</option>
-                    <option value="Chair 2">Fauteuil 2</option>
+                    <option value="Scheduled">Planifié</option>
+                    <option value="Confirmed">Confirmé</option>
+                    <option value="In Treatment">En Soin</option>
+                    <option value="Completed">Terminé</option>
+                    <option value="Cancelled">Annulé</option>
+                    <option value="No Show">Absence</option>
                   </select>
                 </div>
               </div>
 
-              {/* Status */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Statut</label>
-                <select
-                  value={status}
-                  onChange={(e: any) => setStatus(e.target.value)}
-                  className="w-full h-11 px-3 rounded-xl border border-white/10 bg-slate-950 text-xs text-white"
-                >
-                  <option value="Scheduled">Planifié</option>
-                  <option value="Confirmed">Confirmé</option>
-                  <option value="In Treatment">En Soin</option>
-                  <option value="Completed">Terminé</option>
-                  <option value="Cancelled">Annulé</option>
-                  <option value="No Show">Absence</option>
-                </select>
-              </div>
-
               {/* Notes */}
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Motif / Acte Prévu</label>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Motif / Acte Prévu</label>
                 <input
                   type="text"
                   placeholder="ex: Consultation, Détartrage, Pose de couronne..."
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  className="w-full h-11 px-4 rounded-xl text-xs glass-input"
+                  className="w-full h-11 px-4 rounded-xl text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white placeholder-slate-400"
                 />
               </div>
 
               {/* Modal Buttons */}
-              <div className="flex justify-end gap-3 pt-3 border-t border-white/10">
+              <div className="flex justify-end gap-3 pt-3 border-t border-slate-200 dark:border-white/10">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2.5 rounded-xl border border-white/10 text-xs font-semibold text-slate-400 hover:text-white cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer"
                 >
                   Annuler
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition-all shadow-lg shadow-blue-600/20 cursor-pointer"
+                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition-all shadow-md shadow-blue-500/20 cursor-pointer"
                 >
                   {submitting ? 'Enregistrement...' : 'Enregistrer'}
                 </button>

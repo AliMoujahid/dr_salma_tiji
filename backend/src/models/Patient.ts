@@ -26,6 +26,9 @@ export interface IPatient extends Document {
   isArchived: boolean;
   isFavorite: boolean;
   recentlyViewedAt?: Date;
+  deleted: boolean;
+  deletedAt?: Date;
+  deletedBy?: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -57,6 +60,9 @@ const PatientSchema: Schema = new Schema(
     isArchived: { type: Boolean, default: false },
     isFavorite: { type: Boolean, default: false },
     recentlyViewedAt: { type: Date },
+    deleted: { type: Boolean, default: false, index: true },
+    deletedAt: { type: Date },
+    deletedBy: { type: Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }
 );

@@ -18,6 +18,7 @@ import backupRoutes from './routes/backup';
 import reportRoutes from './routes/reports';
 import notificationRoutes from './routes/notifications';
 import licenseRoutes from './routes/license';
+import auditLogRoutes from './routes/auditLogs';
 import { reminderScheduler } from './services/reminderScheduler';
 import { backupScheduler } from './services/backupScheduler';
 import { licenseService } from './services/licenseService';
@@ -84,10 +85,14 @@ app.use('/api/clinic', clinicRoutes);
 app.use('/api/backup', backupRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/audit-logs', auditLogRoutes);
 
-// Start Automated Reminder Scheduler & Backup Cron Engines
+import { whatsappService } from './services/whatsappService';
+
+// Start Automated Reminder Scheduler, Backup Cron Engines & WhatsApp Web Service
 reminderScheduler.initScheduler();
 backupScheduler.initScheduler();
+whatsappService.initClient();
 
 // Base route status check
 app.get('/health', (req, res) => {

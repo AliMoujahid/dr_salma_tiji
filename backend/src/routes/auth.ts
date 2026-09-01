@@ -82,6 +82,108 @@ router.post('/register', protect, restrictTo('ADMIN'), async (req: any, res: any
   }
 });
 
+// Configure Multer storage for profile avatars
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+
+const avatarStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = path.join(__dirname, '..', '..', 'uploads', 'avatars');
+    fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const ext = path.extname(file.originalname);
+    cb(null, `avatar-${uniqueSuffix}${ext}`);
+  },
+});
+
+const uploadAvatar = multer({
+  storage: avatarStorage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+});
+
+// Upload profile avatar image
+router.post('/upload-avatar', protect, uploadAvatar.single('avatar'), async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.file) {
+      res.status(400).json({ message: 'Aucune image fournie.' });
+      return;
+    }
+
+    const avatarUrl = `/uploads/avatars/${req.file.filename}`;
+    if (req.user) {
+      req.user.avatarUrl = avatarUrl;
+      await req.user.save();
+    }
+
+    res.json({
+      message: 'Photo de profil mise à jour avec succès.',
+      avatarUrl,
+      user: {
+        id: req.user?._id,
+        name: req.user?.name,
+        email: req.user?.email,
+        role: req.user?.role,
+        avatarUrl,
+      },
+    });
+  } catch (error: any) {
+    res.status(500).json({ message: 'Erreur lors de l\'envoi de la photo.', error: error.message });
+  }
+});
+
+// Update user profile (name, email, role, avatarUrl, password)
+router.put('/profile', protect, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      res.status(404).json({ message: 'Utilisateur non trouvé.' });
+      return;
+    }
+
+    const { name, email, avatarUrl, role, currentPassword, newPassword } = req.body;
+
+    if (name) req.user.name = name;
+    if (email) req.user.email = email;
+    if (avatarUrl !== undefined) req.user.avatarUrl = avatarUrl;
+    // STRICT SECURITY: Only ADMIN users can change user roles
+    if (role && req.user.role === 'ADMIN') {
+      req.user.role = role;
+    }
+
+    if (newPassword) {
+      if (!currentPassword) {
+        res.status(400).json({ message: 'Veuillez saisir votre mot de passe actuel.' });
+        return;
+      }
+      const isMatch = await bcrypt.compare(currentPassword, req.user.passwordHash);
+      if (!isMatch) {
+        res.status(400).json({ message: 'Le mot de passe actuel est incorrect.' });
+        return;
+      }
+      const salt = await bcrypt.genSalt(10);
+      req.user.passwordHash = await bcrypt.hash(newPassword, salt);
+    }
+
+    await req.user.save();
+
+    res.json({
+      message: 'Profil mis à jour avec succès !',
+      user: {
+        id: req.user._id,
+        name: req.user.name,
+        email: req.user.email,
+        role: req.user.role,
+        avatarUrl: req.user.avatarUrl,
+      },
+    });
+  } catch (error: any) {
+    res.status(500).json({ message: 'Erreur lors de la mise à jour du profil.', error: error.message });
+  }
+});
+
 // Get current user profile
 router.get('/me', protect, (req: AuthRequest, res: Response) => {
   if (!req.user) {

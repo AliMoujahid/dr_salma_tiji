@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Plus, Trash2, Printer, RefreshCw, Eye, ClipboardCopy } from 'lucide-react';
+import { Plus, Trash2, Printer, RefreshCw, Eye, ClipboardCopy, MessageSquare, Send } from 'lucide-react';
 import { Invoice, Patient, ClinicConfig } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { InvoicePrintLayout } from '../components/InvoicePrintLayout';
 import { SearchablePatientSelect } from '../components/SearchablePatientSelect';
 
 export const InvoiceEditor: React.FC = () => {
   const { token } = useAuth();
+  const { toast } = useToast();
   const location = useLocation();
 
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -103,7 +105,7 @@ export const InvoiceEditor: React.FC = () => {
 
   const handleEditInvoice = (inv: Invoice) => {
     setEditInvoiceId(inv._id);
-    setSelectedPatientId(inv.patientId?._id || (inv.patientId as any));
+    setSelectedPatientId(inv.patientId?._id || (inv.patientId as any) || '');
     setInvoiceNumber(inv.invoiceNumber);
     setInvoiceDate(inv.date ? inv.date.split('T')[0] : '');
     setDiscount(inv.discount.toString());
@@ -116,7 +118,7 @@ export const InvoiceEditor: React.FC = () => {
 
   const handleDuplicateInvoice = (inv: Invoice) => {
     setEditInvoiceId(null); // Force creation on save
-    setSelectedPatientId(inv.patientId?._id || (inv.patientId as any));
+    setSelectedPatientId(inv.patientId?._id || (inv.patientId as any) || '');
     setInvoiceNumber(''); // Generate fresh number
     setInvoiceDate(new Date().toISOString().split('T')[0]);
     setDiscount(inv.discount.toString());
@@ -159,6 +161,31 @@ export const InvoiceEditor: React.FC = () => {
       setTimeout(() => {
         window.print();
       }, 300);
+    }
+  };
+
+  const handleSendInvoiceWhatsApp = async (inv: Invoice) => {
+    try {
+      const res = await fetch(`${API_URL}/notifications/send-manual`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          invoiceId: inv._id,
+          patientId: inv.patientId?._id || (inv.patientId as any),
+          channel: 'WhatsApp',
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Échec de l\'envoi');
+
+      toast.success(
+        'Facture transmise !',
+        `La facture N° ${inv.invoiceNumber} a été envoyée avec succès au patient par WhatsApp.`
+      );
+    } catch (err: any) {
+      console.error('Error sending invoice via WhatsApp:', err);
+      toast.error('Erreur', err.message || 'Impossible d\'envoyer la facture.');
     }
   };
 
@@ -238,12 +265,12 @@ export const InvoiceEditor: React.FC = () => {
           <>
             <div className="flex justify-between items-center">
               <div>
-                <h2 className="text-2xl font-bold text-white tracking-tight">Factures & Honoraires</h2>
-                <p className="text-xs text-slate-400 mt-1">Créez et imprimez des factures détaillées pour vos patients.</p>
+                <h2 className="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Factures & Honoraires</h2>
+                <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400 mt-1">Créez et imprimez des factures détaillées pour vos patients.</p>
               </div>
               <button
                 onClick={() => handleNewInvoice()}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 font-semibold text-xs text-white transition-all shadow-lg shadow-blue-600/20 cursor-pointer"
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 font-semibold text-xs text-white transition-all shadow-md shadow-blue-600/20 cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
                 <span>Créer une Facture</span>
@@ -256,37 +283,37 @@ export const InvoiceEditor: React.FC = () => {
               </div>
             ) : invoices.length === 0 ? (
               <div className="py-20 flex flex-col items-center justify-center gap-3">
-                <ClipboardCopy className="w-12 h-12 text-slate-600" />
-                <p className="text-sm font-semibold text-slate-400">Aucune facture émise.</p>
+                <ClipboardCopy className="w-12 h-12 text-slate-400" />
+                <p className="text-sm font-semibold text-slate-500">Aucune facture émise.</p>
               </div>
             ) : (
               <div className="flex flex-col gap-3">
                 {invoices.map((inv) => (
                   <div
                     key={inv._id}
-                    className="p-4 rounded-2xl bg-slate-900/40 border border-white/5 shadow-md flex justify-between items-center hover:bg-slate-900/60 transition-all cursor-pointer group"
+                    className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 shadow-sm flex justify-between items-center hover:bg-slate-50 dark:hover:bg-slate-900/60 transition-all cursor-pointer group"
                   >
                     <div className="flex items-center gap-4">
-                      <div className="p-2.5 bg-blue-600/10 rounded-xl border border-blue-500/15 text-blue-400">
+                      <div className="p-2.5 bg-blue-50 text-blue-600 dark:bg-blue-600/10 dark:text-blue-400 rounded-xl border border-blue-200 dark:border-blue-500/15">
                         <FileTextIcon />
                       </div>
                       <div>
-                        <h4 className="text-xs font-bold text-white font-mono">FAC-{inv.invoiceNumber}</h4>
-                        <p className="text-xxs text-slate-400 mt-1">
-                          Patient : <strong>{inv.patientId?.name || 'Inconnu'}</strong> • Date : {new Date(inv.date).toLocaleDateString('fr-FR')}
+                        <h4 className="text-xs font-bold text-slate-900 dark:text-white font-mono">FAC-{inv.invoiceNumber}</h4>
+                        <p className="text-xxs text-slate-500 dark:text-slate-400 mt-1">
+                          Patient : <strong className="text-slate-800 dark:text-slate-200">{inv.patientId?.name || 'Inconnu'}</strong> • Date : {new Date(inv.date).toLocaleDateString('fr-FR')}
                         </p>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-6">
                       <div className="text-right flex flex-col items-end gap-1">
-                        <span className="text-xs font-bold text-white font-mono">{inv.netAmount.toFixed(2)} DH</span>
-                        <span className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full ${
+                        <span className="text-xs font-bold text-slate-900 dark:text-white font-mono">{inv.netAmount.toFixed(2)} DH</span>
+                        <span className={`text-[9px] font-extrabold uppercase px-2.5 py-0.5 rounded-full ${
                           inv.paymentStatus === 'Paid'
-                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20'
                             : inv.paymentStatus === 'Partially Paid'
-                            ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                            : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                            ? 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20'
+                            : 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20'
                         }`}>
                           {inv.paymentStatus === 'Paid' ? 'Payée' : inv.paymentStatus === 'Partially Paid' ? 'Partiel' : 'Impayée'}
                         </span>
@@ -295,24 +322,31 @@ export const InvoiceEditor: React.FC = () => {
                       <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-all select-none">
                         <button
                           onClick={() => handleEditInvoice(inv)}
-                          className="p-1.5 rounded bg-white/5 border border-white/5 hover:border-white/10 text-slate-300 hover:text-white cursor-pointer"
+                          className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 border border-slate-200 dark:border-white/5 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white cursor-pointer transition-all shadow-xs"
                           title="Modifier"
                         >
                           <EditIcon />
                         </button>
                         <button
                           onClick={() => handleDuplicateInvoice(inv)}
-                          className="p-1.5 rounded bg-white/5 border border-white/5 hover:border-white/10 text-slate-300 hover:text-white cursor-pointer"
+                          className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 border border-slate-200 dark:border-white/5 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white cursor-pointer transition-all shadow-xs"
                           title="Dupliquer"
                         >
                           <ClipboardCopy className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => handlePrintOnly(inv._id)}
-                          className="p-1.5 rounded bg-blue-600/10 border border-blue-500/20 text-blue-400 hover:bg-blue-600 hover:text-white transition-all cursor-pointer"
+                          className="p-1.5 rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-600/10 dark:text-blue-400 border border-blue-200 dark:border-blue-500/20 hover:bg-blue-600 hover:text-white transition-all cursor-pointer shadow-xs"
                           title="Imprimer A4"
                         >
                           <Printer className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleSendInvoiceWhatsApp(inv)}
+                          className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-600/10 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20 hover:bg-emerald-600 hover:text-white transition-all cursor-pointer shadow-xs"
+                          title="Envoyer la Facture par WhatsApp"
+                        >
+                          <MessageSquare className="w-4 h-4" />
                         </button>
                       </div>
                     </div>
@@ -328,12 +362,12 @@ export const InvoiceEditor: React.FC = () => {
           <div className="flex flex-col xl:flex-row gap-8 items-start">
             
             {/* Left Side: Invoice Fields Editor */}
-            <div className="flex-1 w-full rounded-3xl bg-slate-900/40 border border-white/5 p-6 shadow-2xl flex flex-col gap-6">
-              <div className="flex justify-between items-center border-b border-white/5 pb-4">
-                <h3 className="text-base font-bold text-white">Éditeur de Facture</h3>
+            <div className="flex-1 w-full rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 p-6 shadow-sm flex flex-col gap-6">
+              <div className="flex justify-between items-center border-b border-slate-100 dark:border-white/5 pb-4">
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">Éditeur de Facture</h3>
                 <button
                   onClick={() => setViewMode('list')}
-                  className="px-3.5 py-1.5 rounded-lg border border-white/5 text-xxs font-bold text-slate-400 hover:text-white cursor-pointer"
+                  className="px-3.5 py-1.5 rounded-xl border border-slate-200 dark:border-white/5 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer shadow-xs"
                 >
                   Fermer
                 </button>
@@ -344,7 +378,7 @@ export const InvoiceEditor: React.FC = () => {
                 {/* Meta details row */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-semibold text-slate-400 pl-0.5">Patient *</label>
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pl-0.5">Patient *</label>
                     <SearchablePatientSelect
                       patients={patients}
                       selectedId={selectedPatientId}
@@ -353,32 +387,32 @@ export const InvoiceEditor: React.FC = () => {
                   </div>
 
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-semibold text-slate-400 pl-0.5">N° de Facture (Optionnel)</label>
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pl-0.5">N° de Facture (Optionnel)</label>
                     <input
                       type="text"
                       placeholder="Généré automatiquement"
                       value={invoiceNumber}
                       onChange={(e) => setInvoiceNumber(e.target.value)}
-                      className="h-11 px-4 rounded-xl text-sm glass-input placeholder-slate-600"
+                      className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300 placeholder-slate-400 shadow-xs"
                       disabled
                     />
                   </div>
 
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-semibold text-slate-400 pl-0.5">Date d'émission</label>
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pl-0.5">Date d'émission</label>
                     <input
                       type="date"
                       required
                       value={invoiceDate}
                       onChange={(e) => setInvoiceDate(e.target.value)}
-                      className="h-11 px-4 rounded-xl text-sm glass-input text-slate-300"
+                      className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
                     />
                   </div>
                 </div>
 
                 {/* Grid Line Items Table */}
                 <div className="flex flex-col gap-2.5">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider border-b border-white/5 pb-2">Soins / Actes Cliniques</span>
+                  <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-100 dark:border-white/5 pb-2">Soins / Actes Cliniques</span>
                   <div className="max-h-60 overflow-y-auto pr-1 flex flex-col gap-3.5 no-scrollbar">
                     {lineItems.map((item, index) => (
                       <div key={index} className="grid grid-cols-12 gap-3.5 items-center">
@@ -387,33 +421,33 @@ export const InvoiceEditor: React.FC = () => {
                           placeholder="JJ/MM"
                           value={item.date}
                           onChange={(e) => handleLineItemChange(index, 'date', e.target.value)}
-                          className="col-span-2 h-10 px-3 rounded-xl text-xs glass-input text-center placeholder-slate-600"
+                          className="col-span-2 h-10 px-3 rounded-xl text-xs border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-center placeholder-slate-400 shadow-xs focus:outline-none focus:border-blue-500"
                         />
                         <input
                           type="text"
                           placeholder="Dent"
                           value={item.tooth}
                           onChange={(e) => handleLineItemChange(index, 'tooth', e.target.value)}
-                          className="col-span-2 h-10 px-3 rounded-xl text-xs glass-input text-center placeholder-slate-600"
+                          className="col-span-2 h-10 px-3 rounded-xl text-xs border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-center placeholder-slate-400 shadow-xs focus:outline-none focus:border-blue-500"
                         />
                         <input
                           type="text"
                           placeholder="Description de l'acte"
                           value={item.description}
                           onChange={(e) => handleLineItemChange(index, 'description', e.target.value)}
-                          className="col-span-5 h-10 px-4 rounded-xl text-xs glass-input"
+                          className="col-span-5 h-10 px-4 rounded-xl text-xs border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white placeholder-slate-400 shadow-xs focus:outline-none focus:border-blue-500"
                         />
                         <input
                           type="number"
                           placeholder="Montant"
                           value={item.amount || ''}
                           onChange={(e) => handleLineItemChange(index, 'amount', e.target.value)}
-                          className="col-span-2 h-10 px-3 rounded-xl text-xs glass-input text-right font-mono"
+                          className="col-span-2 h-10 px-3 rounded-xl text-xs border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-right font-mono shadow-xs focus:outline-none focus:border-blue-500"
                         />
                         <button
                           type="button"
                           onClick={() => handleRemoveLineItem(index)}
-                          className="col-span-1 p-2 rounded-lg bg-rose-500/10 hover:bg-rose-500 hover:text-white text-rose-400 border border-rose-500/10 hover:border-transparent transition-all flex items-center justify-center cursor-pointer"
+                          className="col-span-1 p-2 rounded-lg bg-rose-50 hover:bg-rose-500 hover:text-white text-rose-600 dark:bg-rose-500/10 dark:text-rose-400 border border-rose-200 dark:border-rose-500/10 hover:border-transparent transition-all flex items-center justify-center cursor-pointer shadow-xs"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -424,26 +458,26 @@ export const InvoiceEditor: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleAddLineItem}
-                    className="self-start mt-2 px-4 py-2 bg-white/5 border border-white/5 hover:border-white/10 text-xs font-semibold text-slate-300 hover:text-white rounded-xl transition-all cursor-pointer"
+                    className="self-start mt-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 border border-slate-200 dark:border-white/5 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white rounded-xl transition-all cursor-pointer shadow-xs"
                   >
                     + Ajouter une ligne
                   </button>
                 </div>
 
                 {/* Summaries bar */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 border-t border-white/5 pt-5 mt-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 border-t border-slate-100 dark:border-white/5 pt-5 mt-2">
                   <div className="flex flex-col gap-1">
-                    <span className="text-xxs font-semibold text-slate-400 uppercase">Total Brut</span>
-                    <span className="text-md font-bold text-white font-mono">{calculateGrossTotal().toFixed(2)} DH</span>
+                    <span className="text-xxs font-semibold text-slate-500 dark:text-slate-400 uppercase">Total Brut</span>
+                    <span className="text-md font-bold text-slate-900 dark:text-white font-mono">{calculateGrossTotal().toFixed(2)} DH</span>
                   </div>
 
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xxs font-semibold text-slate-400 uppercase">Remise (DH)</label>
+                    <label className="text-xxs font-semibold text-slate-500 dark:text-slate-400 uppercase">Remise (DH)</label>
                     <input
                       type="number"
                       value={discount}
                       onChange={(e) => setDiscount(e.target.value)}
-                      className="h-9 px-3 rounded-xl text-xs glass-input max-w-[130px] font-mono"
+                      className="h-9 px-3 rounded-xl text-xs border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white max-w-[130px] font-mono shadow-xs focus:outline-none focus:border-blue-500"
                     />
                   </div>
 
@@ -485,21 +519,34 @@ export const InvoiceEditor: React.FC = () => {
                 </div>
 
                 {/* Save and Print triggers */}
-                <div className="flex justify-end gap-3.5 border-t border-white/5 pt-5 mt-4 select-none">
+                <div className="flex justify-end gap-3.5 border-t border-slate-100 dark:border-white/5 pt-5 mt-4 select-none flex-wrap">
                   <button
                     type="submit"
-                    className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 font-semibold text-xs text-white transition-all shadow shadow-emerald-500/10 cursor-pointer"
+                    className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 font-semibold text-xs text-white transition-all shadow-md shadow-emerald-600/20 cursor-pointer"
                   >
                     Enregistrer la Facture
                   </button>
                   <button
                     type="button"
                     onClick={() => window.print()}
-                    className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 font-semibold text-xs text-white transition-all shadow shadow-blue-500/10 cursor-pointer"
+                    className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 font-semibold text-xs text-white transition-all shadow-md shadow-blue-600/20 cursor-pointer"
                   >
                     <Printer className="w-4 h-4" />
                     <span>Imprimer (A4)</span>
                   </button>
+                  {editInvoiceId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const inv = invoices.find((i) => i._id === editInvoiceId);
+                        if (inv) handleSendInvoiceWhatsApp(inv);
+                      }}
+                      className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-600 font-semibold text-xs text-white transition-all shadow-md shadow-emerald-700/20 cursor-pointer"
+                    >
+                      <MessageSquare className="w-4 h-4" />
+                      <span>Envoyer par WhatsApp</span>
+                    </button>
+                  )}
                 </div>
 
               </form>

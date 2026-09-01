@@ -86,7 +86,7 @@ const NotificationSettingsSchema: Schema = new Schema(
     enableInApp: { type: Boolean, default: true },
     enableScheduler: { type: Boolean, default: true },
     testMode: { type: Boolean, default: false },
-    testPhoneNumber: { type: String, default: '' },
+    testPhoneNumber: { type: String, default: '+212613117131' },
     testEmail: { type: String, default: '' },
 
     remindersConfig: {
@@ -100,7 +100,7 @@ const NotificationSettingsSchema: Schema = new Schema(
       followUpClinical: { type: Boolean, default: true },
     },
 
-    whatsAppProvider: { type: String, enum: ['MetaCloud', 'TwilioWhatsApp'], default: 'MetaCloud' },
+    whatsAppProvider: { type: String, enum: ['WhatsAppWebJS', 'MetaCloud', 'TwilioWhatsApp'], default: 'WhatsAppWebJS' },
     metaCloud: {
       appId: { type: String, default: '' },
       accessToken: { type: String, default: '' },

@@ -4,10 +4,10 @@ export interface INotificationLog extends Document {
   patientId: mongoose.Types.ObjectId;
   appointmentId?: mongoose.Types.ObjectId;
   channel: 'WhatsApp' | 'SMS' | 'Email' | 'InApp';
-  provider: 'MetaCloud' | 'TwilioWhatsApp' | 'TwilioSMS' | 'Vonage' | 'MessageBird' | 'AWSSNS' | 'SMTP' | 'System';
+  provider: 'WhatsAppWebJS' | 'MetaCloud' | 'TwilioWhatsApp' | 'TwilioSMS' | 'Vonage' | 'MessageBird' | 'AWSSNS' | 'SMTP' | 'System';
   recipient: string; // phone number or email address
   templateId?: mongoose.Types.ObjectId;
-  messageType: 'Immediate' | '7Days' | '3Days' | '24Hours' | '2Hours' | 'Completion' | 'Missed' | 'FollowUp' | 'Manual' | 'Bulk';
+  messageType: 'Immediate' | '7Days' | '3Days' | '24Hours' | '2Hours' | 'Completion' | 'Missed' | 'FollowUp' | 'Manual' | 'Bulk' | 'Invoice' | 'Document';
   subject?: string;
   body: string;
   status: 'Queued' | 'Sent' | 'Delivered' | 'Read' | 'Failed';
@@ -28,14 +28,14 @@ const NotificationLogSchema: Schema = new Schema(
     channel: { type: String, enum: ['WhatsApp', 'SMS', 'Email', 'InApp'], required: true },
     provider: {
       type: String,
-      enum: ['MetaCloud', 'TwilioWhatsApp', 'TwilioSMS', 'Vonage', 'MessageBird', 'AWSSNS', 'SMTP', 'System'],
+      enum: ['WhatsAppWebJS', 'MetaCloud', 'TwilioWhatsApp', 'TwilioSMS', 'Vonage', 'MessageBird', 'AWSSNS', 'SMTP', 'System'],
       default: 'System',
     },
     recipient: { type: String, required: true },
     templateId: { type: Schema.Types.ObjectId, ref: 'MessageTemplate' },
     messageType: {
       type: String,
-      enum: ['Immediate', '7Days', '3Days', '24Hours', '2Hours', 'Completion', 'Missed', 'FollowUp', 'Manual', 'Bulk'],
+      enum: ['Immediate', '7Days', '3Days', '24Hours', '2Hours', 'Completion', 'Missed', 'FollowUp', 'Manual', 'Bulk', 'Invoice', 'Document'],
       required: true,
     },
     subject: { type: String },
