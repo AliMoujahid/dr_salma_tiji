@@ -521,17 +521,16 @@ export const Appointments: React.FC = () => {
                 />
               </div>
 
-              {/* Date & Time Input */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Date et Heure</label>
-                <input
-                  type="datetime-local"
-                  required
-                  value={dateTime}
-                  onChange={(e) => setDateTime(e.target.value)}
-                  className="w-full h-11 px-4 rounded-xl text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white"
-                />
-              </div>
+              {/* Date & Time Input with CustomDatePicker */}
+              <CustomDatePicker
+                label="Date et Heure du Rendez-vous *"
+                required
+                enableTime={true}
+                value={dateTime}
+                onChange={(val) => setDateTime(val)}
+                placeholder="JJ/MM/AAAA à HH:MM"
+              />
+
 
               {/* Duration and Status Grid */}
               <div className="grid grid-cols-2 gap-3">

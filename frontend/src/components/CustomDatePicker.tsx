@@ -8,21 +8,21 @@ import {
   Clock,
   Sparkles,
 } from 'lucide-react';
-import { calculateAge, formatDate } from '../utils/dateUtils';
+import { calculateAge, formatDate, formatTime } from '../utils/dateUtils';
 
 interface CustomDatePickerProps {
-  value: string; // Expected format: 'YYYY-MM-DD' or ISO string
+  value: string; // 'YYYY-MM-DD' or 'YYYY-MM-DDTHH:mm' or ISO string
   onChange: (dateStr: string) => void;
   label?: string;
   placeholder?: string;
   required?: boolean;
   showAge?: boolean;
+  enableTime?: boolean;
   align?: 'left' | 'right' | 'auto';
   maxDate?: string;
   minDate?: string;
   className?: string;
 }
-
 
 const MONTH_NAMES = [
   'Janvier',
@@ -41,22 +41,28 @@ const MONTH_NAMES = [
 
 const DAY_NAMES = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
+const HOURS = Array.from({ length: 14 }, (_, i) => String(i + 8).padStart(2, '0')); // 08:00 to 21:00
+const MINUTES = ['00', '15', '30', '45'];
+
 export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
   value,
   onChange,
   label,
-  placeholder = 'JJ/MM/AAAA',
+  placeholder,
   required = false,
   showAge = false,
+  enableTime = false,
   align = 'auto',
   maxDate,
   minDate,
   className = '',
-
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [inputValue, setInputValue] = useState('');
+
+  // Default placeholder
+  const effectivePlaceholder = placeholder || (enableTime ? 'JJ/MM/AAAA à HH:MM' : 'JJ/MM/AAAA');
 
   // Current view states for calendar navigation
   const [viewYear, setViewYear] = useState<number>(() => {
@@ -74,6 +80,10 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
     }
     return new Date().getMonth();
   });
+
+  // Time state (Hour and Minute)
+  const [selectedHour, setSelectedHour] = useState<string>('09');
+  const [selectedMinute, setSelectedMinute] = useState<string>('00');
 
   const [quickAge, setQuickAge] = useState('');
   const [computedAlign, setComputedAlign] = useState<'left' | 'right'>('left');
@@ -97,6 +107,7 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
     }
   }, [isOpen, align]);
 
+  // Sync formatted text input value when prop `value` changes
   useEffect(() => {
     if (value) {
       const d = new Date(value);
@@ -104,14 +115,25 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
         const day = String(d.getDate()).padStart(2, '0');
         const month = String(d.getMonth() + 1).padStart(2, '0');
         const year = d.getFullYear();
-        setInputValue(`${day}/${month}/${year}`);
+        const hours = String(d.getHours()).padStart(2, '0');
+        const minutes = String(d.getMinutes()).padStart(2, '0');
+
+        setSelectedHour(hours);
+        setSelectedMinute(minutes);
+
+        if (enableTime) {
+          setInputValue(`${day}/${month}/${year} à ${hours}:${minutes}`);
+        } else {
+          setInputValue(`${day}/${month}/${year}`);
+        }
+
         setViewYear(year);
         setViewMonth(d.getMonth());
         return;
       }
     }
     setInputValue('');
-  }, [value]);
+  }, [value, enableTime]);
 
   // Click outside to close popup
   useEffect(() => {
@@ -147,19 +169,55 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
     }
   };
 
-  // Select day
-  const handleSelectDay = (day: number) => {
-    const selectedDate = new Date(viewYear, viewMonth, day);
-    const yyyy = selectedDate.getFullYear();
-    const mm = String(selectedDate.getMonth() + 1).padStart(2, '0');
-    const dd = String(selectedDate.getDate()).padStart(2, '0');
-    const formattedIso = `${yyyy}-${mm}-${dd}`;
+  // Helper to emit date / datetime
+  const emitValue = (year: number, month: number, day: number, hour?: string, min?: string) => {
+    const yyyy = year;
+    const mm = String(month + 1).padStart(2, '0');
+    const dd = String(day).padStart(2, '0');
+    const h = hour || selectedHour;
+    const m = min || selectedMinute;
 
-    onChange(formattedIso);
-    setIsOpen(false);
+    if (enableTime) {
+      onChange(`${yyyy}-${mm}-${dd}T${h}:${m}`);
+    } else {
+      onChange(`${yyyy}-${mm}-${dd}`);
+    }
   };
 
-  // Quick Age input helper (e.g. typing 30 calculates 1996-01-01)
+  // Select day
+  const handleSelectDay = (day: number) => {
+    emitValue(viewYear, viewMonth, day);
+    if (!enableTime) {
+      setIsOpen(false);
+    }
+  };
+
+  // Time changes
+  const handleHourChange = (newHour: string) => {
+    setSelectedHour(newHour);
+    if (value) {
+      const d = new Date(value);
+      if (!isNaN(d.getTime())) {
+        emitValue(d.getFullYear(), d.getMonth(), d.getDate(), newHour, selectedMinute);
+        return;
+      }
+    }
+    emitValue(viewYear, viewMonth, new Date().getDate(), newHour, selectedMinute);
+  };
+
+  const handleMinuteChange = (newMin: string) => {
+    setSelectedMinute(newMin);
+    if (value) {
+      const d = new Date(value);
+      if (!isNaN(d.getTime())) {
+        emitValue(d.getFullYear(), d.getMonth(), d.getDate(), selectedHour, newMin);
+        return;
+      }
+    }
+    emitValue(viewYear, viewMonth, new Date().getDate(), selectedHour, newMin);
+  };
+
+  // Quick Age input helper
   const handleApplyAge = (e: React.FormEvent) => {
     e.preventDefault();
     const ageNum = parseInt(quickAge, 10);
@@ -182,43 +240,39 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
   const handleSetToday = () => {
     const today = new Date();
     const yyyy = today.getFullYear();
-    const mm = String(today.getMonth() + 1).padStart(2, '0');
-    const dd = String(today.getDate()).padStart(2, '0');
-    onChange(`${yyyy}-${mm}-${dd}`);
+    const mm = today.getMonth();
+    const dd = today.getDate();
+    emitValue(yyyy, mm, dd);
     setViewYear(yyyy);
-    setViewMonth(today.getMonth());
-    setIsOpen(false);
+    setViewMonth(mm);
+    if (!enableTime) {
+      setIsOpen(false);
+    }
   };
 
-  // Direct manual input typing (e.g. user types "15/09/1990")
+  // Direct manual input typing
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let raw = e.target.value.replace(/[^\d/]/g, '');
-    
-    // Auto add slashes
-    if (raw.length === 2 && !raw.includes('/')) {
-      raw = raw + '/';
-    } else if (raw.length === 5 && raw.split('/').length === 2) {
-      raw = raw + '/';
-    }
-
+    let raw = e.target.value;
     setInputValue(raw);
 
-    // Validate DD/MM/YYYY
-    const parts = raw.split('/');
-    if (parts.length === 3 && parts[2].length === 4) {
-      const d = parseInt(parts[0], 10);
-      const m = parseInt(parts[1], 10) - 1;
-      const y = parseInt(parts[2], 10);
+    // If pure date mode, parse DD/MM/YYYY
+    if (!enableTime) {
+      const parts = raw.split('/');
+      if (parts.length === 3 && parts[2].length === 4) {
+        const d = parseInt(parts[0], 10);
+        const m = parseInt(parts[1], 10) - 1;
+        const y = parseInt(parts[2], 10);
 
-      if (d >= 1 && d <= 31 && m >= 0 && m <= 11 && y >= 1900 && y <= 2100) {
-        const parsedDate = new Date(y, m, d);
-        if (!isNaN(parsedDate.getTime())) {
-          const yyyy = parsedDate.getFullYear();
-          const mm = String(parsedDate.getMonth() + 1).padStart(2, '0');
-          const dd = String(parsedDate.getDate()).padStart(2, '0');
-          onChange(`${yyyy}-${mm}-${dd}`);
-          setViewYear(yyyy);
-          setViewMonth(m);
+        if (d >= 1 && d <= 31 && m >= 0 && m <= 11 && y >= 1900 && y <= 2100) {
+          const parsedDate = new Date(y, m, d);
+          if (!isNaN(parsedDate.getTime())) {
+            const yyyy = parsedDate.getFullYear();
+            const mm = String(parsedDate.getMonth() + 1).padStart(2, '0');
+            const dd = String(parsedDate.getDate()).padStart(2, '0');
+            onChange(`${yyyy}-${mm}-${dd}`);
+            setViewYear(yyyy);
+            setViewMonth(m);
+          }
         }
       }
     }
@@ -233,7 +287,6 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
 
   // Build calendar matrix (Days of previous month, current month, next month)
   const firstDayIndex = new Date(viewYear, viewMonth, 1).getDay();
-  // Adjust so Monday is 0, Sunday is 6
   const adjustedFirstDay = firstDayIndex === 0 ? 6 : firstDayIndex - 1;
   const daysInCurrentMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
   const daysInPrevMonth = new Date(viewYear, viewMonth, 0).getDate();
@@ -283,22 +336,30 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
         }`}
       >
         <div className="flex items-center gap-2.5 flex-1 min-w-0">
-          <CalendarIcon
-            className={`w-4 h-4 shrink-0 transition-colors ${
-              isOpen ? 'text-blue-500' : 'text-slate-400'
-            }`}
-          />
+          {enableTime ? (
+            <Clock
+              className={`w-4 h-4 shrink-0 transition-colors ${
+                isOpen ? 'text-blue-500' : 'text-slate-400'
+              }`}
+            />
+          ) : (
+            <CalendarIcon
+              className={`w-4 h-4 shrink-0 transition-colors ${
+                isOpen ? 'text-blue-500' : 'text-slate-400'
+              }`}
+            />
+          )}
           <input
             type="text"
             required={required}
-            placeholder={placeholder}
+            placeholder={effectivePlaceholder}
             value={inputValue}
             onChange={handleInputChange}
             onClick={(e) => {
               e.stopPropagation();
               setIsOpen(true);
             }}
-            className="w-full bg-transparent text-sm font-medium font-mono text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none cursor-pointer"
+            className="w-full bg-transparent text-xs sm:text-sm font-semibold font-mono text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none cursor-pointer truncate"
           />
         </div>
 
@@ -320,7 +381,7 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
                 : 'bg-slate-200/60 dark:bg-white/5 text-slate-500'
             }`}
           >
-            {value ? 'JJ/MM/AAAA' : 'Choisir'}
+            {value ? (enableTime ? `${selectedHour}:${selectedMinute}` : 'JJ/MM/AAAA') : 'Choisir'}
           </span>
         </div>
       </div>
@@ -330,12 +391,10 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
         <div
           className={`absolute top-[calc(100%+6px)] ${
             computedAlign === 'right' ? 'right-0' : 'left-0'
-          } z-50 w-76 sm:w-80 max-w-[calc(100vw-32px)] rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-2xl p-4 flex flex-col gap-3.5 animate-in fade-in zoom-in-95 duration-150 select-none`}
+          } z-50 w-76 sm:w-84 max-w-[calc(100vw-32px)] rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-2xl p-4 flex flex-col gap-3.5 animate-in fade-in zoom-in-95 duration-150 select-none`}
         >
-          
           {/* Header Controls: Month + Year Selectors */}
           <div className="flex items-center justify-between gap-2 border-b border-slate-100 dark:border-white/5 pb-3">
-            
             {/* Prev month button */}
             <button
               type="button"
@@ -441,6 +500,70 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
             })}
           </div>
 
+          {/* TIME SELECTOR (IF enableTime = true) */}
+          {enableTime && (
+            <div className="flex flex-col gap-2 border-t border-slate-100 dark:border-white/5 pt-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-blue-500" />
+                  <span>Heure du Rendez-vous :</span>
+                </span>
+                <div className="flex items-center gap-1.5">
+                  {/* Hour dropdown */}
+                  <select
+                    value={selectedHour}
+                    onChange={(e) => handleHourChange(e.target.value)}
+                    className="h-8 px-2 rounded-lg text-xs font-bold font-mono bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-200 dark:border-white/10 focus:outline-none focus:border-blue-500 cursor-pointer shadow-xs"
+                  >
+                    {HOURS.map((h) => (
+                      <option key={h} value={h}>
+                        {h} h
+                      </option>
+                    ))}
+                  </select>
+                  <span className="font-bold text-slate-400">:</span>
+                  {/* Minute dropdown */}
+                  <select
+                    value={selectedMinute}
+                    onChange={(e) => handleMinuteChange(e.target.value)}
+                    className="h-8 px-2 rounded-lg text-xs font-bold font-mono bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-200 dark:border-white/10 focus:outline-none focus:border-blue-500 cursor-pointer shadow-xs"
+                  >
+                    {MINUTES.map((m) => (
+                      <option key={m} value={m}>
+                        {m} min
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Quick Time Chips */}
+              <div className="flex items-center gap-1.5 justify-center flex-wrap pt-1">
+                {['09:00', '10:30', '14:30', '16:00', '17:30'].map((timeStr) => {
+                  const [h, m] = timeStr.split(':');
+                  const isCurrentTime = selectedHour === h && selectedMinute === m;
+                  return (
+                    <button
+                      key={timeStr}
+                      type="button"
+                      onClick={() => {
+                        handleHourChange(h);
+                        handleMinuteChange(m);
+                      }}
+                      className={`px-2 py-0.5 rounded-md text-[10.5px] font-mono font-bold transition-all cursor-pointer ${
+                        isCurrentTime
+                          ? 'bg-blue-600 text-white shadow-xs'
+                          : 'bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-600 dark:text-slate-300'
+                      }`}
+                    >
+                      {timeStr}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Quick Shortcuts & Age Input Footer */}
           <div className="flex flex-col gap-2.5 border-t border-slate-100 dark:border-white/5 pt-3 mt-1">
             {showAge && (
@@ -468,7 +591,6 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
               </div>
             )}
 
-
             <div className="flex justify-between items-center">
               <button
                 type="button"
@@ -482,13 +604,13 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
-                className="px-3 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-xs font-semibold text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"
+                className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1"
               >
-                Fermer
+                <Check className="w-3.5 h-3.5" />
+                <span>Valider</span>
               </button>
             </div>
           </div>
-
         </div>
       )}
     </div>
