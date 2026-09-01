@@ -21,7 +21,11 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { Appointment, Patient } from '../types';
 import { SearchablePatientSelect } from '../components/SearchablePatientSelect';
+import { CustomDatePicker } from '../components/CustomDatePicker';
 import { formatDate, formatDateTime, formatTime, formatRelativeDateTime } from '../utils/dateUtils';
+
+
+
 
 
 export const Appointments: React.FC = () => {
@@ -330,16 +334,18 @@ export const Appointments: React.FC = () => {
             </button>
           </div>
 
-          {/* Date Picker Input */}
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => {
-              setSelectedDate(e.target.value);
-              setDateFilterMode('Today');
-            }}
-            className="h-9 px-3 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-950 text-xs text-slate-800 dark:text-white font-medium shadow-xs focus:outline-none focus:border-blue-500"
-          />
+          {/* Custom Date Picker Popup */}
+          <div className="w-48">
+            <CustomDatePicker
+              value={selectedDate}
+              onChange={(val) => {
+                setSelectedDate(val);
+                setDateFilterMode('Today');
+              }}
+              placeholder="JJ/MM/AAAA"
+            />
+          </div>
+
         </div>
 
         {/* Search Bar */}

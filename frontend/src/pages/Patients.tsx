@@ -5,6 +5,8 @@ import { Patient } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { formatDate, formatBirthDateWithAge, calculateAge } from '../utils/dateUtils';
+import { CustomDatePicker } from '../components/CustomDatePicker';
+
 
 
 export const Patients: React.FC = () => {
@@ -467,16 +469,15 @@ export const Patients: React.FC = () => {
                     className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-950 focus:outline-none focus:border-blue-500"
                   />
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 pl-0.5">Date de naissance *</label>
-                  <input
-                    type="date"
-                    required
-                    value={birthDate}
-                    onChange={(e) => setBirthDate(e.target.value)}
-                    className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-950 focus:outline-none focus:border-blue-500"
-                  />
-                </div>
+                <CustomDatePicker
+                  label="Date de naissance *"
+                  required
+                  showAge
+                  value={birthDate}
+                  onChange={(val) => setBirthDate(val)}
+                  placeholder="JJ/MM/AAAA"
+                />
+
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 pl-0.5">National ID (CNIE)</label>
                   <input

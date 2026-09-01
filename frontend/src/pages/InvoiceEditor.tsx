@@ -6,6 +6,8 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { InvoicePrintLayout } from '../components/InvoicePrintLayout';
 import { SearchablePatientSelect } from '../components/SearchablePatientSelect';
+import { CustomDatePicker } from '../components/CustomDatePicker';
+
 
 export const InvoiceEditor: React.FC = () => {
   const { token } = useAuth();
@@ -581,16 +583,14 @@ export const InvoiceEditor: React.FC = () => {
                     />
                   </div>
 
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pl-0.5">Date d'émission</label>
-                    <input
-                      type="date"
-                      required
-                      value={invoiceDate}
-                      onChange={(e) => setInvoiceDate(e.target.value)}
-                      className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
-                    />
-                  </div>
+                  <CustomDatePicker
+                    label="Date d'émission"
+                    required
+                    value={invoiceDate}
+                    onChange={(val) => setInvoiceDate(val)}
+                    placeholder="JJ/MM/AAAA"
+                  />
+
                 </div>
 
                 {/* Grid Line Items Table */}
