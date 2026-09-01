@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Lock, Mail, Activity, Eye, EyeOff, Sparkles } from 'lucide-react';
+import { Lock, User, Activity, Eye, EyeOff, Sparkles } from 'lucide-react';
 import { AntigravityParticles } from '../components/AntigravityParticles';
 
 export const Login: React.FC = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
@@ -25,7 +25,7 @@ export const Login: React.FC = () => {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) {
+    if (!identifier || !password) {
       setError('Veuillez remplir tous les champs.');
       return;
     }
@@ -37,7 +37,7 @@ export const Login: React.FC = () => {
       const res = await fetch(`${API_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ identifier, password }),
       });
 
       const data = await res.json();
@@ -101,7 +101,7 @@ export const Login: React.FC = () => {
         <div className="login-card w-full rounded-3xl bg-slate-900/75 border border-white/15 backdrop-blur-2xl p-8 shadow-2xl flex flex-col gap-6">
           <div className="flex flex-col gap-1">
             <h3 className="text-xl font-bold text-white tracking-tight">Connexion</h3>
-            <p className="text-xs text-slate-300 font-medium">Renseignez vos identifiants pour accéder au tableau de bord</p>
+            <p className="text-xs text-slate-300 font-medium">Renseignez votre nom d'utilisateur et mot de passe</p>
           </div>
 
           {error && (
@@ -113,16 +113,18 @@ export const Login: React.FC = () => {
 
           <form onSubmit={handleLogin} className="flex flex-col gap-4">
             
-            {/* Email Field */}
+            {/* Identifier / Username Field */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold text-slate-200 uppercase tracking-wider pl-1">Email professionnel</label>
+              <label className="text-xs font-bold text-slate-200 uppercase tracking-wider pl-1">Nom d'utilisateur ou Email</label>
               <div className="relative">
-                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input
-                  type="email"
-                  placeholder="nom@exemple.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  type="text"
+                  placeholder="admin"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
                   className="w-full h-11 pl-10 pr-4 rounded-xl text-sm glass-input placeholder-slate-500"
                 />
               </div>
@@ -138,6 +140,7 @@ export const Login: React.FC = () => {
                   placeholder="••••••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+
                   className="w-full h-11 pl-10 pr-12 rounded-xl text-sm glass-input placeholder-slate-500"
                 />
                 <button

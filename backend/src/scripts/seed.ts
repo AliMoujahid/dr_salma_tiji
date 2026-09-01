@@ -37,9 +37,10 @@ async function seed() {
 
     // 1. Create staff users
     const salt = await bcrypt.genSalt(10);
-    const commonPasswordHash = await bcrypt.hash('dr1234', salt);
+    const commonPasswordHash = await bcrypt.hash('Moujahid@97', salt);
 
     const admin = await User.create({
+      username: 'admin',
       email: 'admin@tijini.com',
       passwordHash: commonPasswordHash,
       name: 'Moujahid Ali',
@@ -48,6 +49,7 @@ async function seed() {
     });
 
     const doctor = await User.create({
+      username: 'doctor',
       email: 'doctor@tijini.com',
       passwordHash: commonPasswordHash,
       name: 'Dr. Salma Tijini',
@@ -56,6 +58,7 @@ async function seed() {
     });
 
     const receptionist = await User.create({
+      username: 'receptionist',
       email: 'receptionist@tijini.com',
       passwordHash: commonPasswordHash,
       name: 'Asmae El Hilali',
@@ -64,6 +67,7 @@ async function seed() {
     });
 
     console.log('Seeded staff users.');
+
 
 
     // 2. Create Clinic Configuration

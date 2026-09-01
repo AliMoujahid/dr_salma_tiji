@@ -7,22 +7,32 @@ import { protect, restrictTo, AuthRequest } from '../middleware/auth';
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-super-secret-dental-key';
 
-// Login route
+// Login route (Supports username or email)
 router.post('/login', async (req: any, res: any) => {
   try {
-    const { email, password } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ message: 'Veuillez saisir votre email et mot de passe.' });
+    const identifier = (req.body.identifier || req.body.username || req.body.email || '').trim();
+    const { password } = req.body;
+    if (!identifier || !password) {
+      return res.status(400).json({ message: "Veuillez saisir votre nom d'utilisateur et mot de passe." });
     }
 
-    const user = await User.findOne({ email });
+    const cleanIdentifier = identifier.toLowerCase();
+    const user = await User.findOne({
+      $or: [
+        { email: cleanIdentifier },
+        { username: cleanIdentifier },
+        { email: new RegExp(`^${cleanIdentifier}@`, 'i') },
+        { name: new RegExp(`^${identifier}$`, 'i') },
+      ],
+    });
+
     if (!user || !user.active) {
-      return res.status(401).json({ message: 'Identifiants incorrects ou compte inactif.' });
+      return res.status(401).json({ message: 'Identifiant ou mot de passe incorrect.' });
     }
 
     const isMatch = await bcrypt.compare(password, user.passwordHash);
     if (!isMatch) {
-      return res.status(401).json({ message: 'Identifiants incorrects.' });
+      return res.status(401).json({ message: 'Identifiant ou mot de passe incorrect.' });
     }
 
     const token = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, {
@@ -35,6 +45,7 @@ router.post('/login', async (req: any, res: any) => {
         id: user._id,
         name: user.name,
         email: user.email,
+        username: user.username,
         role: user.role,
         avatarUrl: user.avatarUrl,
       },
@@ -43,6 +54,7 @@ router.post('/login', async (req: any, res: any) => {
     res.status(500).json({ message: 'Erreur serveur lors de la connexion.', error: error.message });
   }
 });
+
 
 // Register route (Admin only)
 router.post('/register', protect, restrictTo('ADMIN'), async (req: any, res: any) => {

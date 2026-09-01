@@ -2,6 +2,7 @@ import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IUser extends Document {
   email: string;
+  username?: string;
   passwordHash: string;
   name: string;
   role: 'ADMIN' | 'DOCTOR' | 'ASSISTANT' | 'RECEPTIONIST';
@@ -14,6 +15,7 @@ export interface IUser extends Document {
 const UserSchema: Schema = new Schema(
   {
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    username: { type: String, lowercase: true, trim: true, sparse: true },
     passwordHash: { type: String, required: true },
     name: { type: String, required: true },
     role: {
@@ -26,5 +28,6 @@ const UserSchema: Schema = new Schema(
   },
   { timestamps: true }
 );
+
 
 export default mongoose.model<IUser>('User', UserSchema);
