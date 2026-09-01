@@ -395,9 +395,10 @@ const guideText = `=============================================================
 
 4. COMPTE ADMINISTRATEUR PAR DEFAUT :
 --------------------------------------
-- Email        : admin@tijini.com
-- Mot de passe : password123
+- Nom d'utilisateur / Email : admin (ou admin@tijini.com)
+- Mot de passe              : Moujahid@97
 (Connectez-vous pour ajouter les comptes du médecin et des assistantes dans Paramètres > Équipe).
+
 
 5. DESINSTALLATION OU REINITIALISATION :
 ----------------------------------------

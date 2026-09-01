@@ -46,8 +46,9 @@ export const Settings: React.FC = () => {
   const [wizardAddress, setWizardAddress] = useState('');
   const [wizardPhone, setWizardPhone] = useState('');
   const [wizardEmail, setWizardEmail] = useState('');
-  const [wizardPassword, setWizardPassword] = useState('password123');
+  const [wizardPassword, setWizardPassword] = useState('Moujahid@97');
   const [runningWizard, setRunningWizard] = useState(false);
+
 
   // Backup files upload trigger
   const [backupFile, setBackupFile] = useState<File | null>(null);
