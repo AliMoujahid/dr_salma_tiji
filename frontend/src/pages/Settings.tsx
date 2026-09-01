@@ -552,16 +552,16 @@ export const Settings: React.FC = () => {
 
       {/* Multi-Cabinet Deployment & White-Label Assistant Banner (Admin Only) */}
       {isAdmin && (
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-blue-950/70 via-indigo-950/60 to-purple-950/70 border border-blue-500/30 p-6 md:p-7 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-5 my-1">
+        <div className="shrink-0 relative overflow-hidden rounded-3xl bg-gradient-to-r from-blue-950/90 via-indigo-950/80 to-purple-950/90 border border-blue-500/40 p-6 md:p-7 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-5 my-1 min-h-fit">
           {/* Subtle background glow decorative elements */}
           <div className="absolute -top-12 -left-12 w-36 h-36 bg-blue-500/10 rounded-full blur-2xl pointer-events-none"></div>
           <div className="absolute -bottom-12 -right-12 w-36 h-36 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none"></div>
 
-          <div className="flex items-start md:items-center gap-4 z-10 flex-1">
-            <div className="w-13 h-13 rounded-2xl bg-blue-600/20 border border-blue-400/30 flex items-center justify-center text-blue-400 shrink-0 shadow-lg shadow-blue-900/30">
-              <Building2 className="w-6.5 h-6.5 text-blue-400" />
+          <div className="flex items-start md:items-center gap-4 z-10 flex-1 min-w-0">
+            <div className="w-12 h-12 rounded-2xl bg-blue-600/25 border border-blue-400/30 flex items-center justify-center text-blue-400 shrink-0 shadow-lg shadow-blue-900/30">
+              <Building2 className="w-6 h-6 text-blue-400" />
             </div>
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1 min-w-0">
               <div className="flex flex-wrap items-center gap-2.5">
                 <h3 className="text-sm md:text-base font-extrabold text-white tracking-wide">
                   Assistant Déploiement & Multi-Cabinet
@@ -588,6 +588,7 @@ export const Settings: React.FC = () => {
           </div>
         </div>
       )}
+
 
 
       {/* Practitioner Profile & Avatar Management Card */}
