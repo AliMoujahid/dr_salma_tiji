@@ -14,6 +14,29 @@ export interface WhatsAppStatus {
   error?: string | null;
 }
 
+const getBrowserExecutablePath = (): string | undefined => {
+  const possiblePaths = [
+    process.env.CHROME_BIN,
+    process.env.PUPPETEER_EXECUTABLE_PATH,
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+    'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+    'C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe',
+  ].filter(Boolean) as string[];
+
+  for (const p of possiblePaths) {
+    try {
+      if (fs.existsSync(p)) {
+        return p;
+      }
+    } catch {
+      // ignore
+    }
+  }
+  return undefined;
+};
+
 class WhatsAppService {
   private client: Client | null = null;
   private qrCode: string | null = null;
@@ -57,6 +80,10 @@ class WhatsAppService {
 
     try {
       console.log('Initializing WhatsApp Web (LocalAuth)...');
+      const browserPath = getBrowserExecutablePath();
+      if (browserPath) {
+        console.log(`Using detected browser at: ${browserPath}`);
+      }
 
       this.client = new Client({
         authStrategy: new LocalAuth({
@@ -64,6 +91,7 @@ class WhatsAppService {
         }),
         puppeteer: {
           headless: true,
+          executablePath: browserPath,
           args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
@@ -81,16 +109,17 @@ class WhatsAppService {
         this.qrCode = qr;
         this.status = 'QR_READY';
         try {
-          this.qrCodeDataUrl = await QRCode.toDataURL(qr);
+          this.qrCodeDataUrl = await QRCode.toDataURL(qr, { margin: 2, scale: 8 });
         } catch (err: any) {
           console.error('Failed to generate local QR code URL:', err.message);
           this.qrCodeDataUrl = null;
         }
         console.log('\n===============================================================');
-        console.log(' 📱 SCANNEZ CE QR CODE AVEC WHATSAPP (CABINET DR. SALMA TIJINI)');
+        console.log(' 📱 SCANNEZ CE QR CODE AVEC WHATSAPP (CABINET DENTAIRE)');
         console.log('===============================================================\n');
         qrcodeTerminal.generate(qr, { small: true });
       });
+
 
       // Event: Authenticated successfully
       this.client.on('authenticated', () => {
