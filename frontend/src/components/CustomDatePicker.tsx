@@ -107,33 +107,68 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
     }
   }, [isOpen, align]);
 
+  // Safe date parser to avoid UTC timezone shifts
+  const parseDateSafely = (val: string) => {
+    if (!val) return null;
+    if (val.includes('-')) {
+      const [datePart, timePart] = val.split('T');
+      const [y, m, d] = datePart.split('-').map(Number);
+      let hour = '09';
+      let minute = '00';
+      if (timePart) {
+        const [h, min] = timePart.split(':');
+        if (h) hour = h.padStart(2, '0');
+        if (min) minute = min.slice(0, 2).padStart(2, '0');
+      }
+      if (y && m && d) {
+        return {
+          year: y,
+          month: m - 1, // 0-indexed for JS Date
+          day: d,
+          hour,
+          minute,
+        };
+      }
+    }
+    const d = new Date(val);
+    if (!isNaN(d.getTime())) {
+      return {
+        year: d.getFullYear(),
+        month: d.getMonth(),
+        day: d.getDate(),
+        hour: String(d.getHours()).padStart(2, '0'),
+        minute: String(d.getMinutes()).padStart(2, '0'),
+      };
+    }
+    return null;
+  };
+
   // Sync formatted text input value when prop `value` changes
   useEffect(() => {
     if (value) {
-      const d = new Date(value);
-      if (!isNaN(d.getTime())) {
-        const day = String(d.getDate()).padStart(2, '0');
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const year = d.getFullYear();
-        const hours = String(d.getHours()).padStart(2, '0');
-        const minutes = String(d.getMinutes()).padStart(2, '0');
+      const parsed = parseDateSafely(value);
+      if (parsed) {
+        const dd = String(parsed.day).padStart(2, '0');
+        const mm = String(parsed.month + 1).padStart(2, '0');
+        const yyyy = parsed.year;
 
-        setSelectedHour(hours);
-        setSelectedMinute(minutes);
+        setSelectedHour(parsed.hour);
+        setSelectedMinute(parsed.minute);
 
         if (enableTime) {
-          setInputValue(`${day}/${month}/${year} à ${hours}:${minutes}`);
+          setInputValue(`${dd}/${mm}/${yyyy} à ${parsed.hour}:${parsed.minute}`);
         } else {
-          setInputValue(`${day}/${month}/${year}`);
+          setInputValue(`${dd}/${mm}/${yyyy}`);
         }
 
-        setViewYear(year);
-        setViewMonth(d.getMonth());
+        setViewYear(yyyy);
+        setViewMonth(parsed.month);
         return;
       }
     }
     setInputValue('');
   }, [value, enableTime]);
+
 
   // Click outside to close popup
   useEffect(() => {
@@ -363,8 +398,8 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
           />
         </div>
 
-        <div className="flex items-center gap-1 shrink-0">
-          {value && (
+        {value && (
+          <div className="flex items-center gap-1 shrink-0 ml-1.5">
             <button
               type="button"
               onClick={handleClear}
@@ -373,18 +408,10 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
             >
               <X className="w-3.5 h-3.5" />
             </button>
-          )}
-          <span
-            className={`px-2 py-1 rounded-lg text-xxs font-bold uppercase transition-all ${
-              value
-                ? 'bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400'
-                : 'bg-slate-200/60 dark:bg-white/5 text-slate-500'
-            }`}
-          >
-            {value ? (enableTime ? `${selectedHour}:${selectedMinute}` : 'JJ/MM/AAAA') : 'Choisir'}
-          </span>
-        </div>
+          </div>
+        )}
       </div>
+
 
       {/* POPUP CALENDAR MODAL / DROPDOWN */}
       {isOpen && (

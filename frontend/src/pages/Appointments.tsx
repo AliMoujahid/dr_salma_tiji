@@ -335,7 +335,7 @@ export const Appointments: React.FC = () => {
           </div>
 
           {/* Custom Date Picker Popup */}
-          <div className="w-48">
+          <div className="w-48 sm:w-52">
             <CustomDatePicker
               value={selectedDate}
               onChange={(val) => {
@@ -345,6 +345,7 @@ export const Appointments: React.FC = () => {
               placeholder="JJ/MM/AAAA"
             />
           </div>
+
 
         </div>
 

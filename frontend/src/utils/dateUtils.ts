@@ -9,6 +9,15 @@
 export const formatDate = (dateInput: string | Date | undefined | null): string => {
   if (!dateInput) return '—';
   try {
+    if (typeof dateInput === 'string') {
+      const trimmed = dateInput.trim();
+      if (trimmed.includes('-') && !trimmed.includes('T') && !trimmed.includes(' ')) {
+        const [y, m, d] = trimmed.split('-').map(Number);
+        if (y && m && d) {
+          return `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${y}`;
+        }
+      }
+    }
     const d = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
     if (isNaN(d.getTime())) return '—';
     const day = String(d.getDate()).padStart(2, '0');
@@ -26,6 +35,14 @@ export const formatDate = (dateInput: string | Date | undefined | null): string 
 export const formatDateTime = (dateInput: string | Date | undefined | null): string => {
   if (!dateInput) return '—';
   try {
+    if (typeof dateInput === 'string' && dateInput.includes('T')) {
+      const [dPart, tPart] = dateInput.split('T');
+      const dateFormatted = formatDate(dPart);
+      const [h, min] = tPart.split(':');
+      if (h && min) {
+        return `${dateFormatted} à ${h.padStart(2, '0')}:${min.slice(0, 2).padStart(2, '0')}`;
+      }
+    }
     const d = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
     if (isNaN(d.getTime())) return '—';
     const datePart = formatDate(d);
@@ -36,6 +53,7 @@ export const formatDateTime = (dateInput: string | Date | undefined | null): str
     return '—';
   }
 };
+
 
 /**
  * Time only format: HH:MM (e.g. 10:30)
