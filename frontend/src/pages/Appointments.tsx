@@ -20,6 +20,12 @@ import {
   Eye,
   X,
   Sparkles,
+  Users,
+  CheckSquare,
+  Volume2,
+  ArrowRight,
+  UserCheck,
+  Check,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -43,30 +49,90 @@ const MONTH_NAMES_FR = [
   'Décembre',
 ];
 
-const WEEK_DAYS_FR = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+const WEEK_DAYS_SHORT_FR = ['LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM', 'DIM'];
+const WEEK_DAYS_FULL_FR = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+
+const TIME_SLOTS = [
+  '08:30',
+  '09:00',
+  '09:30',
+  '10:00',
+  '10:30',
+  '11:00',
+  '11:30',
+  '12:00',
+  '12:30',
+  '13:00',
+  '13:30',
+  '14:00',
+  '14:30',
+  '15:00',
+  '15:30',
+  '16:00',
+  '16:30',
+  '17:00',
+  '17:30',
+  '18:00',
+  '18:30',
+  '19:00',
+  '19:30',
+];
+
+interface WaitingPatient {
+  id: string;
+  name: string;
+  arrivedAt: string;
+  act: string;
+  chair?: string;
+}
+
+interface ClinicTask {
+  id: string;
+  text: string;
+  done: boolean;
+}
 
 export const Appointments: React.FC = () => {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const { toast, confirm } = useToast();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar');
+  // View modes: 'week' (Dentisto Style), 'day', 'month', 'list'
+  const [viewMode, setViewMode] = useState<'week' | 'day' | 'month' | 'list'>('week');
 
-  const todayDate = new Date();
-  const [currentYear, setCurrentYear] = useState<number>(todayDate.getFullYear());
-  const [currentMonth, setCurrentMonth] = useState<number>(todayDate.getMonth());
-
-  const [dateFilterMode, setDateFilterMode] = useState<'Today' | 'Week' | 'Month' | 'All'>('Month');
-  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  // Active Date for week navigation
+  const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
   const [chairFilter, setChairFilter] = useState<string>('All');
+  const [doctorFilter, setDoctorFilter] = useState<string>('All');
 
+  // Waiting Room State
+  const [waitingRoom, setWaitingRoom] = useState<WaitingPatient[]>([
+    { id: 'w1', name: 'Kawtar Fattane', arrivedAt: '10:15', act: 'Consultation & Soins', chair: 'Fauteuil 1' },
+    { id: 'w2', name: 'Omar Bennani', arrivedAt: '10:35', act: 'Contrôle Ortho', chair: 'Fauteuil 2' },
+  ]);
+  const [isWaitingModalOpen, setIsWaitingModalOpen] = useState(false);
+  const [waitingPatientName, setWaitingPatientName] = useState('');
+  const [waitingPatientAct, setWaitingPatientAct] = useState('Consultation');
+
+  // Daily Tasks State
+  const [dailyTasks, setDailyTasks] = useState<ClinicTask[]>([
+    { id: 't1', text: 'Stérilisation des plateaux & turbines', done: true },
+    { id: 't2', text: 'Vérifier livraisons prothèses laboratoire', done: true },
+    { id: 't3', text: 'Rappels WhatsApp 24H envoyés aux patients', done: true },
+    { id: 't4', text: 'Commander composite & anesthésiques', done: false },
+  ]);
+  const [newTaskText, setNewTaskText] = useState('');
+  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+
+  // Modal Detail & Editing
   const [selectedDayDetail, setSelectedDayDetail] = useState<{ date: Date; dateStr: string; appts: Appointment[] } | null>(null);
   const [selectedApptDetail, setSelectedApptDetail] = useState<Appointment | null>(null);
 
+  // Create / Edit Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editApptId, setEditApptId] = useState<string | null>(null);
   const [selectedPatientId, setSelectedPatientId] = useState('');
@@ -98,7 +164,7 @@ export const Appointments: React.FC = () => {
   };
 
   const fetchPatients = () => {
-    fetch(`${API_URL}/patients?limit=150`, {
+    fetch(`${API_URL}/patients?limit=200`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => res.json())
@@ -106,32 +172,142 @@ export const Appointments: React.FC = () => {
       .catch((err) => console.error('Error fetching patients:', err));
   };
 
-  const handlePrevMonth = () => {
-    if (currentMonth === 0) {
-      setCurrentMonth(11);
-      setCurrentYear(currentYear - 1);
-    } else {
-      setCurrentMonth(currentMonth - 1);
-    }
+  // Helper to get Monday of any week
+  const getMonday = (d: Date) => {
+    const dt = new Date(d);
+    const day = dt.getDay();
+    const diff = dt.getDate() - day + (day === 0 ? -6 : 1);
+    return new Date(dt.setDate(diff));
   };
 
-  const handleNextMonth = () => {
-    if (currentMonth === 11) {
-      setCurrentMonth(0);
-      setCurrentYear(currentYear + 1);
-    } else {
-      setCurrentMonth(currentMonth + 1);
+  // 7 Days of the active week
+  const activeWeekDays = useMemo(() => {
+    const monday = getMonday(currentDate);
+    const days: Date[] = [];
+    for (let i = 0; i < 7; i++) {
+      const nextDay = new Date(monday);
+      nextDay.setDate(monday.getDate() + i);
+      days.push(nextDay);
     }
+    return days;
+  }, [currentDate]);
+
+  // Formatted date range: e.g. "31/08/2026 - 06/09/2026"
+  const weekRangeString = useMemo(() => {
+    if (activeWeekDays.length < 7) return '';
+    const start = activeWeekDays[0];
+    const end = activeWeekDays[6];
+    const formatD = (d: Date) =>
+      `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+    return `${formatD(start)} - ${formatD(end)}`;
+  }, [activeWeekDays]);
+
+  // Navigation handlers
+  const handlePrev = () => {
+    const newDate = new Date(currentDate);
+    if (viewMode === 'day') {
+      newDate.setDate(newDate.getDate() - 1);
+    } else if (viewMode === 'month') {
+      newDate.setMonth(newDate.getMonth() - 1);
+    } else {
+      newDate.setDate(newDate.getDate() - 7);
+    }
+    setCurrentDate(newDate);
+  };
+
+  const handleNext = () => {
+    const newDate = new Date(currentDate);
+    if (viewMode === 'day') {
+      newDate.setDate(newDate.getDate() + 1);
+    } else if (viewMode === 'month') {
+      newDate.setMonth(newDate.getMonth() + 1);
+    } else {
+      newDate.setDate(newDate.getDate() + 7);
+    }
+    setCurrentDate(newDate);
   };
 
   const handleGoToday = () => {
-    const now = new Date();
-    setCurrentYear(now.getFullYear());
-    setCurrentMonth(now.getMonth());
-    setSelectedDate(now.toISOString().slice(0, 10));
+    setCurrentDate(new Date());
   };
 
-  const handleOpenCreateModal = (prefillDate?: Date) => {
+  const getApptDateKey = (dateTimeStr: string) => {
+    if (!dateTimeStr) return '';
+    if (dateTimeStr.includes('T')) return dateTimeStr.split('T')[0];
+    const d = new Date(dateTimeStr);
+    if (isNaN(d.getTime())) return '';
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+
+  const filteredAppts = useMemo(() => {
+    return appointments.filter((appt) => {
+      const patientObj = appt.patientId && typeof appt.patientId === 'object' ? (appt.patientId as Patient) : null;
+      const patientName = patientObj?.name ? patientObj.name.toLowerCase() : '';
+      const notesText = (appt.notes || '').toLowerCase();
+      if (searchQuery && !patientName.includes(searchQuery.toLowerCase()) && !notesText.includes(searchQuery.toLowerCase())) return false;
+      if (statusFilter !== 'All' && appt.status !== statusFilter) return false;
+      if (chairFilter !== 'All' && appt.chair !== chairFilter) return false;
+      return true;
+    });
+  }, [appointments, searchQuery, statusFilter, chairFilter]);
+
+  // Group appointments by date string YYYY-MM-DD
+  const appointmentsByDate = useMemo(() => {
+    const map = new Map<string, Appointment[]>();
+    for (const appt of filteredAppts) {
+      const key = getApptDateKey(appt.dateTime);
+      if (key) {
+        const existing = map.get(key) || [];
+        existing.push(appt);
+        existing.sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
+        map.set(key, existing);
+      }
+    }
+    return map;
+  }, [filteredAppts]);
+
+  // Dentisto Solid Card Colors based on Dental Act / Specialty
+  const getDentistoCardColor = (appt: Appointment) => {
+    const notesLower = (appt.notes || '').toLowerCase();
+    const patName = typeof appt.patientId === 'object' ? (appt.patientId as any)?.name || '' : '';
+
+    if (notesLower.includes('chirurg') || notesLower.includes('implant') || notesLower.includes('greffe')) {
+      return 'bg-[#881337] hover:bg-[#700f2b] text-white border-[#4c0519]'; // Dark Burgundy
+    }
+    if (notesLower.includes('ortho') || notesLower.includes('bague') || notesLower.includes('arc')) {
+      return 'bg-[#1d4ed8] hover:bg-[#1e40af] text-white border-[#1e3a8a]'; // Royal Blue
+    }
+    if (notesLower.includes('soin') || notesLower.includes('carie') || notesLower.includes('composite')) {
+      return 'bg-[#e11d48] hover:bg-[#be123c] text-white border-[#9f1239]'; // Rose / Coral
+    }
+    if (notesLower.includes('détartr') || notesLower.includes('detartrage') || notesLower.includes('hygi')) {
+      return 'bg-[#eab308] hover:bg-[#ca8a04] text-slate-950 font-bold border-[#a16207]'; // Vibrant Yellow
+    }
+    if (notesLower.includes('endo') || notesLower.includes('dévital') || notesLower.includes('racine')) {
+      return 'bg-[#7c3aed] hover:bg-[#6d28d9] text-white border-[#5b21b6]'; // Purple / Violet
+    }
+    if (notesLower.includes('contrôle') || notesLower.includes('controle') || notesLower.includes('consult')) {
+      return 'bg-[#06b6d4] hover:bg-[#0891b2] text-white border-[#0e7490]'; // Cyan / Mint
+    }
+    if (notesLower.includes('extract') || notesLower.includes('arrach')) {
+      return 'bg-[#ea580c] hover:bg-[#c2410c] text-white border-[#9a3412]'; // Orange
+    }
+
+    // Deterministic palette fallback
+    const palettes = [
+      'bg-[#2563eb] hover:bg-[#1d4ed8] text-white border-[#1e40af]',
+      'bg-[#d97706] hover:bg-[#b45309] text-white border-[#92400e]',
+      'bg-[#059669] hover:bg-[#047857] text-white border-[#065f46]',
+      'bg-[#9333ea] hover:bg-[#7e22ce] text-white border-[#6b21a8]',
+      'bg-[#0284c7] hover:bg-[#0369a1] text-white border-[#075985]',
+      'bg-[#db2777] hover:bg-[#be185d] text-white border-[#9d174d]',
+    ];
+    let hash = 0;
+    for (let i = 0; i < patName.length; i++) hash += patName.charCodeAt(i);
+    return palettes[hash % palettes.length];
+  };
+
+  const handleOpenCreateModal = (prefillDate?: Date, timeStr?: string) => {
     setEditApptId(null);
     setSelectedPatientId(patients[0]?._id || '');
 
@@ -139,10 +315,9 @@ export const Appointments: React.FC = () => {
     const yyyy = targetDate.getFullYear();
     const mm = String(targetDate.getMonth() + 1).padStart(2, '0');
     const dd = String(targetDate.getDate()).padStart(2, '0');
-    const hours = '09';
-    const minutes = '00';
+    const [h, m] = (timeStr || '09:00').split(':');
 
-    setDateTime(`${yyyy}-${mm}-${dd}T${hours}:${minutes}`);
+    setDateTime(`${yyyy}-${mm}-${dd}T${h || '09'}:${m || '00'}`);
     setDuration('30');
     setChair('Fauteuil');
     setStatus('Scheduled');
@@ -246,7 +421,7 @@ export const Appointments: React.FC = () => {
 
     const apptDateStr = formatDate(appt.dateTime);
     const apptTimeStr = formatTime(appt.dateTime);
-    const message = `Bonjour ${patientObj.name},\n\nNous vous rappelons votre rendez-vous au Cabinet Dentaire Dr. Salma Tijini prévu le ${apptDateStr} à ${apptTimeStr}.\n\n🦷 Soin prévu : ${appt.notes || 'Consultation'}\n\nMerci de confirmer ou modifier votre présence en cas d'empêchement.`;
+    const message = `Bonjour ${patientObj.name},\n\nNous vous rappelons votre rendez-vous au Cabinet Dentaire Dr. Salma Tijini prévu le ${apptDateStr} à ${apptTimeStr}.\n\n🦷 Soin prévu : ${appt.notes || 'Consultation'}\n\nMerci de confirmer votre présence.`;
 
     fetch(`${API_URL}/notifications/send-manual`, {
       method: 'POST',
@@ -295,280 +470,312 @@ export const Appointments: React.FC = () => {
       });
   };
 
-  const getApptDateKey = (dateTimeStr: string) => {
-    if (!dateTimeStr) return '';
-    if (dateTimeStr.includes('T')) return dateTimeStr.split('T')[0];
-    const d = new Date(dateTimeStr);
-    if (isNaN(d.getTime())) return '';
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  // Waiting Room Handlers
+  const handleAddWaitingPatient = () => {
+    if (!waitingPatientName.trim()) return;
+    const now = new Date();
+    const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    const newEntry: WaitingPatient = {
+      id: `w-${Date.now()}`,
+      name: waitingPatientName.trim(),
+      arrivedAt: timeStr,
+      act: waitingPatientAct,
+      chair: 'Fauteuil 1',
+    };
+    setWaitingRoom([...waitingRoom, newEntry]);
+    setWaitingPatientName('');
+    setIsWaitingModalOpen(false);
+    toast.success('Patient en salle d\'attente', `${newEntry.name} ajouté(e) avec succès.`);
   };
 
-  const filteredAppts = useMemo(() => {
-    return appointments.filter((appt) => {
-      const patientObj = appt.patientId && typeof appt.patientId === 'object' ? (appt.patientId as Patient) : null;
-      const patientName = patientObj?.name ? patientObj.name.toLowerCase() : '';
-      const notesText = (appt.notes || '').toLowerCase();
-      if (searchQuery && !patientName.includes(searchQuery.toLowerCase()) && !notesText.includes(searchQuery.toLowerCase())) return false;
-      if (statusFilter !== 'All' && appt.status !== statusFilter) return false;
-      if (chairFilter !== 'All' && appt.chair !== chairFilter) return false;
+  const handleCallPatient = (wPatient: WaitingPatient) => {
+    setWaitingRoom(waitingRoom.filter((p) => p.id !== wPatient.id));
+    toast.info('Patient appelé au Fauteuil', `${wPatient.name} a été invité(e) en salle de soin.`);
+  };
 
-      if (viewMode === 'list') {
-        const apptDate = new Date(appt.dateTime);
-        const selDateObj = new Date(selectedDate);
-        if (dateFilterMode === 'Today') return apptDate.toDateString() === selDateObj.toDateString();
-        if (dateFilterMode === 'Month') return apptDate.getMonth() === currentMonth && apptDate.getFullYear() === currentYear;
-      }
-      return true;
+  // Task Toggle Handler
+  const handleToggleTask = (id: string) => {
+    setDailyTasks(dailyTasks.map((t) => (t.id === id ? { ...t, done: !t.done } : t)));
+  };
+
+  const handleAddTask = () => {
+    if (!newTaskText.trim()) return;
+    const newTask: ClinicTask = {
+      id: `task-${Date.now()}`,
+      text: newTaskText.trim(),
+      done: false,
+    };
+    setDailyTasks([...dailyTasks, newTask]);
+    setNewTaskText('');
+    setIsTaskModalOpen(false);
+  };
+
+  // Helper to test if a slot has an appointment starting
+  const getApptsForSlot = (dateObj: Date, timeSlotStr: string) => {
+    const dateKey = getApptDateKey(dateObj.toISOString());
+    const dayAppts = appointmentsByDate.get(dateKey) || [];
+    return dayAppts.filter((appt) => {
+      const apptTime = formatTime(appt.dateTime);
+      return apptTime.startsWith(timeSlotStr);
     });
-  }, [appointments, searchQuery, statusFilter, chairFilter, viewMode, dateFilterMode, selectedDate, currentMonth, currentYear]);
-
-  const appointmentsByDate = useMemo(() => {
-    const map = new Map<string, Appointment[]>();
-    for (const appt of filteredAppts) {
-      const key = getApptDateKey(appt.dateTime);
-      if (key) {
-        const existing = map.get(key) || [];
-        existing.push(appt);
-        existing.sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
-        map.set(key, existing);
-      }
-    }
-    return map;
-  }, [filteredAppts]);
-
-  const calendarGrid = useMemo(() => {
-    const firstDayIndex = new Date(currentYear, currentMonth, 1).getDay();
-    const adjustedFirstDay = firstDayIndex === 0 ? 6 : firstDayIndex - 1;
-    const daysInCurrentMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
-    const daysInPrevMonth = new Date(currentYear, currentMonth, 0).getDate();
-    const cells: any[] = [];
-    const todayStr = new Date().toDateString();
-
-    for (let i = adjustedFirstDay - 1; i >= 0; i--) {
-      const dayNum = daysInPrevMonth - i;
-      const dateObj = new Date(currentMonth === 0 ? currentYear - 1 : currentYear, currentMonth === 0 ? 11 : currentMonth - 1, dayNum);
-      cells.push({ dayNumber: dayNum, isCurrentMonth: false, dateObj, dateKey: getApptDateKey(dateObj.toISOString()), isToday: false, appts: appointmentsByDate.get(getApptDateKey(dateObj.toISOString())) || [] });
-    }
-    for (let dayNum = 1; dayNum <= daysInCurrentMonth; dayNum++) {
-      const dateObj = new Date(currentYear, currentMonth, dayNum);
-      cells.push({ dayNumber: dayNum, isCurrentMonth: true, dateObj, dateKey: getApptDateKey(dateObj.toISOString()), isToday: dateObj.toDateString() === todayStr, appts: appointmentsByDate.get(getApptDateKey(dateObj.toISOString())) || [] });
-    }
-    while (cells.length < 42) {
-      const dayNum = cells.length - (adjustedFirstDay + daysInCurrentMonth) + 1;
-      const dateObj = new Date(currentMonth === 11 ? currentYear + 1 : currentYear, currentMonth === 11 ? 0 : currentMonth + 1, dayNum);
-      cells.push({ dayNumber: dayNum, isCurrentMonth: false, dateObj, dateKey: getApptDateKey(dateObj.toISOString()), isToday: false, appts: appointmentsByDate.get(getApptDateKey(dateObj.toISOString())) || [] });
-    }
-    return cells;
-  }, [currentYear, currentMonth, appointmentsByDate]);
-
-  const getStatusChipStyles = (apptStatus: string) => {
-    switch (apptStatus) {
-      case 'Completed': return 'bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-500/15 dark:text-emerald-300';
-      case 'Confirmed': return 'bg-teal-50 text-teal-800 border-teal-300 dark:bg-teal-500/15 dark:text-teal-300';
-      case 'In Treatment': return 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-500/15 dark:text-amber-300';
-      default: return 'bg-blue-50 text-blue-800 border-blue-300 dark:bg-blue-500/15 dark:text-blue-300';
-    }
   };
 
   return (
-    <div className="flex-1 p-4 md:p-8 flex flex-col gap-6 overflow-y-auto no-scrollbar max-h-[calc(100vh-80px)] font-sans select-none">
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Agenda</h1>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center p-1 bg-slate-100 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-white/10">
-            <button onClick={() => setViewMode('calendar')} className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold ${viewMode === 'calendar' ? 'bg-blue-600 text-white' : 'text-slate-600'}`}>
-              <CalendarDays className="w-4 h-4" /> Grille
-            </button>
-            <button onClick={() => setViewMode('list')} className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'text-slate-600'}`}>
-              <List className="w-4 h-4" /> Liste
-            </button>
+    <div className="flex-1 p-3 md:p-6 flex flex-col gap-4 overflow-y-auto no-scrollbar max-h-[calc(100vh-80px)] font-sans select-none bg-slate-100/70 dark:bg-slate-950">
+      
+      {/* ========================================================================= */}
+      {/* 🌟 1. TOP HEADER & FILTER BAR (Dentisto Style)                            */}
+      {/* ========================================================================= */}
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <h1 className="text-xl md:text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+              Rendez-Vous
+            </h1>
+            <span className="px-2.5 py-0.5 rounded-full bg-emerald-500 text-white font-extrabold text-xxs tracking-wider uppercase shadow-xs">
+              Agenda V4
+            </span>
           </div>
-          <button onClick={() => handleOpenCreateModal()} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 text-white font-bold text-xs">
-            <Plus className="w-4 h-4" /> Nouveau
+
+          <button
+            onClick={() => handleOpenCreateModal()}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition-all shadow-md shadow-emerald-600/20 cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Nouveau RDV</span>
           </button>
+        </div>
+
+        {/* Dentisto Sub-Bar: Navigation + Date Range + Filters */}
+        <div className="p-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-white/10 shadow-xs flex flex-wrap items-center justify-between gap-3">
+          
+          {/* Left: Navigation Buttons + Date Range Pill */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleGoToday}
+              className="px-3.5 py-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-bold text-xs hover:bg-slate-50 transition-all shadow-2xs cursor-pointer"
+            >
+              Aujourd'hui
+            </button>
+
+            <button
+              onClick={handlePrev}
+              className="p-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 transition-all shadow-2xs cursor-pointer"
+              title="Précédent"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+
+            <button
+              onClick={handleNext}
+              className="p-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 transition-all shadow-2xs cursor-pointer"
+              title="Suivant"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+
+            <div className="h-8 px-3 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-950 flex items-center gap-2 text-xs font-mono font-bold text-slate-700 dark:text-slate-200 shadow-2xs">
+              <CalendarIcon className="w-3.5 h-3.5 text-slate-400" />
+              <span>{weekRangeString}</span>
+            </div>
+          </div>
+
+          {/* Right: Dropdowns Filters (Praticien, Vue, Statut) */}
+          <div className="flex items-center gap-2">
+            {/* Praticien Filter */}
+            <select
+              value={doctorFilter}
+              onChange={(e) => setDoctorFilter(e.target.value)}
+              className="h-8 px-3 rounded-xl text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-200 font-semibold cursor-pointer"
+            >
+              <option value="All">Praticien : Dr. Salma Tijini</option>
+              <option value="All">Tous les praticiens</option>
+            </select>
+
+            {/* View Mode Selector (Semaine / Jour / Mois / Liste) */}
+            <select
+              value={viewMode}
+              onChange={(e: any) => setViewMode(e.target.value)}
+              className="h-8 px-3 rounded-xl text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-200 font-bold cursor-pointer text-emerald-700 dark:text-emerald-400"
+            >
+              <option value="week">Vue : Semaine</option>
+              <option value="day">Vue : Jour</option>
+              <option value="month">Vue : Mois (Grille)</option>
+              <option value="list">Vue : Liste</option>
+            </select>
+
+            {/* Status Filter */}
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="h-8 px-3 rounded-xl text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-200 font-semibold cursor-pointer"
+            >
+              <option value="All">Statut : Tous</option>
+              <option value="Confirmed">Confirmé</option>
+              <option value="In Treatment">En Soin</option>
+              <option value="Completed">Terminé</option>
+              <option value="Scheduled">Planifié</option>
+            </select>
+          </div>
+
         </div>
       </div>
 
       {/* ========================================================================= */}
-      {/* 🌟 1. CANVA-STYLE MONTHLY CALENDAR GRID VIEW                              */}
+      {/* 🌟 2. MAIN SPLIT: AGENDA GRID (LEFT 78%) + CLINIC PANEL (RIGHT 22%)        */}
       {/* ========================================================================= */}
-      {viewMode === 'calendar' && (
-        <div className="rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 shadow-2xl overflow-hidden flex flex-col">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+        
+        {/* ======================================================================= */}
+        {/* A. DENTISTO WEEKLY TIMETABLE MATRIX (lg:col-span-9)                     */}
+        {/* ======================================================================= */}
+        <div className="lg:col-span-9 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-white/10 shadow-sm overflow-hidden flex flex-col">
           
-          {/* A. Canva-Inspired Header (Month Centered, Year on Right, Navigation on Left) */}
-          <div className="px-6 py-6 md:px-8 md:py-8 bg-gradient-to-b from-amber-50/20 via-white to-white dark:from-slate-950 dark:via-slate-900 dark:to-slate-900 border-b border-slate-200 dark:border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4">
-            
-            {/* Left: Navigation */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handlePrevMonth}
-                className="p-2.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition-all shadow-xs cursor-pointer"
-                title="Mois Précédent"
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </button>
+          {viewMode === 'week' && (
+            <div className="overflow-x-auto">
+              <div className="min-w-[760px] flex flex-col">
+                
+                {/* 1. Header Row (7 Days: LUN. 31 (16) -> DIM. 6 (0)) */}
+                <div className="grid grid-cols-8 border-b border-slate-200 dark:border-white/10 bg-slate-50/80 dark:bg-slate-950/60 sticky top-0 z-20">
+                  {/* Empty Corner for Time column */}
+                  <div className="p-2 border-r border-slate-200 dark:border-white/10 text-center text-slate-400 text-xxs font-bold uppercase tracking-wider flex items-center justify-center">
+                    Heure
+                  </div>
 
-              <button
-                onClick={handleGoToday}
-                className="px-4 py-2 rounded-xl border border-blue-200 dark:border-blue-500/30 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold text-xs hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>Aujourd'hui</span>
-              </button>
+                  {/* 7 Days Columns */}
+                  {activeWeekDays.map((dayObj, idx) => {
+                    const isToday = dayObj.toDateString() === new Date().toDateString();
+                    const dayKey = getApptDateKey(dayObj.toISOString());
+                    const dayApptCount = (appointmentsByDate.get(dayKey) || []).length;
+                    const shortName = WEEK_DAYS_SHORT_FR[idx];
+                    const dayNum = dayObj.getDate();
 
-              <button
-                onClick={handleNextMonth}
-                className="p-2.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition-all shadow-xs cursor-pointer"
-                title="Mois Suivant"
-              >
-                <ChevronRight className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Center: Large Aesthetic Month Typography (Canva Style) */}
-            <div className="text-center">
-              <h2 className="text-3xl md:text-5xl font-serif tracking-tight text-slate-900 dark:text-white capitalize">
-                {MONTH_NAMES_FR[currentMonth]}
-              </h2>
-            </div>
-
-            {/* Right: Year Typography + Month Select */}
-            <div className="flex items-center gap-3">
-              <span className="text-2xl md:text-4xl font-serif text-slate-800 dark:text-slate-200 font-normal">
-                {currentYear}
-              </span>
-              <select
-                value={currentMonth}
-                onChange={(e) => setCurrentMonth(parseInt(e.target.value, 10))}
-                className="h-9 px-3 rounded-xl text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white font-bold cursor-pointer"
-              >
-                {MONTH_NAMES_FR.map((name, idx) => (
-                  <option key={name} value={idx}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-          </div>
-
-          {/* B. Weekday Names (7 Columns: Lundi -> Dimanche in Canva Italic Style) */}
-          <div className="grid grid-cols-7 border-b border-slate-300 dark:border-white/10 bg-slate-50/90 dark:bg-slate-950/80 text-center">
-            {WEEK_DAYS_FR.map((dayName, idx) => (
-              <div
-                key={dayName}
-                className={`py-3 px-1 border-r border-slate-200 dark:border-white/10 last:border-r-0 ${
-                  idx >= 5 ? 'text-blue-600 dark:text-blue-400 font-semibold' : 'text-slate-700 dark:text-slate-300'
-                }`}
-              >
-                <span className="font-serif italic text-xs md:text-sm tracking-wide block">
-                  {dayName}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          {/* C. Monthly Calendar Grid (Canva Style Boxed Cells) */}
-          {loading ? (
-            <div className="flex items-center justify-center py-28">
-              <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-7 bg-slate-300 dark:bg-white/10 gap-[1px]">
-              {calendarGrid.map((cell, cellIdx) => {
-                const isCellCurrentMonth = cell.isCurrentMonth;
-                const hasAppts = cell.appts.length > 0;
-                const displayAppts = cell.appts.slice(0, 3);
-                const extraCount = cell.appts.length - displayAppts.length;
-
-                return (
-                  <div
-                    key={`${cell.dateKey}-${cellIdx}`}
-                    onClick={() => handleOpenCreateModal(cell.dateObj)}
-                    className={`min-h-[115px] md:min-h-[140px] p-2 flex flex-col justify-between transition-all group relative cursor-pointer ${
-                      isCellCurrentMonth
-                        ? cell.isToday
-                          ? 'bg-blue-50/60 dark:bg-blue-950/40 ring-2 ring-blue-500/50'
-                          : 'bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/60'
-                        : 'bg-slate-100/60 dark:bg-slate-950/40 text-slate-400 dark:text-slate-600 opacity-50'
-                    }`}
-                  >
-                    
-                    {/* Top Row: Day Number in Top Right (Canva Style) & Appt Count */}
-                    <div className="flex items-center justify-between mb-1">
-                      <div>
-                        {hasAppts && (
-                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 font-mono">
-                            {cell.appts.length} RDV
-                          </span>
-                        )}
-                      </div>
-
-                      <span
-                        className={`text-xs md:text-sm font-serif font-semibold transition-all ${
-                          cell.isToday
-                            ? 'w-6 h-6 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center shadow-md shadow-blue-500/30'
-                            : isCellCurrentMonth
-                            ? 'text-slate-700 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400'
-                            : 'text-slate-400 dark:text-slate-600'
+                    return (
+                      <div
+                        key={dayKey}
+                        onClick={() => handleOpenCreateModal(dayObj)}
+                        className={`py-2.5 px-1 border-r border-slate-200 dark:border-white/10 last:border-r-0 text-center transition-colors cursor-pointer ${
+                          isToday ? 'bg-blue-50/70 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-bold' : 'hover:bg-slate-100/50'
                         }`}
                       >
-                        {String(cell.dayNumber).padStart(2, '0')}
-                      </span>
-                    </div>
+                        <span className="text-xs uppercase font-extrabold tracking-tight">
+                          {shortName}. {dayNum}{' '}
+                          <span className="text-[11px] font-normal text-slate-500 dark:text-slate-400">
+                            ({dayApptCount})
+                          </span>
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
 
-                    {/* Middle: Appointment Pills */}
-                    <div className="flex-1 flex flex-col gap-1 overflow-hidden">
-                      {displayAppts.map((appt: any) => {
-                        const pat: any = appt.patientId;
-                        const patName = pat?.name || 'Patient';
+                {/* 2. Grid Body: Time Slots (08:30 -> 19:30) */}
+                <div className="relative flex flex-col">
+                  {TIME_SLOTS.map((timeStr) => (
+                    <div key={timeStr} className="grid grid-cols-8 border-b border-slate-100 dark:border-white/5 min-h-[50px]">
+                      
+                      {/* Left Time Label */}
+                      <div className="border-r border-slate-200 dark:border-white/10 p-1.5 text-center text-[11px] font-mono font-bold text-slate-400 dark:text-slate-500 bg-slate-50/40 dark:bg-slate-950/30 flex items-start justify-center">
+                        {timeStr}
+                      </div>
+
+                      {/* 7 Day Slot Cells */}
+                      {activeWeekDays.map((dayObj) => {
+                        const cellAppts = getApptsForSlot(dayObj, timeStr);
+                        const isToday = dayObj.toDateString() === new Date().toDateString();
 
                         return (
                           <div
-                            key={appt._id}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedApptDetail(appt);
-                            }}
-                            className={`px-2 py-1 rounded-lg text-xxs font-semibold border flex items-center justify-between gap-1 shadow-2xs hover:scale-[1.02] hover:shadow-xs transition-all cursor-pointer truncate ${getStatusChipStyles(
-                              appt.status
-                            )}`}
-                            title={`${formatTime(appt.dateTime)} - ${patName} (${appt.status})`}
+                            key={`${dayObj.toISOString()}-${timeStr}`}
+                            onClick={() => handleOpenCreateModal(dayObj, timeStr)}
+                            className={`border-r border-slate-100 dark:border-white/5 last:border-r-0 p-1 transition-all group relative min-h-[50px] flex flex-col gap-1 ${
+                              isToday ? 'bg-blue-50/15 dark:bg-blue-950/10' : 'hover:bg-slate-50/80 dark:hover:bg-slate-800/40'
+                            }`}
                           >
-                            <span className="font-mono font-bold shrink-0">{formatTime(appt.dateTime)}</span>
-                            <span className="truncate flex-1 font-medium">{patName}</span>
+                            {cellAppts.map((appt) => {
+                              const patObj = appt.patientId && typeof appt.patientId === 'object' ? (appt.patientId as Patient) : null;
+                              const patName = patObj?.name || 'Patient';
+                              const colorStyle = getDentistoCardColor(appt);
+
+                              return (
+                                <div
+                                  key={appt._id}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedApptDetail(appt);
+                                  }}
+                                  className={`p-1.5 rounded-lg text-xxs border transition-all transform hover:scale-[1.02] shadow-xs cursor-pointer leading-tight flex flex-col justify-center ${colorStyle}`}
+                                  title={`${formatTime(appt.dateTime)} - ${patName} (${appt.notes || 'Consultation'})`}
+                                >
+                                  <div className="font-extrabold uppercase truncate tracking-tight">
+                                    {formatTime(appt.dateTime)} {patName}
+                                  </div>
+                                  <div className="opacity-90 text-[9px] truncate font-medium mt-0.5">
+                                    ({appt.notes || 'Soins'})
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
                         );
                       })}
 
-                      {/* "+X autres" Button */}
-                      {extraCount > 0 && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedDayDetail({
-                              date: cell.dateObj,
-                              dateStr: cell.dateKey,
-                              appts: cell.appts,
-                            });
-                          }}
-                          className="text-[10px] font-bold text-blue-600 dark:text-blue-400 hover:underline text-left mt-0.5 px-1 cursor-pointer"
-                        >
-                          +{extraCount} autre{extraCount > 1 ? 's' : ''}...
-                        </button>
-                      )}
                     </div>
+                  ))}
+                </div>
 
-                    {/* Empty Day Indicator on Hover */}
-                    {!hasAppts && isCellCurrentMonth && (
-                      <div className="opacity-0 group-hover:opacity-40 text-center py-1 text-[10px] text-slate-400">
-                        + Ajouter
+              </div>
+            </div>
+          )}
+
+          {/* Fallback View: Monthly Grid (Canva Style) */}
+          {viewMode === 'month' && (
+            <div className="p-4">
+              <div className="grid grid-cols-7 border-b border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-950 text-center font-bold text-xs py-2">
+                {WEEK_DAYS_FULL_FR.map((d) => (
+                  <div key={d}>{d}</div>
+                ))}
+              </div>
+              <div className="grid grid-cols-7 gap-1 mt-2">
+                {Array.from({ length: 35 }).map((_, i) => {
+                  const dayNum = i + 1;
+                  return (
+                    <div
+                      key={i}
+                      onClick={() => handleOpenCreateModal()}
+                      className="min-h-[90px] p-2 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/60 dark:border-white/5 hover:border-emerald-500 cursor-pointer"
+                    >
+                      <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{dayNum <= 31 ? dayNum : ''}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Fallback View: List Mode */}
+          {viewMode === 'list' && (
+            <div className="p-4 flex flex-col gap-2">
+              {filteredAppts.slice(0, 20).map((appt) => {
+                const patObj = appt.patientId && typeof appt.patientId === 'object' ? (appt.patientId as Patient) : null;
+                return (
+                  <div
+                    key={appt._id}
+                    onClick={() => setSelectedApptDetail(appt)}
+                    className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-white/5 flex items-center justify-between cursor-pointer hover:border-blue-400"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="font-mono font-bold text-xs bg-blue-600 text-white px-2 py-1 rounded-lg">
+                        {formatTime(appt.dateTime)}
+                      </span>
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-900 dark:text-white">{patObj?.name || 'Patient'}</h4>
+                        <p className="text-[11px] text-slate-500">{formatDate(appt.dateTime)} • {appt.notes || 'Consultation'}</p>
                       </div>
-                    )}
-
+                    </div>
+                    <span className="text-xxs font-bold uppercase px-2 py-0.5 rounded-full bg-slate-200 dark:bg-white/10">
+                      {appt.status}
+                    </span>
                   </div>
                 );
               })}
@@ -576,131 +783,161 @@ export const Appointments: React.FC = () => {
           )}
 
         </div>
-      )}
 
-      {/* ========================================================================= */}
-      {/* 🌟 2. CARDS & LIST VIEW                                                   */}
-      {/* ========================================================================= */}
-      {viewMode === 'list' && (
-        <>
-          {loading ? (
-            <div className="flex items-center justify-center py-20">
-              <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+        {/* ======================================================================= */}
+        {/* B. DENTISTO RIGHT CLINIC PANEL (lg:col-span-3)                          */}
+        {/* ======================================================================= */}
+        <div className="lg:col-span-3 flex flex-col gap-4">
+          
+          {/* 1. Doctor Profile Pill */}
+          <div className="p-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-white/10 shadow-xs flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-full bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-bold flex items-center justify-center text-xs shadow-2xs">
+                ST
+              </div>
+              <div className="flex flex-col">
+                <span className="text-xs font-extrabold text-slate-900 dark:text-white">
+                  Dr. Salma Tijini
+                </span>
+                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  En consultation
+                </span>
+              </div>
             </div>
-          ) : filteredAppts.length === 0 ? (
-            <div className="p-12 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-white/5 text-center flex flex-col items-center justify-center gap-3 shadow-sm">
-              <CalendarIcon className="w-12 h-12 text-slate-300 dark:text-slate-600" />
-              <h4 className="text-base font-bold text-slate-800 dark:text-white">Aucun rendez-vous trouvé</h4>
-              <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm">
-                Aucune consultation ne correspond aux critères ou à la date sélectionnée.
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredAppts.map((appt) => {
-                const patientObj = appt.patientId && typeof appt.patientId === 'object' ? (appt.patientId as Patient) : null;
-                const patientName = patientObj?.name || 'Patient';
+          </div>
 
-                return (
+          {/* 2. Salle d'attente (Waiting Room Widget - Exact Dentisto Look) */}
+          <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-white/10 shadow-xs flex flex-col gap-3">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-white/5 pb-2">
+              <h3 className="text-xs font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5">
+                <Users className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Salle d'attente</span>
+                <span className="px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300 text-[10px] font-bold">
+                  {waitingRoom.length}
+                </span>
+              </h3>
+
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setIsWaitingModalOpen(true)}
+                  className="p-1 rounded-lg text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 cursor-pointer"
+                  title="Ajouter un patient"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => waitingRoom[0] && handleCallPatient(waitingRoom[0])}
+                  className="p-1 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10 cursor-pointer"
+                  title="Appeler le prochain"
+                >
+                  <Play className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Waiting List */}
+            <div className="flex flex-col gap-2 max-h-[160px] overflow-y-auto no-scrollbar pr-1">
+              {waitingRoom.length === 0 ? (
+                <div className="py-4 text-center text-[11px] text-slate-400">
+                  Salle d'attente vide
+                </div>
+              ) : (
+                waitingRoom.map((wPatient) => (
                   <div
-                    key={appt._id}
-                    className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 p-5 shadow-sm hover:shadow-md hover:border-blue-300 dark:hover:border-blue-500/30 flex flex-col justify-between gap-4 transition-all group"
+                    key={wPatient.id}
+                    className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200/70 dark:border-white/5 flex items-center justify-between gap-2 hover:border-emerald-300 transition-all"
                   >
-                    <div>
-                      <div className="flex justify-between items-center mb-3">
-                        <span className="text-xs font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1.5 font-mono">
-                          <CalendarIcon className="w-4 h-4 text-blue-500" />
-                          {formatDate(appt.dateTime)}
-                        </span>
-
-                        <span
-                          className={`text-xxs font-extrabold uppercase px-2.5 py-1 rounded-full border ${
-                            appt.status === 'Completed'
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-400'
-                              : appt.status === 'Confirmed'
-                              ? 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-500/20 dark:text-teal-400'
-                              : appt.status === 'In Treatment'
-                              ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/20 dark:text-amber-400'
-                              : 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/20 dark:text-blue-400'
-                          }`}
-                        >
-                          {appt.status}
-                        </span>
-                      </div>
-
-                      <h3 className="text-base font-extrabold text-slate-900 dark:text-white mb-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                        {patientName}
-                      </h3>
-
-                      <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
-                        <Clock className="w-4 h-4 text-blue-500" />
-                        <strong className="text-slate-800 dark:text-white font-mono">{formatTime(appt.dateTime)}</strong>
-                        <span className="text-slate-400">•</span>
-                        <span className="text-slate-500 dark:text-slate-400 font-medium">Durée : {appt.duration} min</span>
-                      </div>
-
-                      {appt.notes && (
-                        <p className="mt-3 text-xs leading-relaxed bg-slate-50 dark:bg-white/5 p-3 rounded-xl border border-slate-100 dark:border-white/5 text-slate-600 dark:text-slate-300">
-                          {appt.notes}
-                        </p>
-                      )}
+                    <div className="flex flex-col">
+                      <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                        {wPatient.name}
+                      </span>
+                      <span className="text-[10px] text-slate-500">
+                        Arrivé(e) à {wPatient.arrivedAt} • {wPatient.act}
+                      </span>
                     </div>
 
-                    <div className="flex items-center justify-between border-t border-slate-100 dark:border-white/10 pt-3 mt-1">
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={(e) => handleUpdateStatus(appt._id, 'Confirmed', e)}
-                          title="Marquer Confirmé"
-                          className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-200 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/20 dark:text-emerald-400 cursor-pointer"
-                        >
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={(e) => handleUpdateStatus(appt._id, 'In Treatment', e)}
-                          title="Marquer En Soin"
-                          className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-600 border border-amber-200 dark:bg-amber-500/10 dark:hover:bg-amber-500/20 dark:text-amber-400 cursor-pointer"
-                        >
-                          <Play className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={(e) => handleUpdateStatus(appt._id, 'Completed', e)}
-                          title="Marquer Terminé"
-                          className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 dark:bg-blue-500/10 dark:hover:bg-blue-500/20 dark:text-blue-400 cursor-pointer"
-                        >
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          onClick={(e) => handleSendWhatsAppReminder(appt, e)}
-                          title="Rappel WhatsApp"
-                          className="px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-600/20 dark:hover:bg-emerald-600/30 dark:text-emerald-400 cursor-pointer flex items-center gap-1 text-xxs font-bold shadow-xs"
-                        >
-                          <MessageSquare className="w-3.5 h-3.5 text-emerald-600" /> WhatsApp
-                        </button>
-                        <button
-                          onClick={() => handleOpenEditModal(appt)}
-                          className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer"
-                        >
-                          <Edit className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={(e) => handleDeleteAppointment(appt._id, e)}
-                          className="p-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/10 dark:hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-
+                    <button
+                      onClick={() => handleCallPatient(wPatient)}
+                      className="px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xxs font-bold flex items-center gap-1 cursor-pointer shrink-0 shadow-2xs"
+                    >
+                      <span>Appeler</span>
+                    </button>
                   </div>
-                );
-              })}
+                ))
+              )}
             </div>
-          )}
-        </>
-      )}
+
+            {/* Dentisto Quick Add Button */}
+            <button
+              type="button"
+              onClick={() => setIsWaitingModalOpen(true)}
+              className="w-full py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Ajouter au salle d'attente</span>
+            </button>
+          </div>
+
+          {/* 3. Tâches du Jour Widget (Exact Dentisto Look) */}
+          <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-white/10 shadow-xs flex flex-col gap-3">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-white/5 pb-2">
+              <h3 className="text-xs font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5">
+                <CheckSquare className="w-3.5 h-3.5 text-blue-600" />
+                <span>Tâches auj.</span>
+              </h3>
+
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setIsTaskModalOpen(true)}
+                  className="p-1 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10 cursor-pointer"
+                  title="Ajouter tâche"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
+                <span className="text-[10px] text-slate-400 font-semibold">Mes tâches</span>
+              </div>
+            </div>
+
+            {/* Tasks List */}
+            <div className="flex flex-col gap-1.5 max-h-[140px] overflow-y-auto no-scrollbar">
+              {dailyTasks.map((task) => (
+                <div
+                  key={task.id}
+                  onClick={() => handleToggleTask(task.id)}
+                  className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/40 cursor-pointer transition-colors"
+                >
+                  <div
+                    className={`w-4 h-4 rounded flex items-center justify-center border transition-all ${
+                      task.done
+                        ? 'bg-emerald-500 border-emerald-500 text-white'
+                        : 'border-slate-300 dark:border-white/20'
+                    }`}
+                  >
+                    {task.done && <Check className="w-3 h-3" />}
+                  </div>
+                  <span
+                    className={`text-xs truncate ${
+                      task.done ? 'line-through text-slate-400' : 'text-slate-700 dark:text-slate-200 font-medium'
+                    }`}
+                  >
+                    {task.text}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* Big Dentisto Checkmark Circle Widget */}
+            <div className="pt-2 flex items-center justify-center">
+              <div className="w-12 h-12 rounded-full border-2 border-emerald-500/30 flex items-center justify-center bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-600">
+                <Check className="w-6 h-6" />
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
 
       {/* ========================================================================= */}
       {/* 🌟 3. SELECTED APPOINTMENT QUICK ACTION MODAL                             */}
@@ -729,7 +966,7 @@ export const Appointments: React.FC = () => {
             <div className="flex flex-col gap-3 text-xs text-slate-600 dark:text-slate-300">
               <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-950/80 border border-slate-100 dark:border-white/5">
                 <span className="font-semibold text-slate-500">Statut actuel :</span>
-                <span className={`px-2.5 py-1 rounded-full text-xxs font-extrabold uppercase border ${getStatusChipStyles(selectedApptDetail.status)}`}>
+                <span className="px-2.5 py-1 rounded-full text-xxs font-extrabold uppercase bg-blue-50 text-blue-700 border border-blue-200">
                   {selectedApptDetail.status}
                 </span>
               </div>
@@ -743,7 +980,7 @@ export const Appointments: React.FC = () => {
 
               {selectedApptDetail.notes && (
                 <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/80 border border-slate-100 dark:border-white/5">
-                  <span className="font-semibold text-slate-500 block mb-1">Motif / Notes :</span>
+                  <span className="font-semibold text-slate-500 block mb-1">Motif / Soin Prévu :</span>
                   <p className="text-slate-800 dark:text-slate-200 leading-relaxed font-medium">
                     {selectedApptDetail.notes}
                   </p>
@@ -751,7 +988,7 @@ export const Appointments: React.FC = () => {
               )}
             </div>
 
-            {/* Status Quick Toggles */}
+            {/* Quick Status Toggles */}
             <div className="flex flex-col gap-2 pt-2 border-t border-slate-100 dark:border-white/10">
               <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Changer le statut :</span>
               <div className="grid grid-cols-3 gap-2">
@@ -761,7 +998,7 @@ export const Appointments: React.FC = () => {
                   className={`py-2 px-1 rounded-xl text-xxs font-bold border transition-all cursor-pointer ${
                     selectedApptDetail.status === 'Confirmed'
                       ? 'bg-teal-600 text-white border-teal-600'
-                      : 'bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100 dark:bg-teal-500/10 dark:text-teal-300'
+                      : 'bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100'
                   }`}
                 >
                   ✓ Confirmé
@@ -772,7 +1009,7 @@ export const Appointments: React.FC = () => {
                   className={`py-2 px-1 rounded-xl text-xxs font-bold border transition-all cursor-pointer ${
                     selectedApptDetail.status === 'In Treatment'
                       ? 'bg-amber-600 text-white border-amber-600'
-                      : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 dark:bg-amber-500/10 dark:text-amber-300'
+                      : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
                   }`}
                 >
                   ⏳ En Soin
@@ -783,7 +1020,7 @@ export const Appointments: React.FC = () => {
                   className={`py-2 px-1 rounded-xl text-xxs font-bold border transition-all cursor-pointer ${
                     selectedApptDetail.status === 'Completed'
                       ? 'bg-emerald-600 text-white border-emerald-600'
-                      : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-300'
+                      : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
                   }`}
                 >
                   ✅ Terminé
@@ -806,7 +1043,7 @@ export const Appointments: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleOpenEditModal(selectedApptDetail)}
-                  className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 font-bold text-xs cursor-pointer flex items-center gap-1"
+                  className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs cursor-pointer flex items-center gap-1"
                 >
                   <Edit className="w-3.5 h-3.5" />
                   <span>Modifier</span>
@@ -815,7 +1052,7 @@ export const Appointments: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleDeleteAppointment(selectedApptDetail._id)}
-                  className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-500/10 dark:hover:bg-rose-500/20 dark:text-rose-400 cursor-pointer"
+                  className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 cursor-pointer"
                   title="Supprimer"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -828,91 +1065,7 @@ export const Appointments: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* 🌟 4. ALL DAY APPOINTMENTS MODAL (from "+X autres")                       */}
-      {/* ========================================================================= */}
-      {selectedDayDetail && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-in fade-in duration-150">
-          <div className="w-full max-w-xl max-h-[85vh] rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-2xl p-6 flex flex-col gap-4 animate-in zoom-in-95 duration-150">
-            
-            <div className="flex justify-between items-center border-b border-slate-100 dark:border-white/10 pb-4">
-              <div>
-                <h3 className="text-lg font-serif font-bold text-slate-900 dark:text-white">
-                  Consultations du {formatDate(selectedDayDetail.dateStr)}
-                </h3>
-                <span className="text-xs text-slate-500 font-medium">
-                  {selectedDayDetail.appts.length} rendez-vous programmés ce jour
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleOpenCreateModal(selectedDayDetail.date);
-                    setSelectedDayDetail(null);
-                  }}
-                  className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1 cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Ajouter</span>
-                </button>
-                <button
-                  onClick={() => setSelectedDayDetail(null)}
-                  className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto flex flex-col gap-2.5 pr-1">
-              {selectedDayDetail.appts.map((appt) => {
-                const pat: any = appt.patientId;
-                const patName = pat?.name || 'Patient';
-
-                return (
-                  <div
-                    key={appt._id}
-                    className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-white/5 flex items-center justify-between gap-3 hover:border-blue-400 transition-all"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="px-2.5 py-1.5 rounded-xl bg-blue-600 text-white font-mono font-bold text-xs shrink-0 shadow-xs">
-                        {formatTime(appt.dateTime)}
-                      </div>
-                      <div>
-                        <h4 className="text-xs font-bold text-slate-900 dark:text-white">{patName}</h4>
-                        <p className="text-[11px] text-slate-500 truncate max-w-xs">{appt.notes || 'Consultation'}</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <span className={`px-2 py-0.5 rounded-full text-xxs font-bold uppercase border ${getStatusChipStyles(appt.status)}`}>
-                        {appt.status}
-                      </span>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedApptDetail(appt);
-                          setSelectedDayDetail(null);
-                        }}
-                        className="p-1.5 rounded-lg bg-slate-200/60 dark:bg-white/10 text-slate-700 dark:text-slate-300 hover:bg-blue-600 hover:text-white transition-colors cursor-pointer"
-                        title="Détails"
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* 🌟 5. CREATE & EDIT APPOINTMENT MODAL                                     */}
+      {/* 🌟 4. CREATE / EDIT APPOINTMENT MODAL                                     */}
       {/* ========================================================================= */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-in fade-in duration-150">
@@ -930,8 +1083,6 @@ export const Appointments: React.FC = () => {
             </div>
 
             <form onSubmit={handleSubmitAppointment} className="flex flex-col gap-4">
-              
-              {/* Patient Selection */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Patient *</label>
                 <SearchablePatientSelect
@@ -941,7 +1092,6 @@ export const Appointments: React.FC = () => {
                 />
               </div>
 
-              {/* Date & Time Input with CustomDatePicker */}
               <CustomDatePicker
                 label="Date et Heure du Rendez-vous *"
                 required
@@ -951,7 +1101,6 @@ export const Appointments: React.FC = () => {
                 placeholder="JJ/MM/AAAA à HH:MM"
               />
 
-              {/* Duration, Chair and Status Grid */}
               <div className="grid grid-cols-3 gap-2.5">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Durée</label>
@@ -994,41 +1143,126 @@ export const Appointments: React.FC = () => {
                     <option value="In Treatment">En Soin</option>
                     <option value="Completed">Terminé</option>
                     <option value="Cancelled">Annulé</option>
-                    <option value="No Show">Absence</option>
                   </select>
                 </div>
               </div>
 
-              {/* Notes */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Motif / Acte Prévu</label>
                 <input
                   type="text"
-                  placeholder="ex: Consultation, Détartrage, Pose d'implant..."
+                  placeholder="ex: Soins, Orthodontie, Détartrage, Chirurgie..."
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   className="w-full h-11 px-4 rounded-xl text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white placeholder-slate-400"
                 />
               </div>
 
-              {/* Modal Buttons */}
               <div className="flex justify-end gap-3 pt-3 border-t border-slate-200 dark:border-white/10">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 text-xs font-semibold text-slate-600 dark:text-slate-400 cursor-pointer"
                 >
                   Annuler
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition-all shadow-md shadow-blue-500/20 cursor-pointer"
+                  className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition-all shadow-md shadow-emerald-500/20 cursor-pointer"
                 >
                   {submitting ? 'Enregistrement...' : 'Enregistrer'}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 🌟 5. ADD TO WAITING ROOM MODAL                                           */}
+      {/* ========================================================================= */}
+      {isWaitingModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="w-full max-w-sm rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-2xl p-6 flex flex-col gap-4">
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+              Ajouter un Patient en Salle d'Attente
+            </h3>
+
+            <div className="flex flex-col gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Nom du Patient</label>
+                <input
+                  type="text"
+                  placeholder="Nom et Prénom..."
+                  value={waitingPatientName}
+                  onChange={(e) => setWaitingPatientName(e.target.value)}
+                  className="w-full h-10 px-3 rounded-xl border text-xs bg-slate-50 dark:bg-slate-950"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Motif / Soin</label>
+                <input
+                  type="text"
+                  placeholder="ex: Consultation, Détartrage..."
+                  value={waitingPatientAct}
+                  onChange={(e) => setWaitingPatientAct(e.target.value)}
+                  className="w-full h-10 px-3 rounded-xl border text-xs bg-slate-50 dark:bg-slate-950"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t">
+              <button
+                onClick={() => setIsWaitingModalOpen(false)}
+                className="px-3 py-1.5 rounded-xl border text-xs text-slate-600"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleAddWaitingPatient}
+                className="px-4 py-1.5 rounded-xl bg-emerald-600 text-white font-bold text-xs"
+              >
+                Ajouter
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 🌟 6. ADD TASK MODAL                                                      */}
+      {/* ========================================================================= */}
+      {isTaskModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="w-full max-w-sm rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-2xl p-6 flex flex-col gap-4">
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+              Nouvelle Tâche Clinique
+            </h3>
+
+            <input
+              type="text"
+              placeholder="Description de la tâche..."
+              value={newTaskText}
+              onChange={(e) => setNewTaskText(e.target.value)}
+              className="w-full h-10 px-3 rounded-xl border text-xs bg-slate-50 dark:bg-slate-950"
+            />
+
+            <div className="flex justify-end gap-2 pt-2 border-t">
+              <button
+                onClick={() => setIsTaskModalOpen(false)}
+                className="px-3 py-1.5 rounded-xl border text-xs text-slate-600"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleAddTask}
+                className="px-4 py-1.5 rounded-xl bg-blue-600 text-white font-bold text-xs"
+              >
+                Enregistrer
+              </button>
+            </div>
           </div>
         </div>
       )}
