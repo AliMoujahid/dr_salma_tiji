@@ -97,8 +97,8 @@ async function seed() {
       enableScheduler: true,
       whatsAppProvider: 'MetaCloud',
       smsProvider: 'Twilio',
-      testMode: true,
-      testPhoneNumber: '+212613117131',
+      testMode: false,
+      testPhoneNumber: '',
     });
 
     // 4. Create Message Templates

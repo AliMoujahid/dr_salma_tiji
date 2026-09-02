@@ -34,8 +34,8 @@ export class NotificationProviderService {
         enableEmail: true,
         enableInApp: true,
         enableScheduler: true,
-        testMode: true,
-        testPhoneNumber: '+212613117131',
+        testMode: false,
+        testPhoneNumber: '',
       });
     }
     return settings;

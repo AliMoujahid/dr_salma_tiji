@@ -61,7 +61,21 @@ router.post('/whatsapp-init', protect, async (req: Request, res: Response) => {
 router.post('/whatsapp-logout', protect, async (req: Request, res: Response) => {
   try {
     await whatsappService.logout();
-    res.json({ message: 'WhatsApp Web déconnecté et session réinitialisée.' });
+    const status = whatsappService.getStatus();
+    res.json({ message: 'WhatsApp Web déconnecté et session réinitialisée.', status });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+/**
+ * POST /api/notifications/whatsapp-reset
+ * Force reset session, clean files and immediately request fresh QR Code
+ */
+router.post('/whatsapp-reset', protect, async (req: Request, res: Response) => {
+  try {
+    const status = await whatsappService.forceResetSession();
+    res.json({ message: 'Session réinitialisée. Nouveau QR Code en cours de génération...', status });
   } catch (err: any) {
     res.status(500).json({ message: err.message });
   }

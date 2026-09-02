@@ -410,12 +410,21 @@ const guideText = `=============================================================
 fs.writeFileSync(path.join(RELEASE_DIR, 'LISEZ-MOI.txt'), guideText, 'utf8');
 
 
-// Helper to copy directory recursively
+// Helper to copy directory recursively (excluding temporary session folders and git)
 function copyDirSync(src, dest) {
   fs.mkdirSync(dest, { recursive: true });
   const entries = fs.readdirSync(src, { withFileTypes: true });
 
   for (const entry of entries) {
+    if (
+      entry.name === '.wwebjs_auth' ||
+      entry.name === '.wwebjs_cache' ||
+      entry.name === '.git' ||
+      entry.name === '.DS_Store'
+    ) {
+      continue;
+    }
+
     const srcPath = path.join(src, entry.name);
     const destPath = path.join(dest, entry.name);
 

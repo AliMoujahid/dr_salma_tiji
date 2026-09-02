@@ -15,14 +15,25 @@ export interface WhatsAppStatus {
 }
 
 const getBrowserExecutablePath = (): string | undefined => {
+  const localAppData = process.env.LOCALAPPDATA || '';
+  const programFiles = process.env.PROGRAMFILES || 'C:\\Program Files';
+  const programFilesX86 = process.env['PROGRAMFILES(X86)'] || 'C:\\Program Files (x86)';
+
   const possiblePaths = [
     process.env.CHROME_BIN,
     process.env.PUPPETEER_EXECUTABLE_PATH,
-    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-    'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-    'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
-    'C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe',
+    // Google Chrome
+    path.join(programFiles, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+    path.join(programFilesX86, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+    path.join(localAppData, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+    // Microsoft Edge (Pre-installed on all Windows 10 & 11 PCs)
+    path.join(programFilesX86, 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+    path.join(programFiles, 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+    path.join(localAppData, 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+    // Brave
+    path.join(programFiles, 'BraveSoftware', 'Brave-Browser', 'Application', 'brave.exe'),
+    path.join(programFilesX86, 'BraveSoftware', 'Brave-Browser', 'Application', 'brave.exe'),
+    path.join(localAppData, 'BraveSoftware', 'Brave-Browser', 'Application', 'brave.exe'),
   ].filter(Boolean) as string[];
 
   for (const p of possiblePaths) {
@@ -41,7 +52,7 @@ class WhatsAppService {
   private client: Client | null = null;
   private qrCode: string | null = null;
   private qrCodeDataUrl: string | null = null;
-  private status: 'INITIALIZING' | 'QR_READY' | 'AUTHENTICATED' | 'CONNECTED' | 'DISCONNECTED' = 'INITIALIZING';
+  private status: 'INITIALIZING' | 'QR_READY' | 'AUTHENTICATED' | 'CONNECTED' | 'DISCONNECTED' = 'DISCONNECTED';
   private connectedNumber: string | null = null;
   private lastError: string | null = null;
   private isInitializing = false;
@@ -51,38 +62,53 @@ class WhatsAppService {
   }
 
   /**
+   * Helper to safely remove session folder on Windows despite file locks
+   */
+  private async cleanSessionFolder(): Promise<void> {
+    const authPath = path.join(process.cwd(), '.wwebjs_auth');
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        if (fs.existsSync(authPath)) {
+          fs.rmSync(authPath, { recursive: true, force: true });
+          console.log('[WhatsApp] Dossier session .wwebjs_auth nettoyé avec succès.');
+        }
+        break;
+      } catch (err: any) {
+        console.warn(`[WhatsApp] Nettoyage session tentative ${attempt + 1} (${err.message}). Attente...`);
+        await new Promise((resolve) => setTimeout(resolve, 800));
+      }
+    }
+  }
+
+  /**
    * Initialize WhatsApp Web client headless session
    */
   public async initClient(forceReset = false) {
-    if (forceReset && this.client) {
-      try {
-        await this.client.destroy();
-      } catch {
-        // ignore
-      }
-      this.client = null;
-      this.isInitializing = false;
+    if (forceReset) {
+      await this.logout();
     }
 
     if (this.isInitializing) {
-      console.log('WhatsApp Web initialization already in progress...');
+      console.log('WhatsApp Web initialisation déjà en cours...');
       return;
     }
 
     if (this.client && this.status === 'CONNECTED') {
-      console.log('WhatsApp Web is already connected.');
+      console.log('WhatsApp Web est déjà connecté.');
       return;
     }
 
     this.isInitializing = true;
     this.status = 'INITIALIZING';
     this.lastError = null;
+    this.qrCode = null;
+    this.qrCodeDataUrl = null;
 
     try {
-      console.log('Initializing WhatsApp Web (LocalAuth)...');
+      console.log('Démarrage de WhatsApp Web (LocalAuth)...');
       const browserPath = getBrowserExecutablePath();
       if (browserPath) {
-        console.log(`Using detected browser at: ${browserPath}`);
+        console.log(`Navigateur détecté pour WhatsApp : ${browserPath}`);
       }
 
       this.client = new Client({
@@ -108,6 +134,7 @@ class WhatsAppService {
       this.client.on('qr', async (qr) => {
         this.qrCode = qr;
         this.status = 'QR_READY';
+        this.isInitializing = false;
         try {
           this.qrCodeDataUrl = await QRCode.toDataURL(qr, { margin: 2, scale: 8 });
         } catch (err: any) {
@@ -119,7 +146,6 @@ class WhatsAppService {
         console.log('===============================================================\n');
         qrcodeTerminal.generate(qr, { small: true });
       });
-
 
       // Event: Authenticated successfully
       this.client.on('authenticated', () => {
@@ -137,9 +163,9 @@ class WhatsAppService {
         this.isInitializing = false;
         try {
           const info = this.client?.info;
-          this.connectedNumber = info?.wid?.user || 'Connecté';
+          this.connectedNumber = info?.wid?.user || 'Cabinet';
         } catch {
-          this.connectedNumber = 'Connecté';
+          this.connectedNumber = 'Cabinet';
         }
         console.log(`🚀 WhatsApp Web prêt ! Connecté sous le numéro : ${this.connectedNumber}`);
       });
@@ -288,38 +314,56 @@ class WhatsAppService {
   /**
    * Log out from WhatsApp Web session and clear credentials
    */
-  public async logout() {
-    this.status = 'INITIALIZING';
+  public async logout(): Promise<void> {
+    this.status = 'DISCONNECTED';
+    this.connectedNumber = null;
+    this.qrCode = null;
+    this.qrCodeDataUrl = null;
+    this.isInitializing = false;
+
     if (this.client) {
       try {
-        await this.client.logout();
+        await Promise.race([
+          this.client.logout().catch(() => {}),
+          new Promise((resolve) => setTimeout(resolve, 2500)),
+        ]);
       } catch (e) {
-        // ignore if already disconnected
+        // ignore
       }
+
       try {
-        await this.client.destroy();
+        await Promise.race([
+          this.client.destroy().catch(() => {}),
+          new Promise((resolve) => setTimeout(resolve, 2500)),
+        ]);
       } catch (e) {
         // ignore
       }
       this.client = null;
-      this.isInitializing = false;
     }
 
-    // Clear local auth folder to force QR scan on next initialization
-    try {
-      const authPath = path.join(process.cwd(), '.wwebjs_auth');
-      if (fs.existsSync(authPath)) {
-        fs.rmSync(authPath, { recursive: true, force: true });
-        console.log('[WhatsApp] Session folder .wwebjs_auth deleted successfully.');
-      }
-    } catch (err: any) {
-      console.error('[WhatsApp] Failed to delete session folder:', err.message);
-    }
+    // Wait a brief moment for Windows file locks to release
+    await new Promise((resolve) => setTimeout(resolve, 800));
 
-    this.status = 'DISCONNECTED';
-    this.qrCode = null;
-    this.qrCodeDataUrl = null;
-    this.connectedNumber = null;
+    // Force delete session folder with retry
+    await this.cleanSessionFolder();
+  }
+
+  /**
+   * Force reset session and restart client immediately for new QR Code
+   */
+  public async forceResetSession(): Promise<WhatsAppStatus> {
+    console.log('[WhatsApp] Réinitialisation forcée de la session demandée...');
+    await this.logout();
+    
+    // Asynchronously launch new client
+    setTimeout(() => {
+      this.initClient(false).catch((err) => {
+        console.error('[WhatsApp] Erreur après reset session:', err);
+      });
+    }, 400);
+
+    return this.getStatus();
   }
 
   public getStatus(): WhatsAppStatus {
@@ -335,3 +379,4 @@ class WhatsAppService {
 }
 
 export const whatsappService = new WhatsAppService();
+

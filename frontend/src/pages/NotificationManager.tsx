@@ -106,26 +106,32 @@ export const NotificationManager: React.FC = () => {
 
   const handleLogoutWa = async () => {
     const confirmed = await confirm({
-      title: 'Déconnecter WhatsApp ?',
-      message: 'Voulez-vous vraiment déconnecter la session WhatsApp actuelle et lier un nouveau numéro ?',
+      title: 'Déconnecter la session WhatsApp ?',
+      message: 'Voulez-vous vraiment déconnecter la session actuelle pour associer un nouveau numéro de téléphone ? Le système générera immédiatement un nouveau QR Code.',
       variant: 'warning',
-      confirmText: 'Déconnecter',
+      confirmText: 'Déconnecter & Changer de Numéro',
       cancelText: 'Annuler',
     });
     if (!confirmed) return;
 
     setLoadingWaStatus(true);
-    fetch(`${API_URL}/notifications/whatsapp-logout`, {
+    setWaStatus({
+      connected: false,
+      status: 'INITIALIZING',
+      phoneNumber: null,
+      qrCodeUrl: null,
+    });
+
+    fetch(`${API_URL}/notifications/whatsapp-reset`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => res.json())
       .then(() => {
-        toast.info('Session WhatsApp fermée', 'Vous pouvez maintenant scanner un nouveau code QR.');
+        toast.info('Session réinitialisée', 'Génération d\'un nouveau QR Code en cours...');
         fetchWaStatus();
-        setTimeout(() => {
-          handleInitWa();
-        }, 1000);
+        setTimeout(fetchWaStatus, 2000);
+        setTimeout(fetchWaStatus, 4000);
       })
       .catch((err) => {
         console.error('Error logging out WA:', err);
@@ -154,8 +160,8 @@ export const NotificationManager: React.FC = () => {
   }, [token]);
 
   const getWhatsAppTargetNumber = () => {
-    if (settings.testMode) {
-      return settings.testPhoneNumber || '+212 6 13 11 71 31';
+    if (settings.testMode && settings.testPhoneNumber) {
+      return settings.testPhoneNumber;
     }
     return clinicConfig?.phones || 'le téléphone du cabinet';
   };
@@ -1060,7 +1066,7 @@ export const NotificationManager: React.FC = () => {
                   }`}
                 >
                   <span className={`w-2 h-2 rounded-full ${waStatus?.connected ? 'bg-emerald-500 animate-ping' : waStatus?.status === 'INITIALIZING' ? 'bg-blue-500 animate-pulse' : 'bg-amber-500'}`}></span>
-                  {waStatus?.connected ? `Connecté (${waStatus?.phoneNumber || 'WhatsApp'})` : waStatus?.status === 'INITIALIZING' ? 'Initialisation...' : waStatus?.status === 'QR_READY' ? 'QR Code Prêt à scanner' : 'Déconnecté'}
+                  {waStatus?.connected ? `Connecté (${waStatus?.phoneNumber || 'Cabinet'})` : waStatus?.status === 'INITIALIZING' ? 'Initialisation...' : waStatus?.status === 'QR_READY' ? 'QR Code Prêt à scanner' : 'Déconnecté'}
                 </span>
 
                 <button
@@ -1073,16 +1079,15 @@ export const NotificationManager: React.FC = () => {
                   <span>{loadingWaStatus || waStatus?.status === 'INITIALIZING' ? 'Lancement...' : 'Relancer WhatsApp'}</span>
                 </button>
 
-                {waStatus?.connected && (
-                  <button
-                    type="button"
-                    onClick={handleLogoutWa}
-                    disabled={loadingWaStatus}
-                    className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold cursor-pointer transition-all disabled:opacity-50"
-                  >
-                    Déconnecter / Changer de Numéro
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={handleLogoutWa}
+                  disabled={loadingWaStatus}
+                  className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold cursor-pointer transition-all disabled:opacity-50 flex items-center gap-1.5"
+                  title="Déconnecter la session et générer un nouveau QR Code"
+                >
+                  <span>Déconnecter / Changer de Numéro</span>
+                </button>
               </div>
             </div>
 
@@ -1095,7 +1100,7 @@ export const NotificationManager: React.FC = () => {
                     ⏳ Démarrage du navigateur et génération du QR Code...
                   </h4>
                   <p className="text-[11px] text-slate-600 dark:text-slate-400">
-                    Veuillez patienter 3 à 5 secondes, le QR code WhatsApp va s'afficher ci-dessous.
+                    Veuillez patienter quelques secondes, le QR code WhatsApp va s'afficher ci-dessous.
                   </p>
                 </div>
               </div>
@@ -1120,8 +1125,14 @@ export const NotificationManager: React.FC = () => {
                     <li>Cliquez sur <strong>Lier un appareil</strong> et pointez la caméra vers le QR Code ci-contre.</li>
                     <li>Une fois scanné, vos rappels de rendez-vous et messages seront envoyés <strong>automatiquement & gratuitement</strong> !</li>
                   </ol>
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400 bg-white/60 dark:bg-slate-900/60 p-2.5 rounded-xl border border-slate-200 dark:border-white/5">
-                    💡 <em>Le QR Code se rafraîchit automatiquement. Dès que vous le scannez, cette page passe à l'état « Connecté ».</em>
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={handleLogoutWa}
+                      className="text-xs font-bold text-rose-600 dark:text-rose-400 hover:underline cursor-pointer"
+                    >
+                      🔄 Problème de scan ? Réinitialiser et générer un nouveau QR Code
+                    </button>
                   </div>
                 </div>
               </div>
@@ -1148,16 +1159,26 @@ export const NotificationManager: React.FC = () => {
             )}
 
             {waStatus?.connected && (
-              <div className="p-5 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-xs font-semibold text-emerald-800 dark:text-emerald-300 flex items-center gap-3">
-                <CheckCircle2 className="w-6 h-6 text-emerald-500 shrink-0" />
-                <div className="flex flex-col gap-0.5">
-                  <span className="font-bold text-emerald-900 dark:text-emerald-200">
-                    WhatsApp Web est connecté avec succès ! ({waStatus?.phoneNumber || 'Cabinet'})
-                  </span>
-                  <span className="text-[11px] font-normal text-emerald-700 dark:text-emerald-400">
-                    Tous les rappels de rendez-vous et ordonnances sont envoyés directement depuis votre numéro.
-                  </span>
+              <div className="p-5 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-xs font-semibold text-emerald-800 dark:text-emerald-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <CheckCircle2 className="w-6 h-6 text-emerald-500 shrink-0" />
+                  <div className="flex flex-col gap-0.5">
+                    <span className="font-bold text-emerald-900 dark:text-emerald-200">
+                      WhatsApp Web est connecté avec succès ! ({waStatus?.phoneNumber || 'Cabinet'})
+                    </span>
+                    <span className="text-[11px] font-normal text-emerald-700 dark:text-emerald-400">
+                      Tous les rappels de rendez-vous et ordonnances sont envoyés directement depuis votre numéro.
+                    </span>
+                  </div>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={handleLogoutWa}
+                  className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-rose-200 dark:border-rose-500/30 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 font-bold text-xxs transition-all shadow-xs shrink-0 cursor-pointer"
+                >
+                  Déconnecter / Changer de Téléphone
+                </button>
               </div>
             )}
           </div>
@@ -1219,7 +1240,7 @@ export const NotificationManager: React.FC = () => {
               </label>
               <input
                 type="text"
-                placeholder="+212613117131"
+                placeholder="+212 6 XX XX XX XX"
                 value={settings.testPhoneNumber || ''}
                 onChange={(e) => setSettings({ ...settings, testPhoneNumber: e.target.value })}
                 className="w-full h-11 px-4 rounded-xl text-xs border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 shadow-xs"

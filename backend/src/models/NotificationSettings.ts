@@ -86,7 +86,7 @@ const NotificationSettingsSchema: Schema = new Schema(
     enableInApp: { type: Boolean, default: true },
     enableScheduler: { type: Boolean, default: true },
     testMode: { type: Boolean, default: false },
-    testPhoneNumber: { type: String, default: '+212613117131' },
+    testPhoneNumber: { type: String, default: '' },
     testEmail: { type: String, default: '' },
 
     remindersConfig: {

@@ -95,6 +95,15 @@ function copyDirSync(src, dest) {
   const entries = fs.readdirSync(src, { withFileTypes: true });
 
   for (const entry of entries) {
+    if (
+      entry.name === '.wwebjs_auth' ||
+      entry.name === '.wwebjs_cache' ||
+      entry.name === '.git' ||
+      entry.name === '.DS_Store'
+    ) {
+      continue;
+    }
+
     const srcPath = path.join(src, entry.name);
     const destPath = path.join(dest, entry.name);
 
