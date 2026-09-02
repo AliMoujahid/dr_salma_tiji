@@ -19,6 +19,7 @@ import reportRoutes from './routes/reports';
 import notificationRoutes from './routes/notifications';
 import licenseRoutes from './routes/license';
 import auditLogRoutes from './routes/auditLogs';
+import dentalActsRoutes, { ensureDefaultActs } from './routes/dentalActs';
 import { reminderScheduler } from './services/reminderScheduler';
 import { backupScheduler } from './services/backupScheduler';
 import { licenseService } from './services/licenseService';
@@ -96,6 +97,9 @@ mongoose
         });
         console.log('⚡ Configuration clinique initiale créée.');
       }
+
+      // Ensure Default Dental Acts & Tariffs Catalog Exists
+      await ensureDefaultActs();
     } catch (bootErr) {
       console.error('Erreur initialisation données par défaut:', bootErr);
     }
@@ -141,6 +145,7 @@ app.use('/api/backup', backupRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/audit-logs', auditLogRoutes);
+app.use('/api/dental-acts', dentalActsRoutes);
 
 import { whatsappService } from './services/whatsappService';
 

@@ -252,3 +252,16 @@ export interface NotificationSettings {
     fromName: string;
   };
 }
+
+export interface DentalAct {
+  _id: string;
+  code?: string;
+  name: string;
+  category: string;
+  defaultPrice: number;
+  description?: string;
+  isFavorite: boolean;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}

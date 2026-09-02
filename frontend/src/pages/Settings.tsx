@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { Settings as SettingsIcon, Save, UploadCloud, Database, Download, CheckCircle2, User, Camera, Key, Lock, Clock, RefreshCw, Users, UserPlus, Trash2, Edit2, Shield, Sparkles, Building2, AlertTriangle, Printer, Phone, MapPin, Mail, Globe } from 'lucide-react';
+import { Settings as SettingsIcon, Save, UploadCloud, Database, Download, CheckCircle2, User, Camera, Key, Lock, Clock, RefreshCw, Users, UserPlus, Trash2, Edit2, Shield, Sparkles, Building2, AlertTriangle, Printer, Phone, MapPin, Mail, Globe, Stethoscope, Layers, FileText } from 'lucide-react';
 import { ClinicConfig } from '../types';
+import { DentalActsManager } from '../components/DentalActsManager';
 
 export const Settings: React.FC = () => {
   const { user, token, isAdmin, updateUser } = useAuth();
   const { toast, confirm } = useToast();
   
+  const [activeSettingsTab, setActiveSettingsTab] = useState<'ACTS' | 'CABINET' | 'USERS' | 'BACKUP' | 'AUDIT'>('ACTS');
   const [config, setConfig] = useState<ClinicConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -590,148 +592,442 @@ export const Settings: React.FC = () => {
         </div>
       )}
 
-
-
-      {/* Practitioner Profile & Avatar Management Card */}
-      <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 p-6 shadow-sm flex flex-col gap-6">
-        <div className="flex justify-between items-center border-b border-slate-100 dark:border-white/5 pb-3">
-          <div className="flex items-center gap-2">
-            <User className="w-5 h-5 text-indigo-500" />
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">Profil Praticien & Compte Connecté</h3>
-          </div>
-          {profileMessage && (
-            <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-200 dark:border-emerald-500/20">
-              {profileMessage}
-            </span>
-          )}
-        </div>
-
-        <div className="flex flex-col md:flex-row items-center gap-6">
-          {/* Avatar Image Picker */}
-          <div className="flex flex-col items-center gap-2">
-            <div className="relative w-24 h-24 rounded-full border-2 border-indigo-500/40 p-1 shadow-lg group bg-slate-800">
-              <img
-                src={getAvatarDisplaySrc(profileAvatarUrl, profileName)}
-                alt={profileName}
-                className="w-full h-full object-cover rounded-full"
-              />
-              <label className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-xs cursor-pointer">
-                <Camera className="w-6 h-6 mb-0.5" />
-                <span>Changer</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleAvatarFileUpload}
-                  className="hidden"
-                  disabled={uploadingAvatar}
-                />
-              </label>
-            </div>
-            <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
-              {uploadingAvatar ? 'Envoi en cours...' : 'Survolez pour modifier'}
-            </span>
-          </div>
-
-          {/* User Info Form */}
-          <form onSubmit={handleSaveProfile} className="flex-1 w-full flex flex-col gap-4">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="flex flex-col gap-1.5 sm:col-span-2">
-                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Nom du Praticien</label>
-                <input
-                  type="text"
-                  value={profileName}
-                  onChange={(e) => setProfileName(e.target.value)}
-                  placeholder="ex: Dr. Salma Tijini"
-                  className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 shadow-xs"
-                />
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Rôle / Titre</label>
-                  {!isAdmin && (
-                    <span className="text-[10px] text-amber-600 dark:text-amber-400 font-bold flex items-center gap-1">
-                      <Lock className="w-3 h-3" /> Admin Seul
-                    </span>
-                  )}
-                </div>
-                <select
-                  value={profileRole}
-                  onChange={(e) => setProfileRole(e.target.value as any)}
-                  disabled={!isAdmin}
-                  className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 shadow-xs disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  <option value="DOCTOR">DOCTOR</option>
-                  <option value="ADMIN">ADMIN</option>
-                  <option value="ASSISTANT">ASSISTANT</option>
-                  <option value="RECEPTIONIST">RECEPTIONIST</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Email de Connexion</label>
-                <input
-                  type="email"
-                  value={profileEmail}
-                  onChange={(e) => setProfileEmail(e.target.value)}
-                  className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 shadow-xs"
-                />
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">URL / Image d'Avatar (Optionnel)</label>
-                <input
-                  type="text"
-                  value={profileAvatarUrl}
-                  onChange={(e) => setProfileAvatarUrl(e.target.value)}
-                  placeholder="https://... ou /uploads/..."
-                  className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 shadow-xs"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-slate-100 dark:border-white/5 pt-3">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Mot de passe actuel (si modification)</label>
-                <input
-                  type="password"
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 shadow-xs"
-                />
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Nouveau mot de passe</label>
-                <input
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 shadow-xs"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end mt-2">
-              <button
-                type="submit"
-                disabled={savingProfile}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition-all shadow-md shadow-indigo-600/20 cursor-pointer disabled:opacity-50"
-              >
-                <Save className="w-4 h-4" />
-                <span>{savingProfile ? 'Mise à jour...' : 'Mettre à jour mon profil'}</span>
-              </button>
-            </div>
-          </form>
-        </div>
+      {/* Settings Navigation Tabs */}
+      <div className="flex items-center gap-2 p-2 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 overflow-x-auto no-scrollbar shadow-xs shrink-0">
+        {[
+          { id: 'ACTS', label: 'Actes & Tarification (Nomenclature)', icon: Stethoscope },
+          { id: 'CABINET', label: 'Identité & En-têtes Officiels', icon: Building2 },
+          ...(isAdmin ? [{ id: 'USERS', label: 'Équipe & Utilisateurs', icon: Users }] : []),
+          ...(isAdmin ? [{ id: 'BACKUP', label: 'Sauvegardes & Restauration', icon: Database }] : []),
+          ...(isAdmin ? [{ id: 'AUDIT', label: 'Journal d\'Audit & Sécurité', icon: Shield }] : []),
+        ].map((tab) => {
+          const isActive = activeSettingsTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveSettingsTab(tab.id as any)}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer shrink-0 ${
+                isActive
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-600/25'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5'
+              }`}
+            >
+              <tab.icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
       </div>
 
-      {/* Staff / Team Management Card */}
-      {isAdmin && (
+      {/* Tab 1: Dental Acts & Pricing Manager (CRUD) */}
+      {activeSettingsTab === 'ACTS' && <DentalActsManager />}
+
+      {/* Tab 2: Practitioner Profile & Cabinet Official Headers */}
+      {activeSettingsTab === 'CABINET' && (
+        <div className="flex flex-col gap-6">
+          {/* Practitioner Profile & Avatar Management Card */}
+          <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 p-6 shadow-sm flex flex-col gap-6">
+            <div className="flex justify-between items-center border-b border-slate-100 dark:border-white/5 pb-3">
+              <div className="flex items-center gap-2">
+                <User className="w-5 h-5 text-indigo-500" />
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">Profil Praticien & Compte Connecté</h3>
+              </div>
+              {profileMessage && (
+                <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-200 dark:border-emerald-500/20">
+                  {profileMessage}
+                </span>
+              )}
+            </div>
+
+            <div className="flex flex-col md:flex-row items-center gap-6">
+              {/* Avatar Image Picker */}
+              <div className="flex flex-col items-center gap-2">
+                <div className="relative w-24 h-24 rounded-full border-2 border-indigo-500/40 p-1 shadow-lg group bg-slate-800">
+                  <img
+                    src={getAvatarDisplaySrc(profileAvatarUrl, profileName)}
+                    alt={profileName}
+                    className="w-full h-full object-cover rounded-full"
+                  />
+                  <label className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-xs cursor-pointer">
+                    <Camera className="w-6 h-6 mb-0.5" />
+                    <span>Changer</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleAvatarFileUpload}
+                      className="hidden"
+                      disabled={uploadingAvatar}
+                    />
+                  </label>
+                </div>
+                <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                  {uploadingAvatar ? 'Envoi en cours...' : 'Survolez pour modifier'}
+                </span>
+              </div>
+
+              {/* User Info Form */}
+              <form onSubmit={handleSaveProfile} className="flex-1 w-full flex flex-col gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="flex flex-col gap-1.5 sm:col-span-2">
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Nom du Praticien</label>
+                    <input
+                      type="text"
+                      value={profileName}
+                      onChange={(e) => setProfileName(e.target.value)}
+                      placeholder="ex: Dr. Salma Tijini"
+                      className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 shadow-xs"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Rôle & Droits</label>
+                      <span className="text-[10px] text-slate-400 font-medium">Auto</span>
+                    </div>
+                    <input
+                      type="text"
+                      disabled
+                      value={profileRole}
+                      className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-slate-950/40 text-slate-400 font-bold uppercase tracking-wider cursor-not-allowed shadow-xs"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Email de Connexion</label>
+                  <input
+                    type="email"
+                    value={profileEmail}
+                    onChange={(e) => setProfileEmail(e.target.value)}
+                    placeholder="email@cabinet.ma"
+                    className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 shadow-xs"
+                  />
+                </div>
+
+                {/* Password Change Sub-section */}
+                <div className="border-t border-slate-100 dark:border-white/5 pt-4 mt-1 flex flex-col gap-3">
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <Lock className="w-3.5 h-3.5 text-slate-400" />
+                    Changer de Mot de Passe
+                  </span>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Mot de passe actuel</label>
+                      <input
+                        type="password"
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
+                        placeholder="••••••••••••"
+                        className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 shadow-xs"
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Nouveau mot de passe</label>
+                      <input
+                        type="password"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder="••••••••••••"
+                        className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 shadow-xs"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-2">
+                  <button
+                    type="submit"
+                    disabled={savingProfile}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md shadow-indigo-600/20 transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>{savingProfile ? 'Enregistrement...' : 'Mettre à jour le Profil'}</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          {/* Form & A4 Preview Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+            {/* Left Columns: Config Form Fields & Live A4 Print Preview */}
+            <div className="lg:col-span-2 flex flex-col gap-6">
+              <form onSubmit={handleSaveConfig} className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 p-6 shadow-sm flex flex-col gap-6">
+                <div className="flex justify-between items-center border-b border-slate-100 dark:border-white/5 pb-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">Identité & En-têtes Officiels du Cabinet</h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Renseignez les données en Français et en Arabe pour vos factures et ordonnances.</p>
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition-all shadow-md shadow-blue-600/20 cursor-pointer disabled:opacity-50"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>{saving ? 'Enregistrement...' : 'Enregistrer'}</span>
+                  </button>
+                </div>
+
+                <div className="flex flex-col gap-5">
+                  {/* FR & AR Name input */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pl-0.5">Nom du Cabinet (FR)</label>
+                      <input
+                        type="text"
+                        value={config.cabinetFr}
+                        onChange={(e) => handleFieldChange('cabinetFr', e.target.value)}
+                        className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1.5 text-right">
+                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pr-0.5">Nom du Cabinet (AR)</label>
+                      <input
+                        type="text"
+                        value={config.cabinetAr}
+                        onChange={(e) => handleFieldChange('cabinetAr', e.target.value)}
+                        className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-right focus:outline-none focus:border-blue-500 shadow-xs"
+                        dir="rtl"
+                      />
+                    </div>
+                  </div>
+
+                  {/* FR & AR Doctor titles */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pl-0.5">Nom du Praticien & Titre (FR)</label>
+                      <input
+                        type="text"
+                        value={config.drFr}
+                        onChange={(e) => handleFieldChange('drFr', e.target.value)}
+                        className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1.5 text-right">
+                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pr-0.5">Nom du Praticien & Titre (AR)</label>
+                      <input
+                        type="text"
+                        value={config.drAr}
+                        onChange={(e) => handleFieldChange('drAr', e.target.value)}
+                        className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-right focus:outline-none focus:border-blue-500 shadow-xs"
+                        dir="rtl"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Specializations FR & AR */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pl-0.5">Spécialités & Diplômes (FR)</label>
+                      <textarea
+                        rows={2}
+                        value={config.specsFr}
+                        onChange={(e) => handleFieldChange('specsFr', e.target.value)}
+                        className="p-3 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1.5 text-right">
+                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pr-0.5">Spécialités & Diplômes (AR)</label>
+                      <textarea
+                        rows={2}
+                        value={config.specsAr}
+                        onChange={(e) => handleFieldChange('specsAr', e.target.value)}
+                        className="p-3 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-right focus:outline-none focus:border-blue-500 shadow-xs"
+                        dir="rtl"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Contact details */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="flex flex-col gap-1.5 md:col-span-2">
+                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pl-0.5">Adresse Physique du Cabinet</label>
+                      <input
+                        type="text"
+                        value={config.address}
+                        onChange={(e) => handleFieldChange('address', e.target.value)}
+                        className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pl-0.5">Téléphones</label>
+                      <input
+                        type="text"
+                        value={config.phones}
+                        onChange={(e) => handleFieldChange('phones', e.target.value)}
+                        className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Legal numbers: ICE, INPE, IF */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pl-0.5">ICE (Identifiant Commun de l'Entreprise)</label>
+                      <input
+                        type="text"
+                        value={config.ice || ''}
+                        onChange={(e) => handleFieldChange('ice', e.target.value)}
+                        className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pl-0.5">INPE (Identifiant National Praticien)</label>
+                      <input
+                        type="text"
+                        value={config.inbe || ''}
+                        onChange={(e) => handleFieldChange('inbe', e.target.value)}
+                        className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pl-0.5">IF (Identifiant Fiscal)</label>
+                      <input
+                        type="text"
+                        value={config.ifVal || ''}
+                        onChange={(e) => handleFieldChange('ifVal', e.target.value)}
+                        className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
+                      />
+                    </div>
+                  </div>
+
+                </div>
+              </form>
+
+              {/* Live A4 Print Header Preview Card */}
+              <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 p-6 shadow-sm flex flex-col gap-4">
+                <div className="flex items-center justify-between border-b border-slate-100 dark:border-white/5 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Printer className="w-5 h-5 text-indigo-500" />
+                    <h3 className="text-xs font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+                      Aperçu Direct En-tête A4 (Factures & Ordonnances)
+                    </h3>
+                  </div>
+                  <span className="text-[11px] font-semibold text-slate-400">Rendu d'impression officiel</span>
+                </div>
+
+                <div className="p-6 bg-white text-slate-900 rounded-xl border border-slate-300 shadow-inner flex flex-col justify-between gap-6 font-sans">
+                  <div className="flex justify-between items-start gap-4">
+                    {/* French info */}
+                    <div className="flex flex-col text-left max-w-[40%]">
+                      <span className="text-base font-extrabold text-blue-900 tracking-tight">{config.drFr || 'Dr. Nom Prénom'}</span>
+                      <span className="text-xs font-bold text-slate-700">{config.cabinetFr || 'Cabinet Dentaire'}</span>
+                      <span className="text-[10px] text-slate-500 whitespace-pre-line mt-1 font-medium leading-tight">
+                        {config.specsFr}
+                      </span>
+                    </div>
+
+                    {/* Center Logo */}
+                    <div className="flex flex-col items-center justify-center shrink-0">
+                      {config.logoUrl ? (
+                        <img
+                          src={getFullAssetUrl(config.logoUrl)}
+                          alt="Logo"
+                          className="w-16 h-16 object-contain"
+                        />
+                      ) : (
+                        <div className="w-14 h-14 rounded-full border border-dashed border-slate-300 flex items-center justify-center text-slate-400 text-xxs font-bold text-center p-1">
+                          Logo Cabinet
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Arabic info */}
+                    <div className="flex flex-col text-right max-w-[40%]" dir="rtl">
+                      <span className="text-base font-extrabold text-blue-900">{config.drAr || 'طبيبة جراحة للأسنان'}</span>
+                      <span className="text-xs font-bold text-slate-700">{config.cabinetAr || 'عيادة طب الأسنان'}</span>
+                      <span className="text-[10px] text-slate-500 whitespace-pre-line mt-1 font-medium leading-tight">
+                        {config.specsAr}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Bottom Address bar */}
+                  <div className="border-t border-slate-300 pt-2 flex justify-between items-center text-[9px] text-slate-600 font-medium">
+                    <span>📍 {config.address}</span>
+                    <span>📞 {config.phones}</span>
+                    <span>ICE: {config.ice || '—'} | INPE: {config.inbe || '—'}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Column: Upload Assets */}
+            <div className="flex flex-col gap-6">
+              {/* Static image uploads (Logo, Signature, Stamp) */}
+              <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 p-6 shadow-sm flex flex-col gap-4">
+                <h3 className="text-xs font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-white/5 pb-3">Images Imprimées (A4)</h3>
+                
+                {/* Logo */}
+                <div className="flex justify-between items-center gap-4 py-2 border-b border-slate-100 dark:border-white/5">
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold text-slate-900 dark:text-white">Logo du cabinet</span>
+                    <span className="text-[10px] text-slate-500 font-medium">Recommandé : PNG transparent</span>
+                  </div>
+                  <div className="relative">
+                    <button type="button" className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 border border-slate-200 dark:border-white/5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer transition-all shadow-xs">
+                      <UploadCloud className="w-5 h-5" />
+                    </button>
+                    <input
+                      type="file"
+                      onChange={(e) => handleAssetUpload(e, 'logo')}
+                      className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+                    />
+                  </div>
+                </div>
+
+                {/* Stamp */}
+                <div className="flex justify-between items-center gap-4 py-2 border-b border-slate-100 dark:border-white/5">
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold text-slate-900 dark:text-white">Cachet du praticien</span>
+                    <span className="text-[10px] text-slate-500 font-medium">Affiché sur les factures imprimées</span>
+                  </div>
+                  <div className="relative">
+                    <button type="button" className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 border border-slate-200 dark:border-white/5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer transition-all shadow-xs">
+                      <UploadCloud className="w-5 h-5" />
+                    </button>
+                    <input
+                      type="file"
+                      onChange={(e) => handleAssetUpload(e, 'stamp')}
+                      className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+                    />
+                  </div>
+                </div>
+
+                {/* Signature */}
+                <div className="flex justify-between items-center gap-4 py-2">
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold text-slate-900 dark:text-white">Signature numérique</span>
+                    <span className="text-[10px] text-slate-500 font-medium">Optionnelle pour ordonnances</span>
+                  </div>
+                  <div className="relative">
+                    <button type="button" className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 border border-slate-200 dark:border-white/5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer transition-all shadow-xs">
+                      <UploadCloud className="w-5 h-5" />
+                    </button>
+                    <input
+                      type="file"
+                      onChange={(e) => handleAssetUpload(e, 'signature')}
+                      className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 3: Staff / Team Management */}
+      {isAdmin && activeSettingsTab === 'USERS' && (
         <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 p-6 shadow-sm flex flex-col gap-4">
           <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 border-b border-slate-100 dark:border-white/5 pb-3">
             <div className="flex items-center gap-2">
@@ -834,360 +1130,84 @@ export const Settings: React.FC = () => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-        
-        {/* Left Columns: Config Form Fields & Live A4 Print Preview */}
-        <div className="lg:col-span-2 flex flex-col gap-6">
-          <form onSubmit={handleSaveConfig} className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 p-6 shadow-sm flex flex-col gap-6">
-            <div className="flex justify-between items-center border-b border-slate-100 dark:border-white/5 pb-3">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">Identité & En-têtes Officiels du Cabinet</h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Renseignez les données en Français et en Arabe pour vos factures et ordonnances.</p>
-              </div>
-              <button
-                type="submit"
-                disabled={saving}
-                className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition-all shadow-md shadow-blue-600/20 cursor-pointer disabled:opacity-50"
-              >
-                <Save className="w-4 h-4" />
-                <span>{saving ? 'Enregistrement...' : 'Enregistrer'}</span>
-              </button>
+      {/* Tab 4: Sauvegardes & Restauration */}
+      {isAdmin && activeSettingsTab === 'BACKUP' && (
+        <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 p-6 shadow-sm flex flex-col gap-6">
+          <div className="flex items-center justify-between border-b border-slate-100 dark:border-white/5 pb-3">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">Sauvegardes Automatiques & Restauration</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Sécurisez l'ensemble de vos dossiers patients et factures hors-ligne.</p>
             </div>
-
-            <div className="flex flex-col gap-5">
-              {/* FR & AR Name input */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pl-0.5">Nom du Cabinet (FR)</label>
-                  <input
-                    type="text"
-                    value={config.cabinetFr}
-                    onChange={(e) => handleFieldChange('cabinetFr', e.target.value)}
-                    className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
-                  />
-                </div>
-
-                <div className="flex flex-col gap-1.5 text-right">
-                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pr-0.5">Nom du Cabinet (AR)</label>
-                  <input
-                    type="text"
-                    value={config.cabinetAr}
-                    onChange={(e) => handleFieldChange('cabinetAr', e.target.value)}
-                    className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-right focus:outline-none focus:border-blue-500 shadow-xs"
-                    dir="rtl"
-                  />
-                </div>
-              </div>
-
-              {/* FR & AR Doctor titles */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pl-0.5">Nom du Praticien & Titre (FR)</label>
-                  <input
-                    type="text"
-                    value={config.drFr}
-                    onChange={(e) => handleFieldChange('drFr', e.target.value)}
-                    className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
-                  />
-                </div>
-
-                <div className="flex flex-col gap-1.5 text-right">
-                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pr-0.5">Nom du Praticien & Titre (AR)</label>
-                  <input
-                    type="text"
-                    value={config.drAr}
-                    onChange={(e) => handleFieldChange('drAr', e.target.value)}
-                    className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-right focus:outline-none focus:border-blue-500 shadow-xs"
-                    dir="rtl"
-                  />
-                </div>
-              </div>
-
-              {/* FR & AR Specialties Textarea */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pl-0.5">Spécialités (FR) - retours à la ligne</label>
-                  <textarea
-                    rows={3}
-                    value={config.specsFr}
-                    onChange={(e) => handleFieldChange('specsFr', e.target.value)}
-                    className="p-4 rounded-xl text-xs border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white resize-none focus:outline-none focus:border-blue-500 shadow-xs"
-                  ></textarea>
-                </div>
-
-                <div className="flex flex-col gap-1.5 text-right">
-                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pr-0.5">Spécialités (AR)</label>
-                  <textarea
-                    rows={3}
-                    value={config.specsAr}
-                    onChange={(e) => handleFieldChange('specsAr', e.target.value)}
-                    className="p-4 rounded-xl text-xs border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white resize-none text-right focus:outline-none focus:border-blue-500 shadow-xs"
-                    dir="rtl"
-                  ></textarea>
-                </div>
-              </div>
-
-              {/* Address, phones and email */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pl-0.5">Adresse Physique du Cabinet</label>
-                <input
-                  type="text"
-                  value={config.address}
-                  onChange={(e) => handleFieldChange('address', e.target.value)}
-                  className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pl-0.5">Téléphones & WhatsApp</label>
-                  <input
-                    type="text"
-                    value={config.phones}
-                    onChange={(e) => handleFieldChange('phones', e.target.value)}
-                    className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
-                  />
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pl-0.5">Email du cabinet</label>
-                  <input
-                    type="email"
-                    value={config.email}
-                    onChange={(e) => handleFieldChange('email', e.target.value)}
-                    className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
-                  />
-                </div>
-              </div>
-
-              {/* Tax IDs / ICE / IF */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-slate-100 dark:border-white/5 pt-5">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pl-0.5">ICE</label>
-                  <input
-                    type="text"
-                    value={config.ice || ''}
-                    onChange={(e) => handleFieldChange('ice', e.target.value)}
-                    className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
-                  />
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pl-0.5">INPE</label>
-                  <input
-                    type="text"
-                    value={config.inbe || ''}
-                    onChange={(e) => handleFieldChange('inbe', e.target.value)}
-                    className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
-                  />
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 pl-0.5">IF (Identifiant Fiscal)</label>
-                  <input
-                    type="text"
-                    value={config.ifVal || ''}
-                    onChange={(e) => handleFieldChange('ifVal', e.target.value)}
-                    className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
-                  />
-                </div>
-              </div>
-
-            </div>
-          </form>
-
-          {/* Live A4 Print Header Preview Card */}
-          <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 p-6 shadow-sm flex flex-col gap-4">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-white/5 pb-3">
-              <div className="flex items-center gap-2">
-                <Printer className="w-5 h-5 text-indigo-500" />
-                <h3 className="text-xs font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
-                  Aperçu Direct En-tête A4 (Factures & Ordonnances)
-                </h3>
-              </div>
-              <span className="text-[11px] font-semibold text-slate-400">Rendu d'impression officiel</span>
-            </div>
-
-            <div className="p-6 bg-white text-slate-900 rounded-xl border border-slate-300 shadow-inner flex flex-col justify-between gap-6 font-sans">
-              <div className="flex justify-between items-start gap-4">
-                {/* French info */}
-                <div className="flex flex-col text-left max-w-[40%]">
-                  <span className="text-base font-extrabold text-blue-900 tracking-tight">{config.drFr || 'Dr. Nom Prénom'}</span>
-                  <span className="text-xs font-bold text-slate-700">{config.cabinetFr || 'Cabinet Dentaire'}</span>
-                  <span className="text-[10px] text-slate-500 whitespace-pre-line mt-1 font-medium leading-tight">
-                    {config.specsFr}
-                  </span>
-                </div>
-
-                {/* Center Logo */}
-                <div className="flex flex-col items-center justify-center shrink-0">
-                  {config.logoUrl ? (
-                    <img
-                      src={getFullAssetUrl(config.logoUrl)}
-                      alt="Logo"
-                      className="w-16 h-16 object-contain"
-                    />
-                  ) : (
-                    <div className="w-14 h-14 rounded-full border border-dashed border-slate-300 flex items-center justify-center text-slate-400 text-xxs font-bold text-center p-1">
-                      Logo Cabinet
-                    </div>
-                  )}
-                </div>
-
-                {/* Arabic info */}
-                <div className="flex flex-col text-right max-w-[40%]" dir="rtl">
-                  <span className="text-base font-extrabold text-blue-900">{config.drAr || 'طبيبة جراحة للأسنان'}</span>
-                  <span className="text-xs font-bold text-slate-700">{config.cabinetAr || 'عيادة طب الأسنان'}</span>
-                  <span className="text-[10px] text-slate-500 whitespace-pre-line mt-1 font-medium leading-tight">
-                    {config.specsAr}
-                  </span>
-                </div>
-              </div>
-
-              {/* Bottom Address bar */}
-              <div className="border-t border-slate-300 pt-2 flex justify-between items-center text-[9px] text-slate-600 font-medium">
-                <span>📍 {config.address}</span>
-                <span>📞 {config.phones}</span>
-                <span>ICE: {config.ice || '—'} | INPE: {config.inbe || '—'}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Right Column: Upload Assets & Backups */}
-        <div className="flex flex-col gap-6">
-          
-          {/* Static image uploads (Logo, Signature, Stamp) */}
-          <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 p-6 shadow-sm flex flex-col gap-4">
-            <h3 className="text-xs font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-white/5 pb-3">Images Imprimées (A4)</h3>
-            
-            {/* Logo */}
-            <div className="flex justify-between items-center gap-4 py-2 border-b border-slate-100 dark:border-white/5">
-              <div className="flex flex-col">
-                <span className="text-xs font-bold text-slate-900 dark:text-white">Logo du cabinet</span>
-                <span className="text-[10px] text-slate-500 font-medium">Recommandé : PNG transparent</span>
-              </div>
-              <div className="relative">
-                <button type="button" className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 border border-slate-200 dark:border-white/5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer transition-all shadow-xs">
-                  <UploadCloud className="w-5 h-5" />
-                </button>
-                <input
-                  type="file"
-                  onChange={(e) => handleAssetUpload(e, 'logo')}
-                  className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
-                />
-              </div>
-            </div>
-
-            {/* Stamp */}
-            <div className="flex justify-between items-center gap-4 py-2 border-b border-slate-100 dark:border-white/5">
-              <div className="flex flex-col">
-                <span className="text-xs font-bold text-slate-900 dark:text-white">Cachet du praticien</span>
-                <span className="text-[10px] text-slate-500 font-medium">Affiché sur les factures imprimées</span>
-              </div>
-              <div className="relative">
-                <button type="button" className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 border border-slate-200 dark:border-white/5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer transition-all shadow-xs">
-                  <UploadCloud className="w-5 h-5" />
-                </button>
-                <input
-                  type="file"
-                  onChange={(e) => handleAssetUpload(e, 'stamp')}
-                  className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
-                />
-              </div>
-            </div>
-
-            {/* Signature */}
-            <div className="flex justify-between items-center gap-4 py-2">
-              <div className="flex flex-col">
-                <span className="text-xs font-bold text-slate-900 dark:text-white">Signature numérique</span>
-                <span className="text-[10px] text-slate-500 font-medium">Optionnelle pour ordonnances</span>
-              </div>
-              <div className="relative">
-                <button type="button" className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 border border-slate-200 dark:border-white/5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer transition-all shadow-xs">
-                  <UploadCloud className="w-5 h-5" />
-                </button>
-                <input
-                  type="file"
-                  onChange={(e) => handleAssetUpload(e, 'signature')}
-                  className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
-                />
-              </div>
-            </div>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20 shadow-xs">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              Protection Active (23h00)
+            </span>
           </div>
 
-          {/* Backup Database Manager */}
-          {isAdmin && (
-            <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 p-6 shadow-sm flex flex-col gap-4">
-              <div className="flex items-center justify-between border-b border-slate-100 dark:border-white/5 pb-3">
-                <h3 className="text-xs font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Sauvegardes & Résilience</h3>
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20 shadow-xs">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                  Auto (23h00)
-                </span>
-              </div>
-
-              {/* Automatic Backup Status Card */}
-              <div className="p-4 bg-slate-50 dark:bg-slate-950/40 border border-slate-200/80 dark:border-white/5 rounded-xl flex flex-col gap-2.5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Status & Manual Backup */}
+            <div className="p-5 bg-slate-50 dark:bg-slate-950/40 border border-slate-200/80 dark:border-white/5 rounded-2xl flex flex-col justify-between gap-4">
+              <div className="flex flex-col gap-3">
                 <div className="flex justify-between items-center text-xs">
-                  <span className="text-slate-500 dark:text-slate-400 font-medium">Dernière sauvegarde :</span>
-                  <span className="font-semibold text-slate-900 dark:text-white font-mono text-[11px]">
+                  <span className="text-slate-500 dark:text-slate-400 font-medium">Dernière sauvegarde automatique :</span>
+                  <span className="font-semibold text-slate-900 dark:text-white font-mono">
                     {backupStatus?.lastBackupDate
                       ? new Date(backupStatus.lastBackupDate).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })
                       : 'Initialisation...'}
                   </span>
                 </div>
                 <div className="flex justify-between items-center text-xs">
-                  <span className="text-slate-500 dark:text-slate-400 font-medium">Points de restauration :</span>
-                  <span className="text-blue-600 dark:text-blue-400 font-bold text-[11px]">
-                    {backupStatus?.totalBackupsCount || 0} sauvegardes (30j)
+                  <span className="text-slate-500 dark:text-slate-400 font-medium">Points de restauration disponibles :</span>
+                  <span className="text-blue-600 dark:text-blue-400 font-bold">
+                    {backupStatus?.totalBackupsCount || 0} sauvegardes (30 jours de rotation)
                   </span>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={handleRunManualBackup}
-                  disabled={runningBackup}
-                  className="mt-1 w-full py-2.5 bg-blue-50 hover:bg-blue-100 dark:bg-blue-600/20 dark:hover:bg-blue-600/30 border border-blue-200 dark:border-blue-500/30 text-blue-600 dark:text-blue-300 font-semibold rounded-xl text-xs flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50 shadow-xs"
-                >
-                  {runningBackup ? (
-                    <>
-                      <div className="w-3.5 h-3.5 border-2 border-blue-600 dark:border-blue-400 border-t-transparent rounded-full animate-spin"></div>
-                      <span>Sauvegarde en cours...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Database className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                      <span>Sauvegarder Maintenant</span>
-                    </>
-                  )}
-                </button>
+                <div className="p-3 bg-amber-50 dark:bg-amber-500/5 border border-amber-200 dark:border-amber-500/10 rounded-xl text-[11px] text-amber-800 dark:text-amber-300/80 leading-relaxed">
+                  ⚡ <strong className="text-amber-900 dark:text-amber-200">Tolérance aux coupures :</strong> En cas de coupure de courant, l'application et MongoDB reprennent automatiquement au redémarrage.
+                </div>
               </div>
 
-              {/* Power Recovery Notification */}
-              <div className="p-3.5 bg-amber-50 dark:bg-amber-500/5 border border-amber-200 dark:border-amber-500/10 rounded-xl text-[11px] text-amber-800 dark:text-amber-300/80 leading-relaxed">
-                ⚡ <strong className="text-amber-900 dark:text-amber-200">Tolérance aux coupures :</strong> En cas de coupure de courant, l'application et la base de données redémarrent automatiquement dès que le PC s'allume.
-              </div>
-              
-              <div className="flex flex-col gap-3.5 mt-1">
+              <button
+                type="button"
+                onClick={handleRunManualBackup}
+                disabled={runningBackup}
+                className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50 shadow-md shadow-blue-600/20"
+              >
+                {runningBackup ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <span>Sauvegarde en cours...</span>
+                  </>
+                ) : (
+                  <>
+                    <Database className="w-4 h-4" />
+                    <span>Créer une Sauvegarde Maintenant</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Export & Import JSON */}
+            <div className="p-5 bg-slate-50 dark:bg-slate-950/40 border border-slate-200/80 dark:border-white/5 rounded-2xl flex flex-col justify-between gap-4">
+              <div className="flex flex-col gap-3">
                 <button
                   type="button"
                   onClick={handleBackupExport}
-                  className="w-full flex items-center justify-between p-3.5 rounded-xl bg-slate-50 hover:bg-slate-100 dark:bg-white/5 dark:hover:bg-white/10 border border-slate-200/80 dark:border-white/5 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-all cursor-pointer shadow-xs"
+                  className="w-full flex items-center justify-between p-3.5 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-all cursor-pointer shadow-xs"
                 >
                   <div className="flex items-center gap-3">
                     <Database className="w-4.5 h-4.5 text-blue-600 dark:text-blue-400" />
-                    <span className="text-xs font-bold">Exporter Archive JSON</span>
+                    <span className="text-xs font-bold">Télécharger Archive JSON Complète</span>
                   </div>
                   <Download className="w-4 h-4 text-slate-400" />
                 </button>
 
-                <form onSubmit={handleBackupImport} className="flex flex-col gap-3 border-t border-slate-100 dark:border-white/5 pt-4">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider pl-1">Importer une base (.json)</label>
-                  <div className="relative border border-dashed border-slate-300 dark:border-white/10 hover:border-blue-500/50 rounded-xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer bg-slate-50 dark:bg-slate-950/20">
-                    <UploadCloud className="w-6 h-6 text-slate-400 dark:text-slate-500" />
+                <form onSubmit={handleBackupImport} className="flex flex-col gap-2.5 border-t border-slate-200/60 dark:border-white/5 pt-3">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider pl-1">Restaurer depuis un fichier JSON</label>
+                  <div className="relative border border-dashed border-slate-300 dark:border-white/10 hover:border-blue-500/50 rounded-xl p-3 flex flex-col items-center justify-center gap-1.5 cursor-pointer bg-white dark:bg-slate-900">
+                    <UploadCloud className="w-5 h-5 text-slate-400 dark:text-slate-500" />
                     <span className="text-[10px] text-slate-600 dark:text-slate-400 font-semibold text-center">
-                      {backupFile ? backupFile.name : 'Sélectionner le fichier JSON'}
+                      {backupFile ? backupFile.name : 'Sélectionner le fichier de sauvegarde JSON'}
                     </span>
                     <input
                       type="file"
@@ -1200,7 +1220,7 @@ export const Settings: React.FC = () => {
                     <button
                       type="submit"
                       disabled={importing}
-                      className="w-full py-2 bg-rose-600 hover:bg-rose-500 text-white font-semibold rounded-xl text-xs transition-all cursor-pointer disabled:opacity-50 shadow-xs"
+                      className="w-full py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl text-xs transition-all cursor-pointer disabled:opacity-50 shadow-xs"
                     >
                       {importing ? 'Restauration...' : 'Restaurer la Base'}
                     </button>
@@ -1208,14 +1228,13 @@ export const Settings: React.FC = () => {
                 </form>
               </div>
             </div>
-          )}
+          </div>
         </div>
+      )}
 
-      </div>
-
-      {/* Admin Professional Audit Logs & Soft-delete Restore Card */}
-      {isAdmin && (
-        <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 p-6 shadow-sm flex flex-col gap-4 mt-6">
+      {/* Tab 5: Admin Professional Audit Logs & Soft-delete Restore Card */}
+      {isAdmin && activeSettingsTab === 'AUDIT' && (
+        <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 p-6 shadow-sm flex flex-col gap-4">
           <div className="flex justify-between items-center border-b border-slate-100 dark:border-white/5 pb-3">
             <div className="flex items-center gap-2">
               <Clock className="w-5 h-5 text-indigo-500" />

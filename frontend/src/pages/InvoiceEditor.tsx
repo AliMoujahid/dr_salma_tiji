@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Plus, Trash2, Printer, RefreshCw, Eye, ClipboardCopy, MessageSquare, Send, Search, X, Filter, CheckCircle2, Clock, AlertCircle, Coins, FileText } from 'lucide-react';
-import { Invoice, Patient, ClinicConfig } from '../types';
+import { Invoice, Patient, ClinicConfig, DentalAct } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { InvoicePrintLayout } from '../components/InvoicePrintLayout';
@@ -16,6 +16,7 @@ export const InvoiceEditor: React.FC = () => {
 
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
+  const [dentalActs, setDentalActs] = useState<DentalAct[]>([]);
   const [config, setConfig] = useState<ClinicConfig | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'edit'>('list');
   const [loading, setLoading] = useState(true);
@@ -47,7 +48,19 @@ export const InvoiceEditor: React.FC = () => {
     fetchInvoices();
     fetchPatients();
     fetchClinicConfig();
+    fetchDentalActs();
   }, []);
+
+  const fetchDentalActs = () => {
+    fetch(`${API_URL}/dental-acts`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) setDentalActs(data);
+      })
+      .catch((err) => console.error('Error fetching dental acts:', err));
+  };
 
   // Listen to navigation state from other pages (e.g. from PatientProfile "Facturer" trigger)
   useEffect(() => {
@@ -91,6 +104,35 @@ export const InvoiceEditor: React.FC = () => {
       .catch((err) => console.error('Error fetching clinic configurations:', err));
   };
 
+  const handleQuickAddAct = (act: DentalAct) => {
+    const today = new Date();
+    const day = String(today.getDate()).padStart(2, '0');
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+
+    // If only 1 initial blank line exists, replace it
+    if (lineItems.length === 1 && !lineItems[0].description && Number(lineItems[0].amount) === 0) {
+      setLineItems([
+        {
+          date: `${day}/${month}`,
+          tooth: lineItems[0].tooth || '',
+          description: act.name,
+          amount: act.defaultPrice,
+        },
+      ]);
+    } else {
+      setLineItems([
+        ...lineItems,
+        {
+          date: `${day}/${month}`,
+          tooth: '',
+          description: act.name,
+          amount: act.defaultPrice,
+        },
+      ]);
+    }
+    toast.success('Acte ajouté', `${act.name} (${act.defaultPrice} DH) ajouté à la facture.`);
+  };
+
   const handleNewInvoice = (preSelectedPatientId = '') => {
     setEditInvoiceId(null);
     setSelectedPatientId(preSelectedPatientId || patients[0]?._id || '');
@@ -118,7 +160,7 @@ export const InvoiceEditor: React.FC = () => {
     setDiscount(inv.discount.toString());
     setPaymentMode(inv.paymentMode);
     setPaymentStatus(inv.paymentStatus as any);
-    setPaidAmount(inv.paidAmount.toString());
+    setPaidAmount((inv.paidAmount || 0).toString());
     setLineItems(inv.items.map((it) => ({ ...it })));
     setViewMode('edit');
   };
@@ -150,6 +192,17 @@ export const InvoiceEditor: React.FC = () => {
   const handleLineItemChange = (index: number, field: string, value: any) => {
     const updated = [...lineItems];
     updated[index][field] = field === 'amount' ? parseFloat(value) || 0 : value;
+
+    // If description changed and matches a known dental act, auto-populate amount if 0
+    if (field === 'description') {
+      const match = dentalActs.find(
+        (a) => a.name.toLowerCase() === (value || '').trim().toLowerCase()
+      );
+      if (match && (!updated[index].amount || Number(updated[index].amount) === 0)) {
+        updated[index].amount = match.defaultPrice;
+      }
+    }
+
     setLineItems(updated);
   };
 
@@ -593,9 +646,50 @@ export const InvoiceEditor: React.FC = () => {
 
                 </div>
 
-                {/* Grid Line Items Table */}
-                <div className="flex flex-col gap-2.5">
-                  <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-100 dark:border-white/5 pb-2">Soins / Actes Cliniques</span>
+                {/* Grid Line Items Table & Quick Acts Picker */}
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center justify-between border-b border-slate-100 dark:border-white/5 pb-2">
+                    <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      Soins / Actes Cliniques & Tarifs
+                    </span>
+                    <span className="text-[11px] text-slate-400 font-semibold">
+                      Tarification automatique au choix de l'acte
+                    </span>
+                  </div>
+
+                  {/* Frequent Dental Acts Quick Add Pills */}
+                  {dentalActs.length > 0 && (
+                    <div className="flex flex-col gap-1.5 p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200/80 dark:border-white/5">
+                      <span className="text-[10px] font-extrabold uppercase text-slate-400 tracking-wider flex items-center gap-1">
+                        ⚡ Actes Fréquents (Cliquez pour ajouter au devis / facture) :
+                      </span>
+                      <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto no-scrollbar pt-1">
+                        {dentalActs.slice(0, 12).map((act) => (
+                          <button
+                            key={act._id}
+                            type="button"
+                            onClick={() => handleQuickAddAct(act)}
+                            className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 hover:bg-blue-50 dark:hover:bg-blue-900/20 border border-slate-200 dark:border-white/10 hover:border-blue-300 text-xs text-slate-700 dark:text-slate-300 font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs group"
+                          >
+                            <span>{act.name}</span>
+                            <span className="font-mono text-[11px] font-extrabold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1 rounded">
+                              {act.defaultPrice} DH
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Datalist for Auto-complete in description */}
+                  <datalist id="dental-acts-datalist">
+                    {dentalActs.map((act) => (
+                      <option key={act._id} value={act.name}>
+                        {act.defaultPrice} DH ({act.category})
+                      </option>
+                    ))}
+                  </datalist>
+
                   <div className="max-h-60 overflow-y-auto pr-1 flex flex-col gap-3.5 no-scrollbar">
                     {lineItems.map((item, index) => (
                       <div key={index} className="grid grid-cols-12 gap-3.5 items-center">
@@ -615,22 +709,29 @@ export const InvoiceEditor: React.FC = () => {
                         />
                         <input
                           type="text"
-                          placeholder="Description de l'acte"
+                          list="dental-acts-datalist"
+                          placeholder="Description de l'acte (ex: Couronne zircone...)"
                           value={item.description}
                           onChange={(e) => handleLineItemChange(index, 'description', e.target.value)}
-                          className="col-span-5 h-10 px-4 rounded-xl text-xs border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white placeholder-slate-400 shadow-xs focus:outline-none focus:border-blue-500"
+                          className="col-span-5 h-10 px-4 rounded-xl text-xs border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white placeholder-slate-400 shadow-xs focus:outline-none focus:border-blue-500 font-medium"
                         />
-                        <input
-                          type="number"
-                          placeholder="Montant"
-                          value={item.amount || ''}
-                          onChange={(e) => handleLineItemChange(index, 'amount', e.target.value)}
-                          className="col-span-2 h-10 px-3 rounded-xl text-xs border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-right font-mono shadow-xs focus:outline-none focus:border-blue-500"
-                        />
+                        <div className="col-span-2 relative">
+                          <input
+                            type="number"
+                            placeholder="Tarif"
+                            value={item.amount || ''}
+                            onChange={(e) => handleLineItemChange(index, 'amount', e.target.value)}
+                            className="w-full h-10 px-3 pr-7 rounded-xl text-xs border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-right font-mono font-bold shadow-xs focus:outline-none focus:border-blue-500"
+                          />
+                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 font-sans pointer-events-none">
+                            DH
+                          </span>
+                        </div>
                         <button
                           type="button"
                           onClick={() => handleRemoveLineItem(index)}
                           className="col-span-1 p-2 rounded-lg bg-rose-50 hover:bg-rose-500 hover:text-white text-rose-600 dark:bg-rose-500/10 dark:text-rose-400 border border-rose-200 dark:border-rose-500/10 hover:border-transparent transition-all flex items-center justify-center cursor-pointer shadow-xs"
+                          title="Supprimer la ligne"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -641,9 +742,9 @@ export const InvoiceEditor: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleAddLineItem}
-                    className="self-start mt-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 border border-slate-200 dark:border-white/5 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white rounded-xl transition-all cursor-pointer shadow-xs"
+                    className="self-start mt-1 px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 border border-slate-200 dark:border-white/5 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white rounded-xl transition-all cursor-pointer shadow-xs"
                   >
-                    + Ajouter une ligne
+                    + Ajouter une ligne vide
                   </button>
                 </div>
 
