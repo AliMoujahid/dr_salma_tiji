@@ -174,6 +174,13 @@ class BackupSchedulerService {
       payments: await PaymentTransaction.find(),
       configs: await ClinicConfig.find(),
       documents: await DocumentModel.find(),
+      dentalActs: await (await import('../models/DentalAct')).default.find(),
+      notificationSettings: await (await import('../models/NotificationSettings')).default.find(),
+      messageTemplates: await (await import('../models/MessageTemplate')).default.find(),
+      followUpReminders: await (await import('../models/FollowUpReminder')).default.find(),
+      auditLogs: await (await import('../models/AuditLog')).default.find(),
+      notificationLogs: await (await import('../models/NotificationLog')).default.find(),
+      whatsAppReceivedMedia: await (await import('../models/WhatsAppReceivedMedia')).default.find(),
     };
 
     const dbBackupFile = path.join(destinationFolder, 'database_dump.json');

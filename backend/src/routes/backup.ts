@@ -58,6 +58,14 @@ router.post('/run-now', protect, restrictTo('ADMIN', 'DOCTOR'), async (req: Auth
   }
 });
 
+import DentalAct from '../models/DentalAct';
+import NotificationSettings from '../models/NotificationSettings';
+import MessageTemplate from '../models/MessageTemplate';
+import FollowUpReminder from '../models/FollowUpReminder';
+import AuditLog from '../models/AuditLog';
+import NotificationLog from '../models/NotificationLog';
+import WhatsAppReceivedMedia from '../models/WhatsAppReceivedMedia';
+
 /**
  * GET /api/backup/export
  * Export Database Backup as a JSON File download
@@ -73,6 +81,13 @@ router.get('/export', protect, restrictTo('ADMIN', 'DOCTOR'), async (req: AuthRe
       payments: await PaymentTransaction.find(),
       configs: await ClinicConfig.find(),
       documents: await DocumentModel.find(),
+      dentalActs: await DentalAct.find(),
+      notificationSettings: await NotificationSettings.find(),
+      messageTemplates: await MessageTemplate.find(),
+      followUpReminders: await FollowUpReminder.find(),
+      auditLogs: await AuditLog.find(),
+      notificationLogs: await NotificationLog.find(),
+      whatsAppReceivedMedia: await WhatsAppReceivedMedia.find(),
       exportedAt: new Date().toISOString(),
     };
 
@@ -124,16 +139,30 @@ router.post(
       await PaymentTransaction.deleteMany({});
       await ClinicConfig.deleteMany({});
       await DocumentModel.deleteMany({});
+      await DentalAct.deleteMany({});
+      await NotificationSettings.deleteMany({});
+      await MessageTemplate.deleteMany({});
+      await FollowUpReminder.deleteMany({});
+      await AuditLog.deleteMany({});
+      await NotificationLog.deleteMany({});
+      await WhatsAppReceivedMedia.deleteMany({});
 
       // Restore data
-      if (parsedData.users.length) await User.insertMany(parsedData.users);
-      if (parsedData.patients.length) await Patient.insertMany(parsedData.patients);
-      if (parsedData.appointments.length) await Appointment.insertMany(parsedData.appointments);
-      if (parsedData.teethHistories.length) await ToothHistory.insertMany(parsedData.teethHistories);
-      if (parsedData.invoices.length) await Invoice.insertMany(parsedData.invoices);
-      if (parsedData.payments.length) await PaymentTransaction.insertMany(parsedData.payments);
+      if (parsedData.users?.length) await User.insertMany(parsedData.users);
+      if (parsedData.patients?.length) await Patient.insertMany(parsedData.patients);
+      if (parsedData.appointments?.length) await Appointment.insertMany(parsedData.appointments);
+      if (parsedData.teethHistories?.length) await ToothHistory.insertMany(parsedData.teethHistories);
+      if (parsedData.invoices?.length) await Invoice.insertMany(parsedData.invoices);
+      if (parsedData.payments?.length) await PaymentTransaction.insertMany(parsedData.payments);
       if (parsedData.configs?.length) await ClinicConfig.insertMany(parsedData.configs);
       if (parsedData.documents?.length) await DocumentModel.insertMany(parsedData.documents);
+      if (parsedData.dentalActs?.length) await DentalAct.insertMany(parsedData.dentalActs);
+      if (parsedData.notificationSettings?.length) await NotificationSettings.insertMany(parsedData.notificationSettings);
+      if (parsedData.messageTemplates?.length) await MessageTemplate.insertMany(parsedData.messageTemplates);
+      if (parsedData.followUpReminders?.length) await FollowUpReminder.insertMany(parsedData.followUpReminders);
+      if (parsedData.auditLogs?.length) await AuditLog.insertMany(parsedData.auditLogs);
+      if (parsedData.notificationLogs?.length) await NotificationLog.insertMany(parsedData.notificationLogs);
+      if (parsedData.whatsAppReceivedMedia?.length) await WhatsAppReceivedMedia.insertMany(parsedData.whatsAppReceivedMedia);
 
       res.json({ message: 'Base de données restaurée avec succès.' });
     } catch (error: any) {
