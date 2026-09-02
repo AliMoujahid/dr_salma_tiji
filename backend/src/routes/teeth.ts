@@ -73,10 +73,10 @@ router.get('/patient/:patientId/tooth/:toothNumber', protect, async (req: AuthRe
 // Add a new tooth intervention / change status
 router.post('/', protect, async (req: AuthRequest, res: Response) => {
   try {
-    const { patientId, toothNumber, status, notes, cost, invoiceId, date, photosBefore, photosAfter, xrays } = req.body;
+    const { patientId, toothNumber, procedureName, status, notes, cost, invoiceId, date, photosBefore, photosAfter, xrays } = req.body;
 
     if (!patientId || !toothNumber || !status) {
-      res.status(400).json({ message: 'Champs requis manquants pour l\'historique dentaire.' });
+      res.status(400).json({ message: 'patientId, toothNumber et status sont requis.' });
       return;
     }
 
@@ -94,6 +94,7 @@ router.post('/', protect, async (req: AuthRequest, res: Response) => {
     const record = await ToothHistory.create({
       patientId,
       toothNumber: tNum,
+      procedureName: procedureName ? procedureName.trim() : undefined,
       status,
       notes,
       cost: parseFloat(cost) || 0,

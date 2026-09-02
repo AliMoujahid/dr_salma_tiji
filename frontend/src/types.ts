@@ -119,6 +119,7 @@ export interface ToothHistory {
   _id: string;
   patientId: string;
   toothNumber: number;
+  procedureName?: string;
   status: ToothStatusType;
   notes?: string;
   photosBefore?: string[];

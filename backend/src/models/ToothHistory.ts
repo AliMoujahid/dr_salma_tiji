@@ -3,6 +3,7 @@ import mongoose, { Schema, Document } from 'mongoose';
 export interface IToothHistory extends Document {
   patientId: mongoose.Types.ObjectId;
   toothNumber: number; // 11-48 for permanent, 51-85 for primary
+  procedureName?: string; // Nom de l'acte / soin (ex: Couronne zircone, Carie simple...)
   status:
     | 'Healthy'
     | 'Missing'
@@ -30,6 +31,7 @@ const ToothHistorySchema: Schema = new Schema(
   {
     patientId: { type: Schema.Types.ObjectId, ref: 'Patient', required: true, index: true },
     toothNumber: { type: Number, required: true },
+    procedureName: { type: String },
     status: {
       type: String,
       enum: [
