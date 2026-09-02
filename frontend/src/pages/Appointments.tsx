@@ -310,7 +310,7 @@ export const Appointments: React.FC = () => {
 
   const handleOpenCreateModal = (prefillDate?: Date, timeStr?: string) => {
     setEditApptId(null);
-    setSelectedPatientId(patients[0]?._id || '');
+    setSelectedPatientId('');
 
     const targetDate = prefillDate || new Date();
     const yyyy = targetDate.getFullYear();
@@ -353,7 +353,14 @@ export const Appointments: React.FC = () => {
 
   const handleSubmitAppointment = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedPatientId || !dateTime || !chair) return;
+    if (!selectedPatientId) {
+      toast.warning('Patient requis', 'Veuillez sélectionner un patient dans la liste.');
+      return;
+    }
+    if (!dateTime) {
+      toast.warning('Date requise', 'Veuillez définir la date et l\'heure du rendez-vous.');
+      return;
+    }
 
     setSubmitting(true);
     const payload = {
