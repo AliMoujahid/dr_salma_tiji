@@ -111,8 +111,8 @@ export const Appointments: React.FC = () => {
 
   // Waiting Room State
   const [waitingRoom, setWaitingRoom] = useState<WaitingPatient[]>([
-    { id: 'w1', name: 'Kawtar Fattane', arrivedAt: '10:15', act: 'Consultation & Soins', chair: 'Fauteuil 1' },
-    { id: 'w2', name: 'Omar Bennani', arrivedAt: '10:35', act: 'Contrôle Ortho', chair: 'Fauteuil 2' },
+    { id: 'w1', name: 'Kawtar Fattane', arrivedAt: '10:15', act: 'Consultation & Soins' },
+    { id: 'w2', name: 'Omar Bennani', arrivedAt: '10:35', act: 'Contrôle Ortho' },
   ]);
   const [isWaitingModalOpen, setIsWaitingModalOpen] = useState(false);
   const [waitingPatientName, setWaitingPatientName] = useState('');
@@ -972,9 +972,9 @@ export const Appointments: React.FC = () => {
               </div>
 
               <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-950/80 border border-slate-100 dark:border-white/5">
-                <span className="font-semibold text-slate-500">Durée & Fauteuil :</span>
-                <span className="font-bold text-slate-800 dark:text-white">
-                  {selectedApptDetail.duration} min • {selectedApptDetail.chair || 'Fauteuil'}
+                <span className="font-semibold text-slate-500">Durée de la consultation :</span>
+                <span className="font-bold text-slate-800 dark:text-white font-mono">
+                  {selectedApptDetail.duration} minutes
                 </span>
               </div>
 
@@ -1101,42 +1101,29 @@ export const Appointments: React.FC = () => {
                 placeholder="JJ/MM/AAAA à HH:MM"
               />
 
-              <div className="grid grid-cols-3 gap-2.5">
+              {/* Duration and Status Grid */}
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Durée</label>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Durée Prévue</label>
                   <select
                     value={duration}
                     onChange={(e) => setDuration(e.target.value)}
-                    className="w-full h-11 px-2 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-950 text-xs text-slate-900 dark:text-white font-medium cursor-pointer"
+                    className="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-950 text-xs text-slate-900 dark:text-white font-medium cursor-pointer"
                   >
                     <option value="15">15 min</option>
-                    <option value="30">30 min</option>
+                    <option value="30">30 min (Standard)</option>
                     <option value="45">45 min</option>
-                    <option value="60">60 min</option>
-                    <option value="90">90 min</option>
+                    <option value="60">60 min (1 heure)</option>
+                    <option value="90">90 min (1h30)</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Fauteuil</label>
-                  <select
-                    value={chair}
-                    onChange={(e) => setChair(e.target.value)}
-                    className="w-full h-11 px-2 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-950 text-xs text-slate-900 dark:text-white font-medium cursor-pointer"
-                  >
-                    <option value="Fauteuil">Principal</option>
-                    <option value="Fauteuil 1">Fauteuil 1</option>
-                    <option value="Fauteuil 2">Fauteuil 2</option>
-                    <option value="Chirurgie">Chirurgie</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Statut</label>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Statut du RDV</label>
                   <select
                     value={status}
                     onChange={(e: any) => setStatus(e.target.value)}
-                    className="w-full h-11 px-2 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-950 text-xs text-slate-900 dark:text-white font-medium cursor-pointer"
+                    className="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-950 text-xs text-slate-900 dark:text-white font-medium cursor-pointer"
                   >
                     <option value="Scheduled">Planifié</option>
                     <option value="Confirmed">Confirmé</option>
