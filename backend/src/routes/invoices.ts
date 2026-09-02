@@ -106,10 +106,41 @@ router.post('/', protect, async (req: AuthRequest, res: Response) => {
       return;
     }
 
+    // Format line items with amount (A payer), advance (Avance), and remaining (Reste)
+    const formattedItems = items.map((item: any) => {
+      const amount = Math.max(0, parseFloat(item.amount) || 0);
+      const advance = Math.max(0, parseFloat(item.advance !== undefined ? item.advance : item.amount) || 0);
+      const remaining = Math.max(0, amount - advance);
+      return {
+        date: item.date || '',
+        tooth: item.tooth || '',
+        description: item.description || '',
+        amount,
+        advance,
+        remaining,
+      };
+    });
+
     // Calculate total amount from items safely
-    const totalAmount = items.reduce((sum: number, item: any) => sum + Math.max(0, parseFloat(item.amount) || 0), 0);
+    const totalAmount = formattedItems.reduce((sum: number, item: any) => sum + item.amount, 0);
     const disc = Math.max(0, parseFloat(discount) || 0);
     const netAmount = Math.max(0, totalAmount - disc);
+
+    // Sum advances from items if paidAmount not explicitly set
+    const itemsTotalAdvance = formattedItems.reduce((sum: number, item: any) => sum + item.advance, 0);
+    const finalPaidAmount = paidAmount !== undefined ? Math.max(0, parseFloat(paidAmount) || 0) : itemsTotalAdvance;
+
+    // Derive payment status
+    let derivedStatus = paymentStatus;
+    if (!derivedStatus) {
+      if (finalPaidAmount >= netAmount && netAmount > 0) {
+        derivedStatus = 'Paid';
+      } else if (finalPaidAmount > 0) {
+        derivedStatus = 'Partially Paid';
+      } else {
+        derivedStatus = 'Unpaid';
+      }
+    }
 
     // Auto-generate invoice number (format: [num]/[year])
     const invoiceDateObj = date && !isNaN(new Date(date).getTime()) ? new Date(date) : new Date();
@@ -128,13 +159,13 @@ router.post('/', protect, async (req: AuthRequest, res: Response) => {
       invoiceNumber,
       patientId,
       date: invoiceDateObj,
-      items,
+      items: formattedItems,
       totalAmount,
       discount: disc,
       netAmount,
       paymentMode: paymentMode || 'espèces',
-      paymentStatus: paymentStatus || 'Unpaid',
-      paidAmount: Math.max(0, parseFloat(paidAmount) || 0),
+      paymentStatus: derivedStatus,
+      paidAmount: finalPaidAmount,
       createdBy: req.user?._id,
     });
 
@@ -165,8 +196,22 @@ router.put('/:id', protect, async (req: AuthRequest, res: Response) => {
     }
 
     if (items && Array.isArray(items)) {
-      invoice.items = items;
-      invoice.totalAmount = items.reduce((sum: number, item: any) => sum + Math.max(0, parseFloat(item.amount) || 0), 0);
+      const formattedItems = items.map((item: any) => {
+        const amount = Math.max(0, parseFloat(item.amount) || 0);
+        const advance = Math.max(0, parseFloat(item.advance !== undefined ? item.advance : item.amount) || 0);
+        const remaining = Math.max(0, amount - advance);
+        return {
+          date: item.date || '',
+          tooth: item.tooth || '',
+          description: item.description || '',
+          amount,
+          advance,
+          remaining,
+        };
+      });
+
+      invoice.items = formattedItems;
+      invoice.totalAmount = formattedItems.reduce((sum: number, item: any) => sum + item.amount, 0);
     }
 
     if (discount !== undefined) {
@@ -176,8 +221,25 @@ router.put('/:id', protect, async (req: AuthRequest, res: Response) => {
     invoice.netAmount = Math.max(0, invoice.totalAmount - invoice.discount);
 
     if (paymentMode) invoice.paymentMode = paymentMode;
-    if (paymentStatus) invoice.paymentStatus = paymentStatus;
-    if (paidAmount !== undefined) invoice.paidAmount = Math.max(0, parseFloat(paidAmount) || 0);
+
+    if (paidAmount !== undefined) {
+      invoice.paidAmount = Math.max(0, parseFloat(paidAmount) || 0);
+    } else if (items && Array.isArray(items)) {
+      invoice.paidAmount = invoice.items.reduce((sum: number, item: any) => sum + (item.advance || 0), 0);
+    }
+
+    if (paymentStatus) {
+      invoice.paymentStatus = paymentStatus;
+    } else {
+      if (invoice.paidAmount >= invoice.netAmount && invoice.netAmount > 0) {
+        invoice.paymentStatus = 'Paid';
+      } else if (invoice.paidAmount > 0) {
+        invoice.paymentStatus = 'Partially Paid';
+      } else {
+        invoice.paymentStatus = 'Unpaid';
+      }
+    }
+
     if (date && !isNaN(new Date(date).getTime())) invoice.date = new Date(date);
 
     await invoice.save();

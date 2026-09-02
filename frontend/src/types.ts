@@ -136,7 +136,9 @@ export interface InvoiceItem {
   date: string;
   tooth?: string;
   description: string;
-  amount: number;
+  amount: number; // A payer
+  advance?: number; // Avance
+  remaining?: number; // Reste à payer (amount - advance)
   _id?: string;
 }
 
@@ -152,6 +154,7 @@ export interface Invoice {
   paymentMode: 'espèces' | 'chèque' | 'carte' | 'virement' | 'traites';
   paymentStatus: 'Paid' | 'Partially Paid' | 'Unpaid' | 'Refunded';
   paidAmount: number;
+  remainingAmount?: number;
   createdBy: User;
   createdAt: string;
   updatedAt: string;

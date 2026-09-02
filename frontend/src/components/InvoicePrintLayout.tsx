@@ -266,126 +266,77 @@ export const InvoicePrintLayout: React.FC<InvoicePrintLayoutProps> = ({ invoice,
                       <span>•</span>
                       <span><strong>IF:</strong> {config.ifVal || '28103818'}</span>
                     </div>
+                    <div className="w-full flex justify-center items-center gap-3 py-1 border-b border-slate-300 px-3"><span>📍 {config.address || 'Résidence Al Manar, Bd Al Qods, Casablanca'}</span></div>
+                    <div className="w-full flex justify-center items-center gap-3 py-1 px-3 border-b border-slate-300 text-slate-800"><span>📱 {config.phones || '+212 5 22 00 00 00'}</span><span className="text-slate-300">|</span><span>✉️ {config.email || 'dr.salma.tijini@gmail.com'}</span></div>
+                    <div className="w-full flex justify-center items-center gap-6 py-0.5 bg-slate-100 text-slate-700 font-medium text-[9.5px]"><span><strong>ICE:</strong> {config.ice || '28103818'}</span><span>•</span><span><strong>INBE:</strong> {config.inbe || '044215820'}</span><span>•</span><span><strong>IF:</strong> {config.ifVal || '28103818'}</span></div>
                   </div>
                 </>
               ) : (
-                /* Sub-Header on Subsequent Pages (Page 2, 3...) */
                 <div className="flex justify-between items-center border-b-2 border-black pb-2 mb-4">
                   <div className="flex items-center gap-3">
-                    <span className="font-serif italic font-bold text-base text-[#1e3a5f]">
-                      {config.cabinetFr || 'Cabinet Tijini'}
-                    </span>
-                    <span className="text-xs font-bold text-slate-600">
-                      — Facture N° {invoice.invoiceNumber} (Suite)
-                    </span>
+                    <span className="font-serif italic font-bold text-base text-[#1e3a5f]">{config.cabinetFr || 'Cabinet Tijini'}</span>
+                    <span className="text-xs font-bold text-slate-600">— Facture N° {invoice.invoiceNumber} (Suite)</span>
                   </div>
-                  <div className="text-xs font-semibold text-black">
-                    Patient : <span className="font-bold uppercase">{invoice.patientId?.name || 'Patient'}</span>
-                  </div>
+                  <div className="text-xs font-semibold text-black">Patient : <span className="font-bold uppercase">{invoice.patientId?.name || 'Patient'}</span></div>
                 </div>
               )}
 
-              {/* Title & Metadata on Page 1 */}
               {isFirstPage && (
                 <>
-                  <h1 className="text-center font-bold text-lg uppercase tracking-widest underline mb-3 text-black">
-                    FACTURE
-                  </h1>
+                  <h1 className="text-center font-bold text-lg uppercase tracking-widest underline mb-3 text-black">FACTURE</h1>
                   <div className="w-full flex justify-between text-xs font-semibold text-black mb-3">
-                    <div>
-                      N° : <span className="font-bold text-sm mr-6">{invoice.invoiceNumber}</span>
-                      Au nom de :{' '}
-                      <span className="font-bold text-sm bg-slate-100 px-2 py-0.5 rounded">
-                        {invoice.patientId?.name || 'Patient'}
-                      </span>
-                    </div>
-                    <div>
-                      Fait le : <span className="font-bold text-sm">{formattedDate()}</span>
-                    </div>
+                    <div>N° : <span className="font-bold text-sm mr-6">{invoice.invoiceNumber}</span> Au nom de : <span className="font-bold text-sm bg-slate-100 px-2 py-0.5 rounded">{invoice.patientId?.name || 'Patient'}</span></div>
+                    <div>Fait le : <span className="font-bold text-sm">{formattedDate()}</span></div>
                   </div>
                 </>
               )}
 
-              {/* --- ITEMS TABLE --- */}
               <table className="w-full border-collapse border-2 border-black text-xs text-black text-center mb-4">
                 <thead>
                   <tr className="bg-slate-100 font-bold border-b-2 border-black">
-                    <th className="border-r border-black p-2 w-[15%] uppercase">Date</th>
-                    <th className="border-r border-black p-2 w-[12%] uppercase">Dent</th>
-                    <th className="border-r border-black p-2 w-[53%] uppercase text-left pl-3">Acte / Soin</th>
-                    <th className="p-2 w-[20%] uppercase text-right pr-3">Montant (DH)</th>
+                    <th className="border-r border-black p-2 w-[12%] uppercase">Date</th>
+                    <th className="border-r border-black p-2 w-[10%] uppercase">Dent</th>
+                    <th className="border-r border-black p-2 w-[42%] uppercase text-left pl-3">Acte / Soin</th>
+                    <th className="border-r border-black p-2 w-[12%] uppercase text-right pr-2">À payer</th>
+                    <th className="border-r border-black p-2 w-[12%] uppercase text-right pr-2">Avance</th>
+                    <th className="p-2 w-[12%] uppercase text-right pr-2">Reste</th>
                   </tr>
                 </thead>
                 <tbody>
                   {pageItems.map((item, index) => (
-                    <tr
-                      key={item._id || index}
-                      className={index < pageItems.length - 1 ? 'border-b border-black' : ''}
-                    >
+                    <tr key={item._id || index} className={index < pageItems.length - 1 ? 'border-b border-black' : ''}>
                       <td className="border-r border-black p-2 text-center">{item.date}</td>
                       <td className="border-r border-black p-2 text-center">{item.tooth || '-'}</td>
                       <td className="border-r border-black p-2 text-left pl-3 font-medium">{item.description}</td>
-                      <td className="p-2 text-right pr-3 font-mono font-semibold">
-                        {item.amount > 0 ? item.amount.toFixed(2).replace('.', ',') : '0,00'}
-                      </td>
+                      <td className="border-r border-black p-2 text-right pr-2 font-mono font-semibold">{item.amount > 0 ? item.amount.toFixed(2).replace('.', ',') : '0,00'}</td>
+                      <td className="border-r border-black p-2 text-right pr-2 font-mono font-semibold text-emerald-800">{item.advance > 0 ? item.advance.toFixed(2).replace('.', ',') : '0,00'}</td>
+                      <td className="p-2 text-right pr-2 font-mono font-bold text-rose-700">{item.remaining > 0 ? item.remaining.toFixed(2).replace('.', ',') : '0,00'}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
 
-              {/* Indicator if more items on next page */}
-              {!isLastPage && (
-                <div className="text-right text-[11px] italic font-semibold text-slate-600 mb-2">
-                  ... Suite des soins sur la page suivante ({pageIndex + 2}/{totalPages})
-                </div>
-              )}
+              {!isLastPage && <div className="text-right text-[11px] italic font-semibold text-slate-600 mb-2">... Suite des soins sur la page suivante ({pageIndex + 2}/{totalPages})</div>}
 
-              {/* --- TOTALS & NUMBER TO WORDS (ONLY ON LAST PAGE) --- */}
               {isLastPage && (
                 <>
-                  {/* Totals Table */}
                   <div className="w-full flex justify-end mb-3">
-                    <table className="w-[280px] border-2 border-black text-xs font-bold text-black border-collapse">
+                    <table className="w-[320px] border-2 border-black text-xs font-bold text-black border-collapse">
                       <tbody>
-                        <tr className="border-b border-black">
-                          <td className="border-r border-black p-1.5 pl-2.5 font-bold">Total Brut</td>
-                          <td className="p-1.5 pr-2.5 text-right font-mono">
-                            {invoice.totalAmount.toFixed(2).replace('.', ',')} DH
-                          </td>
-                        </tr>
-                        <tr className="border-b border-black">
-                          <td className="border-r border-black p-1.5 pl-2.5 font-bold">Remise</td>
-                          <td className="p-1.5 pr-2.5 text-right font-mono">
-                            {invoice.discount.toFixed(2).replace('.', ',')} DH
-                          </td>
-                        </tr>
-                        <tr className="bg-slate-100 font-extrabold text-sm">
-                          <td className="border-r border-black p-1.5 pl-2.5 uppercase text-xs">
-                            Net à payer [{invoice.paymentMode || 'espèces'}]
-                          </td>
-                          <td className="p-1.5 pr-2.5 text-right font-mono text-[#1e3a5f]">
-                            {invoice.netAmount.toFixed(2).replace('.', ',')} DH
-                          </td>
-                        </tr>
+                        <tr className="border-b border-black"><td className="border-r border-black p-1.5 pl-2.5">Total Brut</td><td className="p-1.5 pr-2.5 text-right font-mono">{invoice.totalAmount.toFixed(2).replace('.', ',')} DH</td></tr>
+                        <tr className="border-b border-black"><td className="border-r border-black p-1.5 pl-2.5">Remise</td><td className="p-1.5 pr-2.5 text-right font-mono">{invoice.discount.toFixed(2).replace('.', ',')} DH</td></tr>
+                        <tr className="border-b border-black bg-slate-100"><td className="border-r border-black p-1.5 pl-2.5 uppercase text-xs">Net à Payer [{invoice.paymentMode || 'espèces'}]</td><td className="p-1.5 pr-2.5 text-right font-mono text-[#1e3a5f]">{invoice.netAmount.toFixed(2).replace('.', ',')} DH</td></tr>
+                        <tr className="border-b border-black"><td className="border-r border-black p-1.5 pl-2.5 text-emerald-800">Total Versé</td><td className="p-1.5 pr-2.5 text-right font-mono text-emerald-800">{(invoice.paidAmount || 0).toFixed(2).replace('.', ',')} DH</td></tr>
+                        <tr className="bg-slate-100 font-extrabold text-sm"><td className="border-r border-black p-1.5 pl-2.5 uppercase text-xs text-rose-900">Reste à Payer</td><td className="p-1.5 pr-2.5 text-right font-mono text-rose-700">{Math.max(0, invoice.netAmount - (invoice.paidAmount || 0)).toFixed(2).replace('.', ',')} DH</td></tr>
                       </tbody>
                     </table>
                   </div>
-
-                  {/* Number to words text */}
-                  <div className="text-[11px] font-bold text-black uppercase tracking-wider mb-4 bg-slate-50 p-2.5 border border-black rounded-md">
-                    Arrêtée la présente facture à la somme de :<br />
-                    <span className="text-xs font-extrabold text-[#1e3a5f] mt-1 block tracking-normal">
-                      {formatNumberToWordsWithCentimes(invoice.netAmount)}
-                    </span>
-                  </div>
+                  <div className="text-[11px] font-bold text-black uppercase tracking-wider mb-4 bg-slate-50 p-2.5 border border-black rounded-md">Arrêtée la présente facture à la somme de :<br /><span className="text-xs font-extrabold text-[#1e3a5f] mt-1 block tracking-normal">{formatNumberToWordsWithCentimes(invoice.netAmount)}</span></div>
                 </>
               )}
             </div>
-
-            {/* --- BOTTOM SIGNATURE & PAGE NUMBER FOOTER --- */}
             <div className="w-full pt-2 border-t border-black/10 mt-auto">
               {isLastPage ? (
-                /* Doctor Declaration & Signature Space on Final Page */
                 <div className="w-full flex justify-between items-start text-[11px] text-black mb-3">
                   <div className="w-[50%] leading-relaxed pt-1">
                     Je, soussigné, certifie avoir effectué les actes attestés dans le<br />
