@@ -503,7 +503,7 @@ export const Appointments: React.FC = () => {
 
   const handleCallPatient = (wPatient: WaitingPatient) => {
     setWaitingRoom(waitingRoom.filter((p) => p.id !== wPatient.id));
-    toast.info('Patient appelé', `${wPatient.name} a été invité(e) en salle de soin.`);
+    toast.info('Entrée au fauteuil', `${wPatient.name} passe en salle de soins.`);
   };
 
   // Task Toggle Handler
@@ -842,7 +842,7 @@ export const Appointments: React.FC = () => {
                 <button
                   onClick={() => waitingRoom[0] && handleCallPatient(waitingRoom[0])}
                   className="p-1 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10 cursor-pointer"
-                  title="Appeler le prochain"
+                  title="Faire entrer le prochain patient"
                 >
                   <Play className="w-3.5 h-3.5" />
                 </button>
@@ -872,9 +872,9 @@ export const Appointments: React.FC = () => {
 
                     <button
                       onClick={() => handleCallPatient(wPatient)}
-                      className="px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xxs font-bold flex items-center gap-1 cursor-pointer shrink-0 shadow-2xs"
+                      className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xxs font-bold flex items-center gap-1 cursor-pointer shrink-0 shadow-2xs"
                     >
-                      <span>Appeler</span>
+                      <span>Faire Entrer</span>
                     </button>
                   </div>
                 ))
