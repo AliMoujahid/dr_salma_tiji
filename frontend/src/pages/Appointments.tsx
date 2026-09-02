@@ -115,6 +115,7 @@ export const Appointments: React.FC = () => {
     { id: 'w2', name: 'Omar Bennani', arrivedAt: '10:35', act: 'Contrôle Ortho' },
   ]);
   const [isWaitingModalOpen, setIsWaitingModalOpen] = useState(false);
+  const [waitingPatientId, setWaitingPatientId] = useState('');
   const [waitingPatientName, setWaitingPatientName] = useState('');
   const [waitingPatientAct, setWaitingPatientAct] = useState('Consultation');
 
@@ -472,25 +473,30 @@ export const Appointments: React.FC = () => {
 
   // Waiting Room Handlers
   const handleAddWaitingPatient = () => {
-    if (!waitingPatientName.trim()) return;
+    const selectedPat = patients.find((p) => p._id === waitingPatientId);
+    const patName = selectedPat?.name || waitingPatientName.trim();
+    if (!patName) {
+      toast.warning('Patient requis', 'Veuillez sélectionner un patient dans la liste.');
+      return;
+    }
     const now = new Date();
     const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
     const newEntry: WaitingPatient = {
       id: `w-${Date.now()}`,
-      name: waitingPatientName.trim(),
+      name: patName,
       arrivedAt: timeStr,
-      act: waitingPatientAct,
-      chair: 'Fauteuil 1',
+      act: waitingPatientAct || 'Consultation',
     };
     setWaitingRoom([...waitingRoom, newEntry]);
     setWaitingPatientName('');
+    setWaitingPatientId('');
     setIsWaitingModalOpen(false);
     toast.success('Patient en salle d\'attente', `${newEntry.name} ajouté(e) avec succès.`);
   };
 
   const handleCallPatient = (wPatient: WaitingPatient) => {
     setWaitingRoom(waitingRoom.filter((p) => p.id !== wPatient.id));
-    toast.info('Patient appelé au Fauteuil', `${wPatient.name} a été invité(e) en salle de soin.`);
+    toast.info('Patient appelé', `${wPatient.name} a été invité(e) en salle de soin.`);
   };
 
   // Task Toggle Handler
@@ -1170,46 +1176,60 @@ export const Appointments: React.FC = () => {
       {/* 🌟 5. ADD TO WAITING ROOM MODAL                                           */}
       {/* ========================================================================= */}
       {isWaitingModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="w-full max-w-sm rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-2xl p-6 flex flex-col gap-4">
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-              Ajouter un Patient en Salle d'Attente
-            </h3>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-in fade-in duration-150">
+          <div className="w-full max-w-md rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-2xl p-6 flex flex-col gap-4 animate-in zoom-in-95 duration-150">
+            <div className="flex justify-between items-center border-b border-slate-200 dark:border-white/10 pb-3">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                Ajouter un Patient en Salle d'Attente
+              </h3>
+              <button
+                onClick={() => setIsWaitingModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
 
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Nom du Patient</label>
-                <input
-                  type="text"
-                  placeholder="Nom et Prénom..."
-                  value={waitingPatientName}
-                  onChange={(e) => setWaitingPatientName(e.target.value)}
-                  className="w-full h-10 px-3 rounded-xl border text-xs bg-slate-50 dark:bg-slate-950"
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Sélectionner un Patient *
+                </label>
+                <SearchablePatientSelect
+                  patients={patients}
+                  selectedId={waitingPatientId}
+                  onChange={(id) => {
+                    setWaitingPatientId(id);
+                    const p = patients.find((pat) => pat._id === id);
+                    if (p) setWaitingPatientName(p.name);
+                  }}
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Motif / Soin</label>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Motif / Soin Prévu
+                </label>
                 <input
                   type="text"
-                  placeholder="ex: Consultation, Détartrage..."
+                  placeholder="ex: Consultation, Détartrage, Urgence, Contrôle..."
                   value={waitingPatientAct}
                   onChange={(e) => setWaitingPatientAct(e.target.value)}
-                  className="w-full h-10 px-3 rounded-xl border text-xs bg-slate-50 dark:bg-slate-950"
+                  className="w-full h-11 px-4 rounded-xl border border-slate-200 dark:border-white/10 text-xs bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white placeholder-slate-400"
                 />
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 pt-2 border-t">
+            <div className="flex justify-end gap-3 pt-3 border-t border-slate-200 dark:border-white/10">
               <button
                 onClick={() => setIsWaitingModalOpen(false)}
-                className="px-3 py-1.5 rounded-xl border text-xs text-slate-600"
+                className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 text-xs font-semibold text-slate-600 dark:text-slate-400 cursor-pointer"
               >
                 Annuler
               </button>
               <button
                 onClick={handleAddWaitingPatient}
-                className="px-4 py-1.5 rounded-xl bg-emerald-600 text-white font-bold text-xs"
+                className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md shadow-emerald-500/20 cursor-pointer"
               >
                 Ajouter
               </button>
