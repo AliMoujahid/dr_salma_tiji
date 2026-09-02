@@ -183,51 +183,49 @@ html:not(.dark) .text-slate-500:not(.login-page *):not([data-theme="dark"] *) {
   color: #cbd5e1 !important;
 }
 
-.login-page input.glass-input {
-  background-color: rgba(15, 23, 42, 0.85) !important;
-  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+.login-page input,
+.login-page input.glass-input,
+html:not(.dark) .login-page input,
+html.dark .login-page input {
+  background-color: #1e293b !important;
+  border: 1.5px solid rgba(255, 255, 255, 0.2) !important;
   color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  caret-color: #3b82f6 !important;
 }
 
-.login-page input.glass-input:focus {
-  background-color: rgba(15, 23, 42, 0.98) !important;
+.login-page input:focus,
+.login-page input.glass-input:focus,
+html:not(.dark) .login-page input:focus,
+html.dark .login-page input:focus {
+  background-color: #0f172a !important;
   border-color: #3b82f6 !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.35) !important;
   outline: none !important;
 }
 
-.login-page input.glass-input::placeholder {
-  color: #64748b !important;
+.login-page input::placeholder,
+html:not(.dark) .login-page input::placeholder {
+  color: #94a3b8 !important;
+  -webkit-text-fill-color: #94a3b8 !important;
+}
+
+/* Chrome / Safari / Edge autofill fix for login page */
+.login-page input:-webkit-autofill,
+.login-page input:-webkit-autofill:hover,
+.login-page input:-webkit-autofill:focus,
+.login-page input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px #1e293b inset !important;
+  -webkit-text-fill-color: #ffffff !important;
+  caret-color: #3b82f6 !important;
+  border: 1.5px solid #3b82f6 !important;
+  transition: background-color 5000s ease-in-out 0s;
 }
 
 .login-page .login-section-title {
   color: #cbd5e1 !important;
-}
-
-.login-page .test-account-btn {
-  background-color: rgba(255, 255, 255, 0.06) !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
-  color: #e2e8f0 !important;
-  transition: all 0.2s ease;
-}
-
-.login-page .test-account-btn:hover {
-  background-color: rgba(255, 255, 255, 0.15) !important;
-  border-color: rgba(255, 255, 255, 0.22) !important;
-  color: #ffffff !important;
-}
-
-.login-page .test-account-admin {
-  background-color: rgba(99, 102, 241, 0.18) !important;
-  border: 1px solid rgba(129, 140, 248, 0.35) !important;
-  color: #e0e7ff !important;
-  transition: all 0.2s ease;
-}
-
-.login-page .test-account-admin:hover {
-  background-color: rgba(99, 102, 241, 0.3) !important;
-  border-color: rgba(129, 140, 248, 0.55) !important;
-  color: #ffffff !important;
 }
 
 /* Sub-panels and inner backgrounds */

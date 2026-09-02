@@ -123,9 +123,16 @@ export const Login: React.FC = () => {
                   placeholder="admin"
                   autoCapitalize="none"
                   autoCorrect="off"
+                  autoComplete="username"
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
-                  className="w-full h-11 pl-10 pr-4 rounded-xl text-sm glass-input placeholder-slate-500"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleLogin(e);
+                    }
+                  }}
+                  className="w-full h-12 pl-10 pr-4 rounded-xl text-sm bg-slate-800/90 border border-white/20 text-white placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
                 />
               </div>
             </div>
@@ -138,10 +145,16 @@ export const Login: React.FC = () => {
                 <input
                   type={showPassword ? 'text' : 'password'}
                   placeholder="••••••••••••"
+                  autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-
-                  className="w-full h-11 pl-10 pr-12 rounded-xl text-sm glass-input placeholder-slate-500"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleLogin(e);
+                    }
+                  }}
+                  className="w-full h-12 pl-10 pr-12 rounded-xl text-sm bg-slate-800/90 border border-white/20 text-white placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
                 />
                 <button
                   type="button"
@@ -156,9 +169,9 @@ export const Login: React.FC = () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full h-11 rounded-xl bg-blue-600 hover:bg-blue-500 font-bold text-sm text-white transition-all shadow-lg shadow-blue-600/30 mt-2 cursor-pointer flex items-center justify-center disabled:opacity-60"
+              className="w-full h-12 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-[0.99] font-bold text-sm text-white transition-all shadow-lg shadow-blue-600/30 mt-2 cursor-pointer flex items-center justify-center disabled:opacity-60"
             >
-              {loading ? 'Connexion en cours...' : 'Se connecter'}
+              {loading ? 'Connexion en cours...' : 'Se connecter (Entrée ↵)'}
             </button>
           </form>
 
