@@ -79,13 +79,18 @@ ETAPE 4 : Dans le dossier copié, double-cliquez sur "Installer_Cabinet.bat".
           -> Cela crée l'icône sur le Bureau et configure le démarrage automatique 
              dès que le PC s'allume (même après coupure de courant).
 
+ETAPE 4 BIS (SÉCURITÉ ANTI-COMPASS) :
+          -> Faites un clic droit sur "🔒_VERROUILLER_ET_SECURISER_MONGODB.bat" 
+             et choisissez "Exécuter en tant qu'administrateur".
+          -> Cela active la sécurité stricte sur MongoDB et bloque tout accès non autorisé (Compass, export...).
+
 ETAPE 5 : Double-cliquez sur l'icône du Bureau "Cabinet Dr Salma Tijini".
           -> L'écran d'activation affiche le Machine ID du PC de la docteure.
           -> Sur votre PC, lancez "3_DEVELOPPEUR.../generate_license.bat".
           -> Collez son Machine ID, générez la clé, et collez-la dans son application.
           -> Cliquez sur "Activer le Logiciel".
 
-C'EST TOUT ! Le cabinet est prêt, sécurisé et sauvegardé chaque jour à 23h00.
+C'EST TOUT ! Le cabinet est prêt, ultra-sécurisé et sauvegardé chaque jour à 23h00.
 =======================================================================
 `;
 fs.writeFileSync(path.join(USB_PACK_DIR, 'GUIDE_INSTALLATION_SUR_PLACE.txt'), masterGuide, 'utf8');
