@@ -17,9 +17,9 @@ router.get('/dashboard-stats', protect, async (req: AuthRequest, res: Response) 
     const endOfToday = new Date();
     endOfToday.setHours(23, 59, 59, 999);
 
-    // Patients statistics
-    const totalPatients = await Patient.countDocuments({ isArchived: false });
-    const archivedPatients = await Patient.countDocuments({ isArchived: true });
+    // Patients statistics (excluding soft-deleted)
+    const totalPatients = await Patient.countDocuments({ isArchived: false, deleted: { $ne: true } });
+    const archivedPatients = await Patient.countDocuments({ isArchived: true, deleted: { $ne: true } });
 
     // Appointments statistics
     const appointmentsTodayCount = await Appointment.countDocuments({

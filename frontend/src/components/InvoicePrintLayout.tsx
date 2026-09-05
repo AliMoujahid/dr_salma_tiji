@@ -266,9 +266,6 @@ export const InvoicePrintLayout: React.FC<InvoicePrintLayoutProps> = ({ invoice,
                       <span>•</span>
                       <span><strong>IF:</strong> {config.ifVal || '28103818'}</span>
                     </div>
-                    <div className="w-full flex justify-center items-center gap-3 py-1 border-b border-slate-300 px-3"><span>📍 {config.address || 'Résidence Al Manar, Bd Al Qods, Casablanca'}</span></div>
-                    <div className="w-full flex justify-center items-center gap-3 py-1 px-3 border-b border-slate-300 text-slate-800"><span>📱 {config.phones || '+212 5 22 00 00 00'}</span><span className="text-slate-300">|</span><span>✉️ {config.email || 'dr.salma.tijini@gmail.com'}</span></div>
-                    <div className="w-full flex justify-center items-center gap-6 py-0.5 bg-slate-100 text-slate-700 font-medium text-[9.5px]"><span><strong>ICE:</strong> {config.ice || '28103818'}</span><span>•</span><span><strong>INBE:</strong> {config.inbe || '044215820'}</span><span>•</span><span><strong>IF:</strong> {config.ifVal || '28103818'}</span></div>
                   </div>
                 </>
               ) : (

@@ -96,14 +96,14 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
   };
 
   return (
-    <header className="relative w-full h-20 px-4 md:px-8 flex items-center justify-between bg-slate-950/20 backdrop-blur-md border-b border-white/5 z-30 select-none gap-3 print:hidden">
+    <header className="relative w-full h-20 px-4 md:px-8 flex items-center justify-between bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200/80 dark:border-white/5 z-30 select-none gap-3 print:hidden transition-colors">
       {/* Global Search & Mobile Toggle */}
       <div className="flex items-center gap-3 flex-1 min-w-0">
         {/* Mobile Menu toggle hamburger */}
         <button
           onClick={onMenuClick}
           type="button"
-          className="p-2.5 rounded-xl border border-white/5 bg-slate-900/40 hover:bg-slate-900/80 text-slate-400 hover:text-white transition-all cursor-pointer md:hidden flex items-center justify-center shrink-0"
+          className="p-2.5 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100 hover:bg-slate-200 dark:bg-slate-900/40 dark:hover:bg-slate-900/80 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-all cursor-pointer md:hidden flex items-center justify-center shrink-0"
         >
           <Menu className="w-5 h-5" />
         </button>
@@ -116,22 +116,22 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
               placeholder="Rechercher..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full h-11 pl-10 pr-4 rounded-xl text-sm glass-input placeholder-slate-500"
+              className="w-full h-11 pl-10 pr-4 rounded-xl text-sm bg-slate-100/90 dark:bg-slate-900/60 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 shadow-xs transition-all"
             />
           </div>
 
           {/* Dynamic Search Results Dropdown */}
           {showDropdown && (
-            <div className="absolute top-13 left-0 w-full glass-panel border border-white/10 rounded-xl overflow-hidden shadow-2xl py-1 z-50">
+            <div className="absolute top-13 left-0 w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-xl overflow-hidden shadow-2xl py-1 z-50">
               {searchResults.map((patient) => (
                 <button
                   key={patient._id}
                   type="button"
                   onMouseDown={() => handleResultClick(patient._id)}
-                  className="block w-full text-left px-4 py-2.5 hover:bg-white/5 hover:bg-black/3 transition-all cursor-pointer border-none outline-none"
+                  className="block w-full text-left px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-white/5 transition-all cursor-pointer border-none outline-none"
                 >
-                  <div className="text-sm font-semibold text-white">{patient.name}</div>
-                  <div className="text-xs text-slate-400 mt-0.5">
+                  <div className="text-sm font-semibold text-slate-900 dark:text-white">{patient.name}</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                     Tel : {patient.phone} {patient.nationalId ? `• CNIE : ${patient.nationalId}` : ''}
                   </div>
                 </button>
@@ -144,7 +144,7 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
       {/* Utilities: Notifications, System Status */}
       <div className="flex items-center gap-3 sm:gap-6 shrink-0">
         {/* Connection health check lamp */}
-        <div className="hidden md:flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 px-3.5 py-1.5 rounded-full text-xs font-semibold text-emerald-400">
+        <div className="hidden md:flex items-center gap-2 bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20 px-3.5 py-1.5 rounded-full text-xs font-semibold">
           <span className="relative flex h-2 w-2">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
@@ -154,8 +154,8 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
 
         {/* Local time widget */}
         <div className="hidden sm:block text-right">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest">Heure locale</p>
-          <p className="text-sm font-bold text-white tracking-tight">
+          <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Heure locale</p>
+          <p className="text-sm font-bold text-slate-900 dark:text-white tracking-tight">
             {new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
           </p>
         </div>
@@ -164,7 +164,7 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
         <button
           onClick={toggleTheme}
           type="button"
-          className="p-2.5 rounded-xl border border-white/5 bg-slate-900/40 hover:bg-slate-900/80 text-slate-400 hover:text-white transition-all cursor-pointer flex items-center justify-center"
+          className="p-2.5 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100 hover:bg-slate-200 dark:bg-slate-900/40 dark:hover:bg-slate-900/80 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-all cursor-pointer flex items-center justify-center"
           title={theme === 'light' ? 'Mode Sombre' : 'Mode Clair'}
         >
           {theme === 'light' ? (

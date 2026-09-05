@@ -14,7 +14,7 @@ export interface Patient {
   email?: string;
   address?: string;
   birthDate: string;
-  gender: 'Male' | 'Female' | 'Other';
+  gender: 'Male' | 'Female';
   bloodType?: string;
   emergencyContact?: {
     name: string;

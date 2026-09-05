@@ -106,6 +106,11 @@ export class NotificationProviderService {
       if (result.success) {
         return { success: true, provider: 'WhatsAppWebJS', messageId: result.messageId };
       }
+      return {
+        success: false,
+        provider: 'WhatsAppWebJS',
+        errorDetails: result.error || "Échec de l'envoi du message WhatsApp",
+      };
     }
 
     if (settings.whatsAppProvider === 'MetaCloud') {
@@ -139,11 +144,20 @@ export class NotificationProviderService {
       }
     }
 
-    // Fallback simulation mode
+    // If test mode is explicitly ON and WhatsApp is not connected, simulate for offline UI testing
+    if (settings.testMode) {
+      return {
+        success: true,
+        provider: 'WhatsAppWebJS (Simulé - Mode Test)',
+        messageId: `wa-sim-${Date.now()}`,
+      };
+    }
+
+    // Real mode: Return explicit error informing user to scan QR Code
     return {
-      success: true,
-      provider: settings.whatsAppProvider || 'WhatsAppWebJS',
-      messageId: `wa-sim-${Date.now()}`,
+      success: false,
+      provider: 'WhatsAppWebJS',
+      errorDetails: "WhatsApp Web non connecté. Veuillez scanner le QR Code dans l'onglet 'Configuration APIs & Canaux'.",
     };
   }
 

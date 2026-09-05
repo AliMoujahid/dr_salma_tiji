@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import mongoose from 'mongoose';
 import Invoice from '../models/Invoice';
 import Patient from '../models/Patient';
+import PaymentTransaction from '../models/Payment';
 import { protect, AuthRequest } from '../middleware/auth';
 
 const router = Router();
@@ -168,6 +169,22 @@ router.post('/', protect, async (req: AuthRequest, res: Response) => {
       paidAmount: finalPaidAmount,
       createdBy: req.user?._id,
     });
+
+    // Automatically record initial payment transaction for revenue & audit synchronization
+    if (finalPaidAmount > 0) {
+      try {
+        await PaymentTransaction.create({
+          invoiceId: newInvoice._id,
+          patientId,
+          amount: finalPaidAmount,
+          paymentMethod: paymentMode || 'espèces',
+          notes: `Règlement initial / Avance - Facture N° ${invoiceNumber}`,
+          date: invoiceDateObj,
+        });
+      } catch (payErr) {
+        console.warn('Warning creating initial PaymentTransaction:', payErr);
+      }
+    }
 
     const populated = await Invoice.findById(newInvoice._id)
       .populate('patientId', 'name phone nationalId')

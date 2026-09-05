@@ -161,7 +161,7 @@ router.put('/:id/rename', protect, async (req: AuthRequest, res: Response) => {
     }
 
     // Rename file physically on disk safely
-    const absolutePath = path.join(__dirname, '..', '..', 'uploads', doc.filePath);
+    const absolutePath = path.join(__dirname, '..', '..', 'uploads', doc.filePath.replace(/^\/+/, ''));
     const dir = path.dirname(absolutePath);
     const ext = path.extname(absolutePath);
     
@@ -208,7 +208,7 @@ router.delete('/:id', protect, async (req: AuthRequest, res: Response) => {
 
     // Delete physical file on disk safely
     try {
-      const absolutePath = path.join(__dirname, '..', '..', 'uploads', doc.filePath);
+      const absolutePath = path.join(__dirname, '..', '..', 'uploads', doc.filePath.replace(/^\/+/, ''));
       if (fs.existsSync(absolutePath)) {
         fs.unlinkSync(absolutePath);
       }

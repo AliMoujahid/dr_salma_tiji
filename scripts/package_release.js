@@ -149,19 +149,124 @@ exit
 `;
 fs.writeFileSync(path.join(RELEASE_DIR, 'Lancer_Application.bat'), lancerAppBat, 'utf8');
 
-// 7.2 CreateShortcut.vbs & Installer_Cabinet.bat
+// 7.1.b Lancer_Silencieux.vbs (100% Invisible - 0 Fenêtre Console)
+const lancerSilencieuxVbs = `' ==============================================================================
+' LANCEUR SILENCIEUX & INVISIBLE - CABINET DENTAIRE DR. SALMA TIJINI
+' ==============================================================================
+Set WshShell = CreateObject("WScript.Shell")
+Set fso = CreateObject("Scripting.FileSystemObject")
+
+sCurDir = fso.GetParentFolderName(WScript.ScriptFullName)
+If Right(sCurDir, 1) <> "\\" Then sCurDir = sCurDir & "\\"
+
+' 1. Verifier si l'application tourne deja sur le port 5000
+Dim oExec, sOutput
+Set oExec = WshShell.Exec("cmd /c netstat -ano | findstr :5000 | findstr LISTENING")
+sOutput = oExec.StdOut.ReadAll()
+
+If InStr(sOutput, "LISTENING") > 0 Then
+    WshShell.Run "http://localhost:5000", 1, False
+    WScript.Quit 0
+End If
+
+' 2. Demarrer le serveur en arriere-plan 100% invisible (Style = 0)
+WshShell.Run "cmd /c ""cd /d """ & sCurDir & "app"" && node server.js""", 0, False
+
+' 3. Attendre l'initialisation et ouvrir le navigateur
+WScript.Sleep 2500
+WshShell.Run "http://localhost:5000", 1, False
+`;
+fs.writeFileSync(path.join(RELEASE_DIR, 'Lancer_Silencieux.vbs'), lancerSilencieuxVbs, 'utf8');
+
+// 7.1.c PM2 Ecosystem Config
+const ecosystemConfigJs = `module.exports = {
+  apps: [
+    {
+      name: 'cabinet-dr-salma-tijini',
+      script: './app/server.js',
+      cwd: __dirname,
+      instances: 1,
+      autorestart: true,
+      watch: false,
+      max_memory_restart: '800M',
+      env: {
+        NODE_ENV: 'production',
+        PORT: 5000,
+      },
+      error_file: './Sauvegardes_Cabinet/logs/pm2-error.log',
+      out_file: './Sauvegardes_Cabinet/logs/pm2-out.log',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss',
+    },
+  ],
+};
+`;
+fs.writeFileSync(path.join(RELEASE_DIR, 'ecosystem.config.js'), ecosystemConfigJs, 'utf8');
+
+// 7.1.d Lancer_PM2.bat & Arreter_PM2.bat
+const lancerPm2Bat = `@echo off
+title Lancer PM2 - Cabinet Dr. Salma Tijini
+color 0B
+cls
+
+echo =======================================================================
+echo    LANCEMENT DU CABINET VIA PM2 (PROCESSUS ARRIERE-PLAN INVISIBLE)
+echo =======================================================================
+echo.
+
+where pm2 >nul 2>nul
+if %errorlevel% equ 0 (
+    pm2 start ecosystem.config.js
+    pm2 save
+) else (
+    npx pm2 start ecosystem.config.js
+)
+
+timeout /t 2 >nul
+start http://localhost:5000
+exit
+`;
+fs.writeFileSync(path.join(RELEASE_DIR, 'Lancer_PM2.bat'), lancerPm2Bat, 'utf8');
+
+const arreterPm2Bat = `@echo off
+title Arreter PM2 - Cabinet Dr. Salma Tijini
+color 0C
+cls
+
+echo =======================================================================
+echo     ARRET DU SERVEUR PM2 - CABINET DENTAIRE DR. SALMA TIJINI
+echo =======================================================================
+echo.
+
+where pm2 >nul 2>nul
+if %errorlevel% equ 0 (
+    pm2 stop cabinet-dr-salma-tijini
+    pm2 delete cabinet-dr-salma-tijini
+) else (
+    npx pm2 stop cabinet-dr-salma-tijini
+    npx pm2 delete cabinet-dr-salma-tijini
+)
+
+echo [OK] Serveur PM2 arrete.
+timeout /t 2 >nul
+exit
+`;
+fs.writeFileSync(path.join(RELEASE_DIR, 'Arreter_PM2.bat'), arreterPm2Bat, 'utf8');
+
+// 7.2 CreateShortcut.vbs & Installer_Cabinet.bat (Updated to point to Lancer_Silencieux.vbs)
 const createShortcutVbs = `Set oWS = CreateObject("WScript.Shell")
 
 sCurDir = oWS.CurrentDirectory
 If Right(sCurDir, 1) <> "\\" Then sCurDir = sCurDir & "\\"
 
-sTarget = sCurDir & "Lancer_Application.bat"
+sTarget = "wscript.exe"
+sArguments = """" & sCurDir & "Lancer_Silencieux.vbs"""
 
 ' Desktop Shortcut
 sDesktop = oWS.SpecialFolders("Desktop")
 sDesktopLink = sDesktop & "\\Cabinet Dr Salma Tijini.lnk"
 Set oLink = oWS.CreateShortcut(sDesktopLink)
 oLink.TargetPath = sTarget
+oLink.Arguments = sArguments
 oLink.WorkingDirectory = sCurDir
 oLink.Description = "Gestion Clinique - Cabinet Dr. Salma Tijini"
 If FileExists(sCurDir & "logo.png") Then oLink.IconLocation = sCurDir & "logo.png"
@@ -172,6 +277,7 @@ sStartup = oWS.SpecialFolders("Startup")
 sStartupLink = sStartup & "\\Cabinet_Dr_Salma_Tijini.lnk"
 Set oStartupLink = oWS.CreateShortcut(sStartupLink)
 oStartupLink.TargetPath = sTarget
+oStartupLink.Arguments = sArguments
 oStartupLink.WorkingDirectory = sCurDir
 oStartupLink.Description = "Demarrage Automatique Cabinet Dr Salma Tijini"
 If FileExists(sCurDir & "logo.png") Then oStartupLink.IconLocation = sCurDir & "logo.png"
@@ -194,11 +300,12 @@ echo       INSTALLATION DU SYSTEME - CABINET DENTAIRE DR. SALMA TIJINI
 echo =======================================================================
 echo.
 echo Cette operation va :
-echo  1. Creer un raccourci direct sur le Bureau de l'ordinateur
-echo  2. Configurer le demarrage automatique avec Windows
+echo  1. Creer un raccourci direct et SILENCIEUX sur le Bureau
+echo  2. Configurer le demarrage automatique invisible avec Windows
+echo     (AUCUNE fenetre console noire n'apparaitra !)
 echo.
 
-echo [1/2] Creation du raccourci sur votre Bureau et au demarrage...
+echo [1/2] Creation du raccourci silencieux sur votre Bureau et au demarrage...
 cscript //nologo "%~dp0CreateShortcut.vbs"
 
 echo [2/2] Configuration du demarrage automatique avec Windows validee.
@@ -207,11 +314,11 @@ echo.
 echo =======================================================================
 echo   [OK] INSTALLATION ET DEMARRAGE AUTOMATIQUE CONFIGURES AVEC SUCCES !
 echo.
-echo   - Raccourci ajoute sur votre Bureau : "Cabinet Dr Salma Tijini"
-echo   - Demarrage automatique au redemarrage du PC : ACTIVE
+echo   - Raccourci silencieux ajoute sur le Bureau : "Cabinet Dr Salma Tijini"
+echo   - Demarrage 100%% invisible au redemarrage du PC : ACTIVE
 echo.
-echo   Des que le PC se rallume, l'application et la base de donnees
-echo   se lancent toutes seules !
+echo   Des que vous cliquez sur le raccourci ou allumez le PC,
+echo   l'application demarre sans aucune fenetre console noire !
 echo =======================================================================
 echo.
 pause
