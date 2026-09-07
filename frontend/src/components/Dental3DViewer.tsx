@@ -119,6 +119,274 @@ const STATUS_CONFIGS: Record<
   'Wisdom Tooth': { label: 'Dent de Sagesse', color: 'bg-indigo-500', hex: '#6366f1' },
 };
 
+// --- HIGH-PRECISION ANATOMICAL CROWN & ROOT PROCEDURAL 3D SCULPTOR ---
+// (0,0,0) is placed exactly at the cervical line (gumline)
+const buildAnatomicalCrown = (
+  type: 'Incisor' | 'Canine' | 'Premolar' | 'Molar', 
+  isUpper: boolean, 
+  fdiNumber: number
+) => {
+  const isCentralIncisor = fdiNumber === 11 || fdiNumber === 21 || fdiNumber === 51 || fdiNumber === 61;
+  const isLateralIncisor = fdiNumber === 12 || fdiNumber === 22 || fdiNumber === 52 || fdiNumber === 62;
+  const isLowerIncisor = (fdiNumber >= 31 && fdiNumber <= 42) || (fdiNumber >= 71 && fdiNumber <= 82);
+
+  if (type === 'Incisor') {
+    // 1. Realistic Human Incisor Crown (matching Typodont photo 2!)
+    // Upper central incisors are large spade-shaped teeth; lower incisors are slender chisels
+    let width = 0.50;
+    let height = 0.72;
+    let depth = 0.34;
+
+    if (isUpper) {
+      width = isCentralIncisor ? 0.64 : (isLateralIncisor ? 0.54 : 0.48);
+      height = isCentralIncisor ? 0.80 : 0.74;
+      depth = 0.36;
+    } else {
+      width = isLowerIncisor ? 0.50 : 0.54;
+      height = 0.70;
+      depth = 0.30;
+    }
+
+    const baseGeo = new THREE.BoxGeometry(width, height, depth, 20, 20, 20);
+    baseGeo.translate(0, isUpper ? -height / 2 : height / 2, 0);
+
+    const pos = baseGeo.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      let x = pos.getX(i);
+      let y = pos.getY(i);
+      let z = pos.getZ(i);
+      const t = isUpper ? -y / height : y / height; // 0 (cervix/gumline) to 1 (incisal edge)
+
+      // Cervical neck taper (creates distinct cervical embrasures)
+      const neck = 0.68 + 0.32 * Math.sin(t * Math.PI * 0.5);
+      x *= neck;
+
+      // Incisal embrasure rounding (creates distinct mesial/distal separation lines between teeth 11 & 21)
+      if (t > 0.68) {
+        const edgeDist = Math.abs(x) / (width * 0.5);
+        if (edgeDist > 0.50) {
+          const embrasureTaper = 1.0 - 0.22 * Math.pow((edgeDist - 0.50) / 0.50, 1.8);
+          x *= embrasureTaper;
+        }
+      }
+
+      // Incisal thinning towards incisal edge
+      const depthFactor = 1.0 - 0.58 * Math.pow(t, 1.2);
+      z *= depthFactor;
+
+      // Labial curvature (3D smooth convex front face) & Lingual fossa (concave back)
+      if (z > 0) {
+        // Smooth curved front labial face
+        z += 0.05 * Math.sin(t * Math.PI) * Math.cos((x / (width * 0.5)) * (Math.PI / 2.2));
+      } else {
+        // Lingual cingulum near cervix + lingual fossa concavity
+        if (t < 0.28) {
+          z -= 0.04 * Math.cos(t * Math.PI * 2); // cingulum bulge
+        } else {
+          z += 0.05 * Math.sin((t - 0.28) * Math.PI * 1.3); // lingual fossa
+        }
+      }
+
+      // Rounded incisal edge corners (mesial slightly sharper, distal rounded)
+      if (t > 0.82) {
+        const cornerFactor = Math.abs(x) / (width * 0.5);
+        if (cornerFactor > 0.65) {
+          const drop = 0.05 * Math.pow((cornerFactor - 0.65) / 0.35, 2.2);
+          y += isUpper ? drop : -drop;
+        }
+      }
+
+      pos.setXYZ(i, x, y, z);
+    }
+    baseGeo.computeVertexNormals();
+    return baseGeo;
+
+  } else if (type === 'Canine') {
+    // 2. Realistic Canine Crown (pointed sharp cusp tip, central labial ridge & robust shoulders)
+    const width = isUpper ? 0.66 : 0.60;
+    const height = isUpper ? 0.84 : 0.78;
+    const depth = 0.44;
+
+    const baseGeo = new THREE.CylinderGeometry(width * 0.5, width * 0.35, height, 28, 20);
+    baseGeo.translate(0, isUpper ? -height / 2 : height / 2, 0);
+
+    const pos = baseGeo.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      let x = pos.getX(i);
+      let y = pos.getY(i);
+      let z = pos.getZ(i);
+      const t = isUpper ? -y / height : y / height;
+
+      // Diamond-ish cross section (flatten labiolingually)
+      z *= 0.78;
+
+      // Prominent Labial Ridge (central vertical ridge on front)
+      if (z > 0) {
+        const cFactor = Math.max(0, 1 - Math.abs(x) / (width * 0.4));
+        z += 0.06 * cFactor * Math.sin(t * Math.PI);
+      }
+
+      // Pointed Cusp Tip at Apex with mesial/distal slopes
+      if (t > 0.68) {
+        const tipFactor = (1 - t) / 0.32;
+        x *= (0.2 + 0.8 * tipFactor);
+        z *= (0.2 + 0.8 * tipFactor);
+        if (t > 0.94) y += isUpper ? -0.04 : 0.04;
+      }
+
+      // Cervical constriction at gumline
+      if (t < 0.25) {
+        const neck = 0.72 + 0.28 * (t / 0.25);
+        x *= neck;
+        z *= neck;
+      }
+
+      pos.setXYZ(i, x, y, z);
+    }
+    baseGeo.computeVertexNormals();
+    return baseGeo;
+
+  } else if (type === 'Premolar') {
+    // 3. Bicuspid Premolar Crown (2 distinct cusps)
+    const width = 0.58;
+    const height = 0.64;
+    const depth = 0.58;
+    const baseGeo = new THREE.BoxGeometry(width, height, depth, 20, 20, 20);
+    baseGeo.translate(0, isUpper ? -height / 2 : height / 2, 0);
+
+    const pos = baseGeo.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      let x = pos.getX(i);
+      let y = pos.getY(i);
+      let z = pos.getZ(i);
+      const t = isUpper ? -y / height : y / height;
+
+      const r = Math.sqrt((x / (width * 0.5)) ** 2 + (z / (depth * 0.5)) ** 2);
+      if (r > 1) {
+        x /= r;
+        z /= r;
+      }
+
+      const neck = 0.70 + 0.30 * Math.sin(t * Math.PI * 0.5);
+      x *= neck;
+      z *= neck;
+
+      // 2 Cusps on occlusal surface
+      if (t > 0.58) {
+        const oFactor = (t - 0.58) / 0.42;
+        if (z > 0.06) {
+          const d = Math.sqrt(x * x + (z - 0.15) ** 2);
+          const lift = 0.09 * oFactor * Math.max(0, 1 - d / 0.22);
+          y += isUpper ? -lift : lift;
+        } else if (z < -0.06) {
+          const d = Math.sqrt(x * x + (z + 0.15) ** 2);
+          const lift = 0.07 * oFactor * Math.max(0, 1 - d / 0.22);
+          y += isUpper ? -lift : lift;
+        }
+        if (Math.abs(z) < 0.08) {
+          const dip = 0.06 * oFactor * (1 - Math.abs(z) / 0.08);
+          y += isUpper ? dip : -dip;
+        }
+      }
+
+      pos.setXYZ(i, x, y, z);
+    }
+    baseGeo.computeVertexNormals();
+    return baseGeo;
+
+  } else {
+    // 4. Quadricuspid Molar Crown
+    const width = 0.74;
+    const height = 0.62;
+    const depth = 0.76;
+    const baseGeo = new THREE.BoxGeometry(width, height, depth, 24, 24, 24);
+    baseGeo.translate(0, isUpper ? -height / 2 : height / 2, 0);
+
+    const pos = baseGeo.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      let x = pos.getX(i);
+      let y = pos.getY(i);
+      let z = pos.getZ(i);
+      const t = isUpper ? -y / height : y / height;
+
+      // Rounded rectangular molar contour
+      const maxR = 0.88;
+      const cornerR = Math.pow(Math.abs(x / (width * 0.5)), 3) + Math.pow(Math.abs(z / (depth * 0.5)), 3);
+      if (cornerR > maxR) {
+        const scale = Math.pow(maxR / cornerR, 0.25);
+        x *= scale;
+        z *= scale;
+      }
+
+      if (t < 0.35) {
+        const neck = 0.72 + 0.28 * (t / 0.35);
+        x *= neck;
+        z *= neck;
+      } else if (t < 0.6) {
+        const bulge = 1.0 + 0.04 * Math.sin((t - 0.35) / 0.25 * Math.PI);
+        x *= bulge;
+        z *= bulge;
+      }
+
+      // 4 Cusps & Fossa
+      if (t > 0.55) {
+        const oFactor = Math.pow((t - 0.55) / 0.45, 1.2);
+        const cusps = [
+          { cx: -0.20, cz:  0.20, h: 0.11 }, // Mesio-Buccal
+          { cx:  0.20, cz:  0.20, h: 0.10 }, // Disto-Buccal
+          { cx: -0.20, cz: -0.20, h: 0.09 }, // Mesio-Lingual
+          { cx:  0.20, cz: -0.20, h: 0.08 }, // Disto-Lingual
+        ];
+
+        let cuspLift = 0;
+        for (const c of cusps) {
+          const d = Math.sqrt((x - c.cx) ** 2 + (z - c.cz) ** 2);
+          if (d < 0.24) {
+            cuspLift += c.h * Math.cos((d / 0.24) * (Math.PI / 2));
+          }
+        }
+        y += isUpper ? -cuspLift * oFactor : cuspLift * oFactor;
+
+        // Central fossa dip
+        const centerDist = Math.sqrt(x * x + z * z);
+        if (centerDist < 0.22) {
+          const dip = 0.08 * oFactor * Math.cos((centerDist / 0.22) * (Math.PI / 2));
+          y += isUpper ? dip : -dip;
+        }
+
+        // Grooves
+        if (Math.abs(x) < 0.05 || Math.abs(z) < 0.05) {
+          const groove = 0.035 * oFactor;
+          y += isUpper ? groove : -groove;
+        }
+      }
+
+      pos.setXYZ(i, x, y, z);
+    }
+    baseGeo.computeVertexNormals();
+    return baseGeo;
+  }
+};
+
+const buildAnatomicalRoot = (isUpper: boolean) => {
+  const height = 0.95;
+  const geo = new THREE.CylinderGeometry(0.18, 0.04, height, 16);
+  geo.translate(0, isUpper ? height / 2 : -height / 2, 0);
+
+  const pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    let y = pos.getY(i);
+    let x = pos.getX(i);
+    const t = isUpper ? y / height : -y / height;
+    if (t > 0.5) {
+      x -= 0.08 * Math.pow((t - 0.5) / 0.5, 2);
+    }
+    pos.setX(i, x);
+  }
+  geo.computeVertexNormals();
+  return geo;
+};
+
 // --- PHOTOREALISTIC HUMAN 3D TOOTH MESH COMPONENT ---
 const ToothMesh3D: React.FC<{
   fdiNumber: number;
@@ -134,77 +402,23 @@ const ToothMesh3D: React.FC<{
   const statusCfg = STATUS_CONFIGS[status] || STATUS_CONFIGS.Healthy;
   const isUpper = meta.jaw === 'Maxillary';
 
-  // High-definition anatomical crown & root geometry generators
+  // Anatomical 3D organic crown & root geometry generators
   const { crownGeo, rootGeo, implantGeo } = useMemo(() => {
-    let cGeo: THREE.BufferGeometry;
+    const cGeo = buildAnatomicalCrown(meta.type, isUpper, fdiNumber);
+    const rGeo = buildAnatomicalRoot(isUpper);
 
-    if (meta.type === 'Incisor') {
-      // Natural human spade incisor with curved labial face, rounded corners & sculpted incisal edge
-      const shape = new THREE.Shape();
-      shape.moveTo(-0.25, -0.32);
-      shape.bezierCurveTo(-0.27, -0.1, -0.27, 0.22, -0.24, 0.35); // mesial curved contour
-      shape.bezierCurveTo(-0.12, 0.38, 0.12, 0.38, 0.24, 0.35);  // rounded incisal edge
-      shape.bezierCurveTo(0.27, 0.22, 0.27, -0.1, 0.25, -0.32);  // distal curved contour
-      shape.bezierCurveTo(0.13, -0.38, -0.13, -0.38, -0.25, -0.32); // cervical line
-      
-      const extrudeSettings = { depth: 0.24, bevelEnabled: true, bevelSegments: 8, steps: 3, bevelSize: 0.08, bevelThickness: 0.08 };
-      cGeo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-      cGeo.center();
-    } else if (meta.type === 'Canine') {
-      // Natural sharp canine crown with distinct labial ridge, pointed cusp tip & prominent cingulum
-      const shape = new THREE.Shape();
-      shape.moveTo(-0.26, -0.34);
-      shape.bezierCurveTo(-0.28, -0.1, -0.28, 0.12, -0.18, 0.26);
-      shape.lineTo(0.0, 0.44); // prominent sharp cusp tip
-      shape.lineTo(0.18, 0.26);
-      shape.bezierCurveTo(0.28, 0.12, 0.28, -0.1, 0.26, -0.34);
-      shape.bezierCurveTo(0.13, -0.4, -0.13, -0.4, -0.26, -0.34);
-
-      const extrudeSettings = { depth: 0.3, bevelEnabled: true, bevelSegments: 8, steps: 3, bevelSize: 0.09, bevelThickness: 0.09 };
-      cGeo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-      cGeo.center();
-    } else if (meta.type === 'Premolar') {
-      // Bicuspid crown with buccal and lingual anatomical cusps & central groove
-      const shape = new THREE.Shape();
-      shape.moveTo(-0.3, -0.28);
-      shape.bezierCurveTo(-0.34, 0, -0.34, 0.28, -0.3, 0.28);
-      shape.bezierCurveTo(0, 0.34, 0.3, 0.34, 0.3, 0.28);
-      shape.bezierCurveTo(0.34, 0, 0.34, -0.28, 0.3, -0.28);
-      shape.bezierCurveTo(0, -0.34, -0.3, -0.34, -0.3, -0.28);
-
-      const extrudeSettings = { depth: 0.52, bevelEnabled: true, bevelSegments: 8, steps: 3, bevelSize: 0.11, bevelThickness: 0.11 };
-      cGeo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-      cGeo.center();
-    } else {
-      // Molar crown: quadricuspid occlusal table with rounded cusps and central occlusal pit
-      const shape = new THREE.Shape();
-      shape.moveTo(-0.38, -0.36);
-      shape.bezierCurveTo(-0.42, 0, -0.42, 0.36, -0.38, 0.36);
-      shape.bezierCurveTo(0, 0.42, 0.38, 0.42, 0.38, 0.36);
-      shape.bezierCurveTo(0.42, 0, 0.42, -0.36, 0.38, -0.36);
-      shape.bezierCurveTo(0, -0.42, -0.38, -0.42, -0.38, -0.36);
-
-      const extrudeSettings = { depth: 0.54, bevelEnabled: true, bevelSegments: 10, steps: 4, bevelSize: 0.13, bevelThickness: 0.13 };
-      cGeo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-      cGeo.center();
-    }
-
-    // Anatomical tapered root with realistic apical curve
-    const rGeo = new THREE.CylinderGeometry(0.2, 0.05, 0.95, 16);
     // Titanium implant screw
-    const impGeo = new THREE.CylinderGeometry(0.2, 0.14, 1.0, 16);
+    const impGeo = new THREE.CylinderGeometry(0.19, 0.13, 0.98, 16);
+    impGeo.translate(0, isUpper ? 0.49 : -0.49, 0);
 
     return { crownGeo: cGeo, rootGeo: rGeo, implantGeo: impGeo };
-  }, [meta]);
+  }, [meta, fdiNumber, isUpper]);
 
   const isMissingOrExtracted = status === 'Missing' || status === 'Extracted';
   const isImplant = status === 'Implant';
 
-  const crownYOffset = isUpper ? -0.34 : 0.34;
-  const rootYOffset = isUpper ? 0.48 : -0.48;
-
   // Realistic natural enamel color
-  const enamelColor = status === 'Healthy' ? '#fffef4' : statusCfg.hex;
+  const enamelColor = status === 'Healthy' ? '#fffdf2' : statusCfg.hex;
 
   return (
     <group
@@ -216,13 +430,18 @@ const ToothMesh3D: React.FC<{
         if (onClick) onClick();
       }}
     >
-      {/* Photorealistic Enamel Crown Mesh */}
+      {/* Photorealistic Porcelain Enamel Crown Mesh */}
       {!isMissingOrExtracted && (
-        <mesh position={[0, crownYOffset, 0]} geometry={crownGeo} castShadow receiveShadow>
-          <meshStandardMaterial
+        <mesh geometry={crownGeo} castShadow receiveShadow>
+          <meshPhysicalMaterial
             color={isSelected ? '#2563eb' : enamelColor}
-            roughness={isSelected ? 0.2 : (statusCfg.roughness ?? 0.12)}
+            roughness={isSelected ? 0.15 : (statusCfg.roughness ?? 0.14)}
             metalness={isSelected ? 0.1 : (statusCfg.metalness ?? 0.02)}
+            clearcoat={status === 'Healthy' ? 0.95 : 0.4}
+            clearcoatRoughness={0.06}
+            reflectivity={0.9}
+            transmission={0.02}
+            ior={1.62}
             transparent={Boolean(statusCfg.opacity)}
             opacity={statusCfg.opacity ?? 1.0}
           />
@@ -231,32 +450,32 @@ const ToothMesh3D: React.FC<{
 
       {/* Anatomical Root Mesh(es) */}
       {!isMissingOrExtracted && !isImplant && (
-        <group position={[0, rootYOffset, 0]}>
+        <group>
           {meta.rootCount === 1 && (
-            <mesh rotation={[isUpper ? 0 : Math.PI, 0, 0]} geometry={rootGeo} castShadow>
-              <meshStandardMaterial color="#fefaf2" roughness={0.38} />
+            <mesh geometry={rootGeo} castShadow>
+              <meshStandardMaterial color="#fcf6ea" roughness={0.35} />
             </mesh>
           )}
           {meta.rootCount === 2 && (
             <>
-              <mesh position={[-0.14, 0, 0]} rotation={[isUpper ? 0 : Math.PI, 0, -0.15]} geometry={rootGeo} castShadow>
-                <meshStandardMaterial color="#fefaf2" roughness={0.38} />
+              <mesh position={[-0.12, 0, 0]} rotation={[0, 0, isUpper ? -0.12 : 0.12]} geometry={rootGeo} castShadow>
+                <meshStandardMaterial color="#fcf6ea" roughness={0.35} />
               </mesh>
-              <mesh position={[0.14, 0, 0]} rotation={[isUpper ? 0 : Math.PI, 0, 0.15]} geometry={rootGeo} castShadow>
-                <meshStandardMaterial color="#fefaf2" roughness={0.38} />
+              <mesh position={[0.12, 0, 0]} rotation={[0, 0, isUpper ? 0.12 : -0.12]} geometry={rootGeo} castShadow>
+                <meshStandardMaterial color="#fcf6ea" roughness={0.35} />
               </mesh>
             </>
           )}
           {meta.rootCount >= 3 && (
             <>
-              <mesh position={[-0.14, 0, -0.08]} rotation={[isUpper ? 0 : Math.PI, -0.1, -0.15]} geometry={rootGeo} castShadow>
-                <meshStandardMaterial color="#fefaf2" roughness={0.38} />
+              <mesh position={[-0.12, 0, -0.06]} rotation={[0, -0.1, isUpper ? -0.12 : 0.12]} geometry={rootGeo} castShadow>
+                <meshStandardMaterial color="#fcf6ea" roughness={0.35} />
               </mesh>
-              <mesh position={[0.14, 0, -0.08]} rotation={[isUpper ? 0 : Math.PI, 0.1, 0.15]} geometry={rootGeo} castShadow>
-                <meshStandardMaterial color="#fefaf2" roughness={0.38} />
+              <mesh position={[0.12, 0, -0.06]} rotation={[0, 0.1, isUpper ? 0.12 : -0.12]} geometry={rootGeo} castShadow>
+                <meshStandardMaterial color="#fcf6ea" roughness={0.35} />
               </mesh>
-              <mesh position={[0, 0, 0.12]} rotation={[isUpper ? 0 : Math.PI, 0.2, 0]} geometry={rootGeo} castShadow>
-                <meshStandardMaterial color="#fefaf2" roughness={0.38} />
+              <mesh position={[0, 0, 0.10]} rotation={[0, 0.2, 0]} geometry={rootGeo} castShadow>
+                <meshStandardMaterial color="#fcf6ea" roughness={0.35} />
               </mesh>
             </>
           )}
@@ -265,14 +484,14 @@ const ToothMesh3D: React.FC<{
 
       {/* Titanium Implant Screw */}
       {isImplant && (
-        <mesh position={[0, rootYOffset, 0]} geometry={implantGeo} castShadow>
+        <mesh geometry={implantGeo} castShadow>
           <meshStandardMaterial color="#94a3b8" metalness={0.92} roughness={0.15} />
         </mesh>
       )}
 
-      {/* Sleek Floating FDI Badge */}
+      {/* Floating FDI Badge */}
       {showLabels && (
-        <Html position={[0, isUpper ? 1.05 : -1.05, 0]} center distanceFactor={12}>
+        <Html position={[0, isUpper ? 0.95 : -0.95, 0]} center distanceFactor={12}>
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -292,32 +511,67 @@ const ToothMesh3D: React.FC<{
   );
 };
 
-// --- PHOTOREALISTIC GINGIVA (GUM) ARCH & PALATAL VAULT MESH ---
-const GingivaArchMesh: React.FC<{ jaw: 'Maxillary' | 'Mandibular' }> = ({ jaw }) => {
-  const curvePoints = useMemo(() => {
-    const points: THREE.Vector3[] = [];
-    const isUpper = jaw === 'Maxillary';
-    const yPos = isUpper ? 0.48 : -0.48;
-    for (let i = 0; i <= 16; i++) {
-      const angle = (i / 16) * Math.PI - Math.PI / 2;
-      const rx = 3.3 * Math.sin(angle);
-      const rz = 2.7 * Math.cos(angle) - 1.1;
-      points.push(new THREE.Vector3(rx, yPos, rz));
+// --- PHOTOREALISTIC GINGIVA (GUM) ARCH MESHES ---
+const MaxillaryGingivaMesh: React.FC<{ showRoots: boolean }> = ({ showRoots }) => {
+  const archGeo = useMemo(() => {
+    // Alveolar Arch Ridge (Upper Gum Tube)
+    const curvePoints: THREE.Vector3[] = [];
+    const count = 32;
+    for (let i = 0; i <= count; i++) {
+      const t = i / count;
+      const angle = (t * 0.84 - 0.42) * Math.PI;
+      const rx = 2.95 * Math.sin(angle);
+      const rz = 2.45 * Math.cos(angle) - 1.1;
+      curvePoints.push(new THREE.Vector3(rx, 0.86, rz));
     }
-    return new THREE.CatmullRomCurve3(points);
-  }, [jaw]);
-
-  const tubeGeo = useMemo(() => new THREE.TubeGeometry(curvePoints, 36, 0.52, 16, false), [curvePoints]);
+    const curve = new THREE.CatmullRomCurve3(curvePoints);
+    return new THREE.TubeGeometry(curve, 64, 0.32, 20, false);
+  }, []);
 
   return (
-    <group>
-      {/* Alveolar Ridge Gum Tube with natural pink mucosal tone */}
-      <mesh geometry={tubeGeo} receiveShadow>
-        <meshStandardMaterial color="#dc687c" roughness={0.3} opacity={0.96} transparent />
-      </mesh>
-    </group>
+    <mesh geometry={archGeo} receiveShadow castShadow>
+      <meshPhysicalMaterial
+        color="#d86577"
+        roughness={0.28}
+        clearcoat={0.5}
+        clearcoatRoughness={0.12}
+        transparent={showRoots}
+        opacity={showRoots ? 0.35 : 0.98}
+      />
+    </mesh>
   );
 };
+
+const MandibularGingivaMesh: React.FC<{ showRoots: boolean }> = ({ showRoots }) => {
+  const archGeo = useMemo(() => {
+    const curvePoints: THREE.Vector3[] = [];
+    const count = 32;
+    for (let i = 0; i <= count; i++) {
+      const t = i / count;
+      const angle = (t * 0.84 - 0.42) * Math.PI;
+      const rx = 2.95 * Math.sin(angle);
+      const rz = 2.45 * Math.cos(angle) - 1.1;
+      curvePoints.push(new THREE.Vector3(rx, -0.86, rz));
+    }
+    const curve = new THREE.CatmullRomCurve3(curvePoints);
+    return new THREE.TubeGeometry(curve, 64, 0.32, 20, false);
+  }, []);
+
+  return (
+    <mesh geometry={archGeo} receiveShadow castShadow>
+      <meshPhysicalMaterial
+        color="#d86577"
+        roughness={0.28}
+        clearcoat={0.5}
+        clearcoatRoughness={0.12}
+        transparent={showRoots}
+        opacity={showRoots ? 0.35 : 0.98}
+      />
+    </mesh>
+  );
+};
+
+
 
 // --- MAIN 3D DENTAL CHART COMPONENT ---
 interface Dental3DViewerProps {
@@ -336,9 +590,10 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId }) => 
   const [jawFilter, setJawFilter] = useState<'All' | 'Maxillary' | 'Mandibular'>('All');
   const [autoRotate, setAutoRotate] = useState<boolean>(false);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const [showRoots, setShowRoots] = useState<boolean>(false);
 
   // Mouth Open / Close Articulator state (0 = closed occlusion, 1 = wide open occlusal view)
-  const [mouthOpening, setMouthOpening] = useState<number>(0.4);
+  const [mouthOpening, setMouthOpening] = useState<number>(0.35);
 
   // Form states for adding intervention
   const [newStatus, setNewStatus] = useState<ToothStatusType>('Healthy');
@@ -452,15 +707,16 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId }) => 
     const calcArch = (teeth: number[], isUpper: boolean) => {
       const count = teeth.length;
       teeth.forEach((num, idx) => {
-        const angle = (idx / (count - 1)) * Math.PI - Math.PI / 2;
-        const radiusX = 3.3;
-        const radiusZ = 2.7;
+        const t = idx / (count - 1);
+        const angle = (t * 0.84 - 0.42) * Math.PI;
+        const radiusX = 2.95;
+        const radiusZ = 2.45;
         const x = radiusX * Math.sin(angle);
         const z = radiusZ * Math.cos(angle) - 1.1;
-        const y = isUpper ? 0.48 : -0.48;
+        const y = isUpper ? 0.70 : -0.70;
         const rotY = -angle;
 
-        // Rotations: crowns face labially towards front
+        // Crowns face labially towards front
         positions[num] = { pos: [x, y, z], rot: [0, rotY, 0] };
       });
     };
@@ -504,11 +760,8 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId }) => 
     });
   }, [toothPositions]);
 
-  // Mandible kinematic opening calculation
-  const maxYOffset = mouthOpening * 0.35;
-  const mandYOffset = -mouthOpening * 1.55;
-  const mandZOffset = -mouthOpening * 0.55;
-  const mandRotX = -mouthOpening * 0.42;
+  // Mandible TMJ Kinematic Articulator Opening Rotation
+  const maxYOffset = mouthOpening * 0.30;
 
   return (
     <div
@@ -579,30 +832,30 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId }) => 
           {/* Right: Mouth Articulator & Action Buttons */}
           <div className="flex items-center gap-2 shrink-0">
             
-            {/* Interactive Mouth Opening Controls */}
-            <div className="flex items-center gap-2.5 bg-slate-950 px-3 py-1.5 rounded-xl border border-white/10">
+            {/* Interactive TMJ Jaw Opening Slider */}
+            <div className="flex items-center gap-2.5 bg-slate-950 px-3.5 py-1.5 rounded-xl border border-white/10 shadow-inner">
               <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5 select-none whitespace-nowrap">
-                👄 <span>Bouche :</span>
+                💀 <span>Articulateur Mâchoire :</span>
               </span>
               <input
                 type="range"
                 min="0"
                 max="1"
-                step="0.05"
+                step="0.02"
                 value={mouthOpening}
                 onChange={(e) => setMouthOpening(parseFloat(e.target.value))}
-                className="w-20 md:w-28 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                title="Ajuster l'ouverture de la bouche"
+                className="w-24 md:w-32 h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500 hover:accent-blue-400"
+                title="Pivoter la mandibule pour ouvrir/fermer la bouche"
               />
               <button
-                onClick={() => setMouthOpening(mouthOpening > 0.1 ? 0 : 0.85)}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                onClick={() => setMouthOpening(mouthOpening > 0.1 ? 0 : 0.80)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shadow-xs ${
                   mouthOpening > 0.1
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-emerald-600 text-white'
                 }`}
               >
-                {mouthOpening > 0.1 ? 'Ouverte (Occlusale)' : 'Fermée (Occlusion)'}
+                {mouthOpening > 0.1 ? 'Fermer (Occlusion)' : 'Ouvrir Mâchoire'}
               </button>
             </div>
 
@@ -647,10 +900,10 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId }) => 
         <Canvas camera={{ position: [0, 0.4, 8.5], fov: 42 }} className="w-full h-full">
           {/* Clinical Dental Studio Lighting */}
           <ambientLight intensity={1.2} />
-          <directionalLight position={[4, 8, 8]} intensity={2.0} castShadow />
-          <directionalLight position={[-4, 8, 8]} intensity={1.4} />
-          <pointLight position={[0, -2, 4]} intensity={0.9} />
-          <pointLight position={[0, 4, -4]} intensity={0.5} />
+          <directionalLight position={[6, 12, 10]} intensity={2.2} castShadow />
+          <directionalLight position={[-6, 10, 8]} intensity={1.5} />
+          <pointLight position={[0, -2, 5]} intensity={0.9} />
+          <spotLight position={[0, 8, 4]} intensity={1.8} angle={0.6} penumbra={0.6} />
 
           <OrbitControls
             enablePan={true}
@@ -663,8 +916,8 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId }) => 
 
           {/* MAXILLARY (UPPER JAW & TEETH) GROUP */}
           {(jawFilter === 'All' || jawFilter === 'Maxillary') && (
-            <group position={[0, maxYOffset, 0]}>
-              <GingivaArchMesh jaw="Maxillary" />
+            <group position={[0, 0, 0]}>
+              <MaxillaryGingivaMesh showRoots={showRoots} />
               {upperTeeth.map(([numStr, { pos, rot }]) => {
                 const num = Number(numStr);
                 const record = odontogram.find((t) => t.toothNumber === num);
@@ -684,26 +937,28 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId }) => 
             </group>
           )}
 
-          {/* MANDIBULAR (LOWER JAW & TEETH) GROUP WITH REALISTIC TMJ ARTICULATOR OPENING */}
+          {/* MANDIBULAR (LOWER JAW & TEETH) GROUP - PIVOTING REALISTICALLY AROUND TMJ CONDYLES */}
           {(jawFilter === 'All' || jawFilter === 'Mandibular') && (
-            <group position={[0, mandYOffset, mandZOffset]} rotation={[mandRotX, 0, 0]}>
-              <GingivaArchMesh jaw="Mandibular" />
-              {lowerTeeth.map(([numStr, { pos, rot }]) => {
-                const num = Number(numStr);
-                const record = odontogram.find((t) => t.toothNumber === num);
-                return (
-                  <ToothMesh3D
-                    key={num}
-                    fdiNumber={num}
-                    position={pos}
-                    rotation={rot}
-                    status={record?.status || 'Healthy'}
-                    isSelected={selectedTooth === num}
-                    showLabels={showLabels}
-                    onClick={() => handleSelectTooth(num)}
-                  />
-                );
-              })}
+            <group position={[0, 0.40, -3.2]} rotation={[mouthOpening * 0.45, 0, 0]}>
+              <group position={[0, -0.40, 3.2]}>
+                <MandibularGingivaMesh showRoots={showRoots} />
+                {lowerTeeth.map(([numStr, { pos, rot }]) => {
+                  const num = Number(numStr);
+                  const record = odontogram.find((t) => t.toothNumber === num);
+                  return (
+                    <ToothMesh3D
+                      key={num}
+                      fdiNumber={num}
+                      position={pos}
+                      rotation={rot}
+                      status={record?.status || 'Healthy'}
+                      isSelected={selectedTooth === num}
+                      showLabels={showLabels}
+                      onClick={() => handleSelectTooth(num)}
+                    />
+                  );
+                })}
+              </group>
             </group>
           )}
         </Canvas>

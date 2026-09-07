@@ -46,67 +46,94 @@ import User from './models/User';
 import ClinicConfig from './models/ClinicConfig';
 
 // Connect to MongoDB & Auto-Bootstrap default admin
-mongoose
-  .connect(MONGODB_URI)
-  .then(async () => {
-    console.log('MongoDB connected successfully.');
-    try {
-      // Ensure Admin Account Exists
-      const adminUser = await User.findOne({ username: 'admin' });
-      const salt = await bcrypt.genSalt(10);
-      const passwordHash = await bcrypt.hash('Moujahid@97', salt);
+// Connect to MongoDB & Auto-Bootstrap default admin with resilient auto-retry
+const connectWithRetry = async () => {
+  const primaryUri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/dr-tijini';
+  const fallbackUri = 'mongodb://127.0.0.1:27017/dr-tijini';
 
-      if (!adminUser) {
-        await User.create({
-          username: 'admin',
-          email: 'admin@tijini.com',
-          passwordHash,
-          name: 'Moujahid Ali',
-          role: 'ADMIN',
-          active: true,
-        });
-        console.log('⚡ Initialisation automatique du compte Administrateur (admin / Moujahid@97).');
-      } else {
-        // Guarantee password and role are active
-        const isMatch = await bcrypt.compare('Moujahid@97', adminUser.passwordHash);
-        if (!isMatch || !adminUser.active || adminUser.role !== 'ADMIN') {
-          adminUser.passwordHash = passwordHash;
-          adminUser.role = 'ADMIN';
-          adminUser.active = true;
-          await adminUser.save();
-          console.log('⚡ Synchronisation du compte Administrateur (admin / Moujahid@97).');
+  let connected = false;
+  let attempts = 0;
+
+  while (!connected) {
+    attempts++;
+    try {
+      await mongoose.connect(primaryUri, { serverSelectionTimeoutMS: 5000 });
+      connected = true;
+      console.log('✅ MongoDB connected successfully.');
+    } catch (err: any) {
+      console.warn(`⚠️ [MongoDB] Tentative #${attempts} échouée avec l'URI principale: ${err.message}`);
+      if (primaryUri !== fallbackUri) {
+        try {
+          await mongoose.connect(fallbackUri, { serverSelectionTimeoutMS: 5000 });
+          connected = true;
+          console.log('✅ MongoDB connected successfully via fallback local URI.');
+        } catch (fallbackErr: any) {
+          console.warn(`⚠️ [MongoDB] Fallbacks local échoué: ${fallbackErr.message}`);
         }
       }
-
-      // Ensure Clinic Configuration Exists
-      const configCount = await ClinicConfig.countDocuments();
-      if (configCount === 0) {
-        await ClinicConfig.create({
-          cabinetFr: 'Cabinet Dentaire Dr. Salma Tijini',
-          cabinetAr: 'عيادة الدكتورة سلمى التيجيني لطب وجراحة الأسنان',
-          drFr: 'Dr. Salma Tijini',
-          drAr: 'الدكتورة سلمى التيجيني',
-          specsFr: 'Implantologie - Esthétique dentaire - Chirurgie buccale\nOrthodontie - Soins & Prothèses - Radio Panoramique 3D',
-          specsAr: 'علاج وتجميل الأسنان - زراعة الأسنان - تقويم الأسنان\nجراحة الفم والأسنان - تركيبات الزيركون - راديو بانوراميك',
-          address: 'Angle Av. Hassan II & Rue Al Qods, Imm. Al Andalous, 1er Étage, Skhirat',
-          phones: '+212 6 13 11 71 31',
-          email: 'dr.salmatijini@gmail.com',
-          ice: '003291823000045',
-          inbe: '102938475',
-          ifVal: '54321098',
-        });
-        console.log('⚡ Configuration clinique initiale créée.');
+      if (!connected) {
+        console.log('⏳ Attente de 3 secondes avant la prochaine tentative de connexion MongoDB...');
+        await new Promise((resolve) => setTimeout(resolve, 3000));
       }
-
-      // Ensure Default Dental Acts & Tariffs Catalog Exists
-      await ensureDefaultActs();
-    } catch (bootErr) {
-      console.error('Erreur initialisation données par défaut:', bootErr);
     }
-  })
-  .catch((err) => {
-    console.error('MongoDB connection error:', err);
-  });
+  }
+
+  try {
+    // Ensure Admin Account Exists
+    const adminUser = await User.findOne({ username: 'admin' });
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash('Moujahid@97', salt);
+
+    if (!adminUser) {
+      await User.create({
+        username: 'admin',
+        email: 'admin@tijini.com',
+        passwordHash,
+        name: 'Moujahid Ali',
+        role: 'ADMIN',
+        active: true,
+      });
+      console.log('⚡ Initialisation automatique du compte Administrateur (admin / Moujahid@97).');
+    } else {
+      // Guarantee password and role are active
+      const isMatch = await bcrypt.compare('Moujahid@97', adminUser.passwordHash);
+      if (!isMatch || !adminUser.active || adminUser.role !== 'ADMIN') {
+        adminUser.passwordHash = passwordHash;
+        adminUser.role = 'ADMIN';
+        adminUser.active = true;
+        await adminUser.save();
+        console.log('⚡ Synchronisation du compte Administrateur (admin / Moujahid@97).');
+      }
+    }
+
+    // Ensure Clinic Configuration Exists
+    const configCount = await ClinicConfig.countDocuments();
+    if (configCount === 0) {
+      await ClinicConfig.create({
+        cabinetFr: 'Cabinet Dentaire Dr. Salma Tijini',
+        cabinetAr: 'عيادة الدكتورة سلمى التيجيني لطب وجراحة الأسنان',
+        drFr: 'Dr. Salma Tijini',
+        drAr: 'الدكتورة سلمى التيجيني',
+        specsFr: 'Implantologie - Esthétique dentaire - Chirurgie buccale\nOrthodontie - Soins & Prothèses - Radio Panoramique 3D',
+        specsAr: 'علاج وتجميل الأسنان - زراعة الأسنان - تقويم الأسنان\nجراحة الفم والأسنان - تركيبات الزيركون - راديو بانوراميك',
+        address: 'Angle Av. Hassan II & Rue Al Qods, Imm. Al Andalous, 1er Étage, Skhirat',
+        phones: '+212 6 13 11 71 31',
+        email: 'dr.salmatijini@gmail.com',
+        ice: '003291823000045',
+        inbe: '102938475',
+        ifVal: '54321098',
+      });
+      console.log('⚡ Configuration clinique initiale créée.');
+    }
+
+    // Ensure Default Dental Acts & Tariffs Catalog Exists
+    await ensureDefaultActs();
+  } catch (bootErr) {
+    console.error('Erreur initialisation données par défaut:', bootErr);
+  }
+};
+
+connectWithRetry();
 
 
 // License API routes (must be available without license block)

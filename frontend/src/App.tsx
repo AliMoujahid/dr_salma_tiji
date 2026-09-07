@@ -52,6 +52,22 @@ const AppLayout: React.FC = () => {
   const { token } = useAuth();
   const [config, setConfig] = useState<ClinicConfig | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    return localStorage.getItem('sidebar_collapsed') === 'true';
+  });
+
+  const toggleSidebar = () => {
+    if (window.innerWidth < 768) {
+      setSidebarOpen((prev) => !prev);
+    } else {
+      setIsSidebarCollapsed((prev) => {
+        const next = !prev;
+        localStorage.setItem('sidebar_collapsed', String(next));
+        return next;
+      });
+    }
+  };
+
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
   useEffect(() => {
@@ -70,12 +86,23 @@ const AppLayout: React.FC = () => {
         clinicNameFr={config?.cabinetFr} 
         clinicLogo={config?.logoUrl} 
         isOpen={sidebarOpen} 
+        isCollapsed={isSidebarCollapsed}
         onClose={() => setSidebarOpen(false)} 
+        onToggleCollapse={() => {
+          setIsSidebarCollapsed((prev) => {
+            const next = !prev;
+            localStorage.setItem('sidebar_collapsed', String(next));
+            return next;
+          });
+        }}
       />
 
       {/* Main Panel grid (Header + Content) */}
-      <div className="flex-1 flex flex-col min-w-0 print:block">
-        <Header onMenuClick={() => setSidebarOpen(true)} />
+      <div className="flex-1 flex flex-col min-w-0 print:block transition-all duration-300">
+        <Header 
+          onMenuClick={toggleSidebar} 
+          isSidebarCollapsed={isSidebarCollapsed}
+        />
         
         {/* Main Content Area */}
         <main className="flex-1 flex flex-col relative print:block print:p-0">

@@ -136,19 +136,11 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-:: 2. Verifier si le serveur MongoDB tourne
-echo [1/3] Verification du service de base de donnees (MongoDB)...
-sc query MongoDB | find "RUNNING" >nul 2>nul
-if %errorlevel% neq 0 (
-    net start MongoDB >nul 2>nul
-    if %errorlevel% neq 0 (
-        echo [INFO] Demarrage manuel de MongoDB ou MongoDB tourne deja en processus local.
-    ) else (
-        echo [OK] Service MongoDB demarre.
-    )
-) else (
-    echo [OK] Base de donnees connectee.
-)
+:: 2. Configurer et verifier la base de donnees MongoDB
+echo [1/3] Verification et demarrage automatique du service MongoDB...
+sc config MongoDB start= auto >nul 2>nul
+net start MongoDB >nul 2>nul
+echo [OK] Base de donnees MongoDB prete.
 
 :: 3. Verifier si l'application tourne deja sur le port 5000
 netstat -ano | findstr :5000 | findstr LISTENING >nul 2>nul
@@ -161,11 +153,18 @@ if %errorlevel% equ 0 (
     exit /b 0
 )
 
-:: 4. Lancer le serveur en arriere-plan
+:: 4. Lancer le serveur via PM2 ou Node
 echo.
 echo [2/3] Lancement du serveur du Cabinet...
-cd /d "%~dp0app"
-start "Serveur Cabinet Dr Salma Tijini" /min node server.js
+cd /d "%~dp0"
+where pm2 >nul 2>nul
+if %errorlevel% equ 0 (
+    call pm2 start ecosystem.config.js
+    call pm2 save >nul 2>nul
+) else (
+    cd /d "%~dp0app"
+    start "Serveur Cabinet Dr Salma Tijini" /min node server.js
+)
 
 :: 5. Attendre l'initialisation et ouvrir le navigateur
 echo [3/3] Chargement de l'interface clinique...
@@ -194,7 +193,10 @@ Set fso = CreateObject("Scripting.FileSystemObject")
 sCurDir = fso.GetParentFolderName(WScript.ScriptFullName)
 If Right(sCurDir, 1) <> "\\" Then sCurDir = sCurDir & "\\"
 
-' 1. Verifier si l'application tourne deja sur le port 5000
+' 1. S'assurer que le service MongoDB est configure en automatique et demarre
+WshShell.Run "cmd /c sc config MongoDB start= auto & net start MongoDB", 0, True
+
+' 2. Verifier si l'application tourne deja sur le port 5000
 Dim oExec, sOutput
 Set oExec = WshShell.Exec("cmd /c netstat -ano | findstr :5000 | findstr LISTENING")
 sOutput = oExec.StdOut.ReadAll()
@@ -204,10 +206,18 @@ If InStr(sOutput, "LISTENING") > 0 Then
     WScript.Quit 0
 End If
 
-' 2. Demarrer le serveur en arriere-plan 100% invisible (Style = 0)
-WshShell.Run "cmd /c ""cd /d """ & sCurDir & "app"" && node server.js""", 0, False
+' 3. Demarrer le serveur via PM2 ou Node en arriere-plan 100% invisible (Style = 0)
+If fso.FileExists(sCurDir & "ecosystem.config.js") Then
+    WshShell.Run "cmd /c ""cd /d """ & sCurDir & """ && npx pm2 start ecosystem.config.js""", 0, False
+ElseIf fso.FolderExists(sCurDir & "app") Then
+    WshShell.Run "cmd /c ""cd /d """ & sCurDir & "app"" && node server.js""", 0, False
+ElseIf fso.FolderExists(sCurDir & "backend\\dist") Then
+    WshShell.Run "cmd /c ""cd /d """ & sCurDir & "backend"" && node dist/server.js""", 0, False
+Else
+    WshShell.Run "cmd /c ""cd /d """ & sCurDir & "backend"" && npm run dev""", 0, False
+End If
 
-' 3. Attendre l'initialisation et ouvrir le navigateur
+' 4. Attendre l'initialisation et ouvrir le navigateur
 WScript.Sleep 2500
 WshShell.Run "http://localhost:5000", 1, False
 `;
@@ -248,12 +258,19 @@ echo    LANCEMENT DU CABINET VIA PM2 (PROCESSUS ARRIERE-PLAN INVISIBLE)
 echo =======================================================================
 echo.
 
+:: 1. Verifier et demarrer le service MongoDB
+echo [1/2] Configuration et demarrage de MongoDB...
+sc config MongoDB start= auto >nul 2>nul
+net start MongoDB >nul 2>nul
+
+echo [2/2] Demarrage de l'application via PM2...
+cd /d "%~dp0"
 where pm2 >nul 2>nul
 if %errorlevel% equ 0 (
-    pm2 start ecosystem.config.js
-    pm2 save
+    call pm2 start ecosystem.config.js
+    call pm2 save
 ) else (
-    npx pm2 start ecosystem.config.js
+    call npx pm2 start ecosystem.config.js
 )
 
 timeout /t 2 >nul
