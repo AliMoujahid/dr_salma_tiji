@@ -390,13 +390,73 @@ export const NotificationManager: React.FC = () => {
     }
   };
 
-  const handleRetry = (id: string) => {
-    fetch(`${API_URL}/notifications/retry/${id}`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(() => fetchLogs())
-      .catch((err) => console.error('Error retrying message:', err));
+  const [retryingId, setRetryingId] = useState<string | null>(null);
+  const [clearingLogs, setClearingLogs] = useState(false);
+
+  const handleRetry = async (id: string) => {
+    if (retryingId) return;
+    setRetryingId(id);
+    try {
+      const res = await fetch(`${API_URL}/notifications/retry/${id}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        toast.success('Message renvoyé', 'Le message a été réexpédié avec succès.');
+      } else {
+        toast.error('Échec de renvoi', data.message || data.errorDetails || "WhatsApp Web n'est pas connecté.");
+      }
+      fetchLogs();
+    } catch (err: any) {
+      console.error('Error retrying message:', err);
+      toast.error('Erreur', 'Impossible de renvoyer le message.');
+    } finally {
+      setRetryingId(null);
+    }
+  };
+
+  const handleDeleteLog = async (id: string) => {
+    try {
+      const res = await fetch(`${API_URL}/notifications/logs/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        setLogs((prev) => prev.filter((l) => l._id !== id));
+        toast.info('Notification supprimée', "L'entrée a été supprimée de l'historique.");
+      }
+    } catch (err: any) {
+      console.error('Error deleting log:', err);
+    }
+  };
+
+  const handleClearAllFailed = async () => {
+    const confirmed = await confirm({
+      title: 'Effacer les notifications en échec ?',
+      message: 'Voulez-vous supprimer toutes les notifications en statut échec du journal ?',
+      variant: 'danger',
+      confirmText: 'Effacer Tout',
+      cancelText: 'Annuler',
+    });
+    if (!confirmed) return;
+
+    setClearingLogs(true);
+    try {
+      const res = await fetch(`${API_URL}/notifications/clear-failed`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        fetchLogs();
+        toast.success('Alertes effacées', data.message || 'Toutes les alertes d\'échec ont été supprimées.');
+      }
+    } catch (err: any) {
+      console.error('Error clearing logs:', err);
+    } finally {
+      setClearingLogs(false);
+    }
   };
 
   return (
@@ -499,11 +559,25 @@ export const NotificationManager: React.FC = () => {
               >
                 Filtrer
               </button>
+
+              {logs.some((l) => l.status === 'Failed') && (
+                <button
+                  type="button"
+                  onClick={handleClearAllFailed}
+                  disabled={clearingLogs}
+                  className="h-10 px-3.5 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/15 dark:hover:bg-rose-500/25 border border-rose-200 dark:border-rose-500/30 text-rose-700 dark:text-rose-300 font-semibold text-xs cursor-pointer transition-all flex items-center gap-1.5 disabled:opacity-50"
+                  title="Supprimer toutes les notifications en échec"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>{clearingLogs ? 'Suppression...' : 'Vider les échecs'}</span>
+                </button>
+              )}
             </div>
 
             <button
               onClick={fetchLogs}
               className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 border border-slate-200 dark:border-white/5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer transition-all shadow-xs"
+              title="Actualiser"
             >
               <RefreshCw className="w-4 h-4" />
             </button>
@@ -521,7 +595,7 @@ export const NotificationManager: React.FC = () => {
                     <th className="p-4">Contenu du Message</th>
                     <th className="p-4">Statut</th>
                     <th className="p-4">Horodatage</th>
-                    <th className="p-4 text-right">Action</th>
+                    <th className="p-4 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-white/5">
@@ -532,49 +606,94 @@ export const NotificationManager: React.FC = () => {
                       </td>
                     </tr>
                   ) : (
-                    logs.map((log) => (
-                      <tr key={log._id} className="hover:bg-slate-50 dark:hover:bg-white/3 transition-all">
-                        <td className="p-4 font-bold text-slate-900 dark:text-white">
-                          {log.patientId?.name || log.recipient}
-                          <span className="block text-xxs font-normal text-slate-500 dark:text-slate-400">{log.recipient}</span>
-                        </td>
-                        <td className="p-4">
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 text-xxs font-semibold text-slate-800 dark:text-slate-300">
-                            {log.channel === 'WhatsApp' && <MessageSquare className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />}
-                            {log.channel === 'SMS' && <Smartphone className="w-3 h-3 text-blue-600 dark:text-blue-400" />}
-                            {log.channel === 'Email' && <Mail className="w-3 h-3 text-amber-600 dark:text-amber-400" />}
-                            {log.provider}
-                          </span>
-                        </td>
-                        <td className="p-4 font-semibold text-indigo-600 dark:text-indigo-400">{log.messageType}</td>
-                        <td className="p-4 max-w-xs truncate text-slate-600 dark:text-slate-300">{log.body}</td>
-                        <td className="p-4">
-                          <span
-                            className={`px-2.5 py-1 rounded-full text-xxs font-bold ${
-                              log.status === 'Sent' || log.status === 'Delivered'
-                                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20'
-                                : 'bg-rose-50 text-rose-700 dark:bg-rose-500/20 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20'
-                            }`}
-                          >
-                            {log.status}
-                          </span>
-                        </td>
-                        <td className="p-4 text-slate-500 dark:text-slate-400 text-xxs font-mono">
-                          {formatDateTime(log.createdAt)}
-                        </td>
+                    logs.map((log) => {
+                      const isSent = log.status === 'Sent' || log.status === 'Delivered';
+                      const isRetried = log.status === 'Failed' && (log.retryCount || 0) > 0;
+                      const isUntouched = log.status === 'Failed' && (!log.retryCount || log.retryCount === 0);
+                      const isRetrying = retryingId === log._id;
 
-                        <td className="p-4 text-right">
-                          {log.status === 'Failed' && (
-                            <button
-                              onClick={() => handleRetry(log._id)}
-                              className="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/20 dark:hover:bg-rose-500/30 text-rose-700 dark:text-rose-300 text-xxs font-bold cursor-pointer transition-all shadow-xs"
+                      return (
+                        <tr
+                          key={log._id}
+                          className={`hover:bg-slate-50 dark:hover:bg-white/3 transition-all ${
+                            isRetried
+                              ? 'bg-amber-50/40 dark:bg-amber-500/5'
+                              : isUntouched
+                              ? 'bg-rose-50/40 dark:bg-rose-500/5'
+                              : ''
+                          }`}
+                        >
+                          <td className="p-4 font-bold text-slate-900 dark:text-white">
+                            {log.patientId?.name || log.recipient}
+                            <span className="block text-xxs font-normal text-slate-500 dark:text-slate-400">{log.recipient}</span>
+                          </td>
+                          <td className="p-4">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 text-xxs font-semibold text-slate-800 dark:text-slate-300">
+                              {log.channel === 'WhatsApp' && <MessageSquare className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />}
+                              {log.channel === 'SMS' && <Smartphone className="w-3 h-3 text-blue-600 dark:text-blue-400" />}
+                              {log.channel === 'Email' && <Mail className="w-3 h-3 text-amber-600 dark:text-amber-400" />}
+                              {log.provider}
+                            </span>
+                          </td>
+                          <td className="p-4 font-semibold text-indigo-600 dark:text-indigo-400">{log.messageType}</td>
+                          <td className="p-4 max-w-xs truncate text-slate-600 dark:text-slate-300">
+                            {log.body}
+                            {log.errorDetails && log.status === 'Failed' && (
+                              <span className="block text-[10px] text-amber-500 italic mt-0.5 truncate">
+                                Erreur : {log.errorDetails}
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-4">
+                            <span
+                              className={`px-2.5 py-1 rounded-full text-xxs font-bold border inline-flex items-center gap-1 ${
+                                isSent
+                                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20'
+                                  : isRetried
+                                  ? 'bg-amber-50 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300 border-amber-200 dark:border-amber-500/30'
+                                  : 'bg-rose-50 text-rose-700 dark:bg-rose-500/20 dark:text-rose-400 border-rose-200 dark:border-rose-500/20'
+                              }`}
                             >
-                              Réessayer
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))
+                              {isSent
+                                ? '✓ Délivré'
+                                : isRetried
+                                ? `⚠️ Tentative (${log.retryCount}x)`
+                                : '✕ Non Traité'}
+                            </span>
+                          </td>
+                          <td className="p-4 text-slate-500 dark:text-slate-400 text-xxs font-mono">
+                            {formatDateTime(log.createdAt)}
+                          </td>
+
+                          <td className="p-4 text-right">
+                            <div className="inline-flex items-center justify-end gap-1.5">
+                              {log.status === 'Failed' && (
+                                <button
+                                  onClick={() => handleRetry(log._id)}
+                                  disabled={isRetrying}
+                                  className={`px-2.5 py-1 rounded-lg text-xxs font-bold cursor-pointer transition-all shadow-xs flex items-center gap-1 disabled:opacity-50 ${
+                                    isRetried
+                                      ? 'bg-amber-100 hover:bg-amber-200 dark:bg-amber-500/20 dark:hover:bg-amber-500/30 text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-500/30'
+                                      : 'bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/20 dark:hover:bg-rose-500/30 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-500/30'
+                                  }`}
+                                >
+                                  <RefreshCw className={`w-3 h-3 ${isRetrying ? 'animate-spin' : ''}`} />
+                                  <span>{isRetrying ? 'Envoi...' : isRetried ? 'Relancer' : 'Réessayer'}</span>
+                                </button>
+                              )}
+
+                              <button
+                                onClick={() => handleDeleteLog(log._id)}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-slate-100 dark:hover:bg-white/5 transition-all cursor-pointer"
+                                title="Supprimer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>

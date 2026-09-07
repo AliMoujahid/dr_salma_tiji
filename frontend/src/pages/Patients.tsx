@@ -44,7 +44,7 @@ export const Patients: React.FC = () => {
   const [email, setEmail] = useState('');
   const [address, setAddress] = useState('');
   const [birthDate, setBirthDate] = useState('');
-  const [gender, setGender] = useState<'Male' | 'Female' | 'Other'>('Male');
+  const [gender, setGender] = useState<'Male' | 'Female'>('Male');
   const [bloodType, setBloodType] = useState('O+');
   const [emergencyName, setEmergencyName] = useState('');
   const [emergencyPhone, setEmergencyPhone] = useState('');
@@ -507,7 +507,6 @@ export const Patients: React.FC = () => {
                   >
                     <option value="Male">Masculin</option>
                     <option value="Female">Féminin</option>
-                    <option value="Other">Autre</option>
                   </select>
                 </div>
                 <div className="flex flex-col gap-1.5">

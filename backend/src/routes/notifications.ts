@@ -452,15 +452,42 @@ router.post('/retry/:id', protect, async (req: Request, res: Response) => {
       body: log.body,
     });
 
-    log.retryCount += 1;
+    log.retryCount = (log.retryCount || 0) + 1;
     log.status = result.success ? 'Sent' : 'Failed';
-    log.errorDetails = result.errorDetails;
+    log.errorDetails = result.success ? undefined : (result.errorDetails || 'Échec de renvoi');
     if (result.success) log.sentAt = new Date();
 
     await log.save();
-    res.json(log);
+    res.json({ success: result.success, log, message: result.success ? 'Message réexpédié avec succès !' : (result.errorDetails || 'Échec de renvoi') });
   } catch (err: any) {
     res.status(500).json({ message: 'Error retrying notification', error: err.message });
+  }
+});
+
+/**
+ * DELETE /api/notifications/logs/:id
+ * Delete a specific notification log
+ */
+router.delete('/logs/:id', protect, async (req: Request, res: Response) => {
+  try {
+    const deleted = await NotificationLog.findByIdAndDelete(req.params.id);
+    if (!deleted) return res.status(404).json({ message: 'Notification non trouvée' });
+    res.json({ success: true, message: 'Notification supprimée avec succès' });
+  } catch (err: any) {
+    res.status(500).json({ message: 'Erreur lors de la suppression', error: err.message });
+  }
+});
+
+/**
+ * POST /api/notifications/clear-failed
+ * Clear or dismiss all failed notification logs
+ */
+router.post('/clear-failed', protect, async (req: Request, res: Response) => {
+  try {
+    const result = await NotificationLog.deleteMany({ status: 'Failed' });
+    res.json({ success: true, message: `${result.deletedCount} notification(s) en échec effacée(s)`, count: result.deletedCount });
+  } catch (err: any) {
+    res.status(500).json({ message: 'Erreur lors de la suppression des notifications', error: err.message });
   }
 });
 

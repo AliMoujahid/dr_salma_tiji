@@ -7,7 +7,7 @@ export interface IPatient extends Document {
   email?: string;
   address?: string;
   birthDate: Date;
-  gender: 'Male' | 'Female' | 'Other';
+  gender: 'Male' | 'Female';
   bloodType?: string;
   emergencyContact?: {
     name: string;
@@ -41,7 +41,7 @@ const PatientSchema: Schema = new Schema(
     email: { type: String, lowercase: true, trim: true },
     address: { type: String },
     birthDate: { type: Date, required: true },
-    gender: { type: String, enum: ['Male', 'Female', 'Other'], required: true },
+    gender: { type: String, enum: ['Male', 'Female'], required: true },
     bloodType: { type: String, trim: true },
     emergencyContact: {
       name: { type: String },

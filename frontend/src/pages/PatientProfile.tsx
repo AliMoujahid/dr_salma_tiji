@@ -586,7 +586,9 @@ export const PatientProfile: React.FC = () => {
                 </div>
                 <div className="flex flex-col gap-0.5">
                   <span className="text-slate-500 font-medium">Genre :</span>
-                  <span className="text-slate-900 dark:text-white font-bold">{patient.gender}</span>
+                  <span className="text-slate-900 dark:text-white font-bold">
+                    {patient.gender === 'Male' ? 'Masculin' : patient.gender === 'Female' ? 'Féminin' : patient.gender}
+                  </span>
                 </div>
                 <div className="flex flex-col gap-0.5 col-span-2">
                   <span className="text-slate-500 font-medium">Adresse principale :</span>

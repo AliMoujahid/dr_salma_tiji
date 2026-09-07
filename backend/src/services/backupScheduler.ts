@@ -9,6 +9,13 @@ import Invoice from '../models/Invoice';
 import PaymentTransaction from '../models/Payment';
 import ClinicConfig from '../models/ClinicConfig';
 import DocumentModel from '../models/Document';
+import DentalAct from '../models/DentalAct';
+import NotificationSettings from '../models/NotificationSettings';
+import MessageTemplate from '../models/MessageTemplate';
+import FollowUpReminder from '../models/FollowUpReminder';
+import AuditLog from '../models/AuditLog';
+import NotificationLog from '../models/NotificationLog';
+import WhatsAppReceivedMedia from '../models/WhatsAppReceivedMedia';
 
 export interface BackupStatus {
   lastBackupDate: string | null;
@@ -174,13 +181,13 @@ class BackupSchedulerService {
       payments: await PaymentTransaction.find(),
       configs: await ClinicConfig.find(),
       documents: await DocumentModel.find(),
-      dentalActs: await (await import('../models/DentalAct')).default.find(),
-      notificationSettings: await (await import('../models/NotificationSettings')).default.find(),
-      messageTemplates: await (await import('../models/MessageTemplate')).default.find(),
-      followUpReminders: await (await import('../models/FollowUpReminder')).default.find(),
-      auditLogs: await (await import('../models/AuditLog')).default.find(),
-      notificationLogs: await (await import('../models/NotificationLog')).default.find(),
-      whatsAppReceivedMedia: await (await import('../models/WhatsAppReceivedMedia')).default.find(),
+      dentalActs: await DentalAct.find(),
+      notificationSettings: await NotificationSettings.find(),
+      messageTemplates: await MessageTemplate.find(),
+      followUpReminders: await FollowUpReminder.find(),
+      auditLogs: await AuditLog.find(),
+      notificationLogs: await NotificationLog.find(),
+      whatsAppReceivedMedia: await WhatsAppReceivedMedia.find(),
     };
 
     const dbBackupFile = path.join(destinationFolder, 'database_dump.json');

@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import mongoose from 'mongoose';
 import Patient from '../models/Patient';
+import Appointment from '../models/Appointment';
 import AuditLog from '../models/AuditLog';
 import { protect, AuthRequest } from '../middleware/auth';
 
@@ -231,6 +232,23 @@ router.delete('/:id', protect, async (req: AuthRequest, res: Response) => {
     patient.deletedAt = new Date();
     patient.deletedBy = req.user?._id;
     await patient.save();
+
+    // Automatically cancel pending future appointments for this patient
+    try {
+      await Appointment.updateMany(
+        {
+          patientId: patient._id,
+          dateTime: { $gte: new Date() },
+          status: { $in: ['Scheduled', 'Confirmed'] },
+        },
+        {
+          status: 'Cancelled',
+          notes: 'Annulé suite à la suppression du dossier patient.',
+        }
+      );
+    } catch (apptErr) {
+      console.warn('Warning cancelling appointments for deleted patient:', apptErr);
+    }
 
     // Create Audit Log with backupData snapshot for restore
     await AuditLog.create({
