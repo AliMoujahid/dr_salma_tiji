@@ -37,10 +37,11 @@ if (fs.existsSync(RELEASE_DIR)) {
 fs.mkdirSync(RELEASE_DIR, { recursive: true });
 fs.mkdirSync(APP_DIR, { recursive: true });
 fs.mkdirSync(path.join(APP_DIR, 'public'), { recursive: true });
+fs.mkdirSync(path.join(RELEASE_DIR, 'public'), { recursive: true });
 fs.mkdirSync(path.join(APP_DIR, 'uploads', 'temp'), { recursive: true });
 fs.mkdirSync(path.join(APP_DIR, 'uploads', 'Patients'), { recursive: true });
 fs.mkdirSync(path.join(APP_DIR, 'uploads', 'Clinic'), { recursive: true });
-fs.mkdirSync(path.join(RELEASE_DIR, 'Sauvegardes_Cabinet'), { recursive: true });
+fs.mkdirSync(path.join(RELEASE_DIR, 'Sauvegardes_Cabinet', 'logs'), { recursive: true });
 
 // Copy Compiled Backend files
 console.log('4️⃣  Copie des fichiers Backend compilés...');
@@ -52,15 +53,17 @@ fs.copyFileSync(path.join(BACKEND_DIR, 'package.json'), path.join(APP_DIR, 'pack
 const prodEnv = `# Configuration Cabinet Dentaire Dr. Salma Tijini (Production)
 PORT=5000
 NODE_ENV=production
-MONGODB_URI=mongodb://tijini_app:Tijini%40App%23Dental2026%21@127.0.0.1:27017/dr-tijini?authSource=dr-tijini
+MONGODB_URI=mongodb://127.0.0.1:27017/dr-tijini
 JWT_SECRET=DrSalmaTijini_Secured_Production_Key_2026_x99!
 LICENSE_MASTER_SECRET=DrSalmaTijini_SecuredDentalApp_MasterKey_2026_x87$kL!
 `;
 fs.writeFileSync(path.join(APP_DIR, '.env'), prodEnv, 'utf8');
+fs.writeFileSync(path.join(RELEASE_DIR, '.env'), prodEnv, 'utf8');
 
-// Copy Compiled Frontend to app/public
-console.log('5️⃣  Copie du Frontend compilé vers app/public...');
+// Copy Compiled Frontend to both app/public and release/public
+console.log('5️⃣  Copie du Frontend compilé vers app/public et public...');
 copyDirSync(path.join(FRONTEND_DIR, 'dist'), path.join(APP_DIR, 'public'));
+copyDirSync(path.join(FRONTEND_DIR, 'dist'), path.join(RELEASE_DIR, 'public'));
 
 // Copy Node Modules to app/node_modules
 console.log('6️⃣  Copie des dépendances Node.js de production (node_modules)...');
@@ -153,22 +156,27 @@ if %errorlevel% equ 0 (
     exit /b 0
 )
 
-:: 4. Lancer le serveur via PM2 ou Node
+:: 4. Lancer le serveur via PM2 embarque
 echo.
-echo [2/3] Lancement du serveur du Cabinet...
+echo [2/3] Lancement du serveur du Cabinet en arriere-plan (PM2)...
 cd /d "%~dp0"
-where pm2 >nul 2>nul
-if %errorlevel% equ 0 (
-    call pm2 start ecosystem.config.js
-    call pm2 save >nul 2>nul
+if exist "%~dp0app\\node_modules\\pm2\\bin\\pm2" (
+    call node "%~dp0app\\node_modules\\pm2\\bin\\pm2" start ecosystem.config.js
+    call node "%~dp0app\\node_modules\\pm2\\bin\\pm2" save >nul 2>nul
 ) else (
-    cd /d "%~dp0app"
-    start "Serveur Cabinet Dr Salma Tijini" /min node server.js
+    where pm2 >nul 2>nul
+    if %errorlevel% equ 0 (
+        call pm2 start ecosystem.config.js
+        call pm2 save >nul 2>nul
+    ) else (
+        cd /d "%~dp0app"
+        start "Serveur Cabinet Dr Salma Tijini" /min node server.js
+    )
 )
 
 :: 5. Attendre l'initialisation et ouvrir le navigateur
 echo [3/3] Chargement de l'interface clinique...
-timeout /t 3 >nul
+timeout /t 2 >nul
 
 echo.
 echo =======================================================================
@@ -206,15 +214,13 @@ If InStr(sOutput, "LISTENING") > 0 Then
     WScript.Quit 0
 End If
 
-' 3. Demarrer le serveur via PM2 ou Node en arriere-plan 100% invisible (Style = 0)
-If fso.FileExists(sCurDir & "ecosystem.config.js") Then
-    WshShell.Run "cmd /c ""cd /d """ & sCurDir & """ && npx pm2 start ecosystem.config.js""", 0, False
+' 3. Demarrer le serveur via PM2 embarque ou Node en arriere-plan 100% invisible (Style = 0)
+If fso.FileExists(sCurDir & "app\\node_modules\\pm2\\bin\\pm2") Then
+    WshShell.Run "cmd /c ""cd /d """ & sCurDir & """ && node app\\node_modules\\pm2\\bin\\pm2 start ecosystem.config.js""", 0, False
 ElseIf fso.FolderExists(sCurDir & "app") Then
     WshShell.Run "cmd /c ""cd /d """ & sCurDir & "app"" && node server.js""", 0, False
-ElseIf fso.FolderExists(sCurDir & "backend\\dist") Then
-    WshShell.Run "cmd /c ""cd /d """ & sCurDir & "backend"" && node dist/server.js""", 0, False
 Else
-    WshShell.Run "cmd /c ""cd /d """ & sCurDir & "backend"" && npm run dev""", 0, False
+    WshShell.Run "cmd /c ""cd /d """ & sCurDir & "backend"" && node dist/server.js""", 0, False
 End If
 
 ' 4. Attendre l'initialisation et ouvrir le navigateur
@@ -231,6 +237,7 @@ const ecosystemConfigJs = `module.exports = {
       script: './app/server.js',
       cwd: __dirname,
       instances: 1,
+      exec_mode: 'fork',
       autorestart: true,
       watch: false,
       max_memory_restart: '800M',
@@ -263,14 +270,20 @@ echo [1/2] Configuration et demarrage de MongoDB...
 sc config MongoDB start= auto >nul 2>nul
 net start MongoDB >nul 2>nul
 
-echo [2/2] Demarrage de l'application via PM2...
+echo [2/2] Demarrage de l'application via PM2 embarque...
 cd /d "%~dp0"
-where pm2 >nul 2>nul
-if %errorlevel% equ 0 (
-    call pm2 start ecosystem.config.js
-    call pm2 save
+if exist "%~dp0app\\node_modules\\pm2\\bin\\pm2" (
+    call node "%~dp0app\\node_modules\\pm2\\bin\\pm2" start ecosystem.config.js
+    call node "%~dp0app\\node_modules\\pm2\\bin\\pm2" save >nul 2>nul
 ) else (
-    call npx pm2 start ecosystem.config.js
+    where pm2 >nul 2>nul
+    if %errorlevel% equ 0 (
+        call pm2 start ecosystem.config.js
+        call pm2 save >nul 2>nul
+    ) else (
+        cd /d "%~dp0app"
+        start "Serveur Cabinet Dr Salma Tijini" /min node server.js
+    )
 )
 
 timeout /t 2 >nul
@@ -289,13 +302,20 @@ echo     ARRET DU SERVEUR PM2 - CABINET DENTAIRE DR. SALMA TIJINI
 echo =======================================================================
 echo.
 
-where pm2 >nul 2>nul
-if %errorlevel% equ 0 (
-    pm2 stop cabinet-dr-salma-tijini
-    pm2 delete cabinet-dr-salma-tijini
+cd /d "%~dp0"
+if exist "%~dp0app\\node_modules\\pm2\\bin\\pm2" (
+    call node "%~dp0app\\node_modules\\pm2\\bin\\pm2" stop cabinet-dr-salma-tijini
+    call node "%~dp0app\\node_modules\\pm2\\bin\\pm2" delete cabinet-dr-salma-tijini
 ) else (
-    npx pm2 stop cabinet-dr-salma-tijini
-    npx pm2 delete cabinet-dr-salma-tijini
+    where pm2 >nul 2>nul
+    if %errorlevel% equ 0 (
+        call pm2 stop cabinet-dr-salma-tijini
+        call pm2 delete cabinet-dr-salma-tijini
+    )
+)
+
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr :5000 ^| findstr LISTENING') do (
+    taskkill /f /pid %%a >nul 2>nul
 )
 
 echo [OK] Serveur PM2 arrete.

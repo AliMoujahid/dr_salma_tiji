@@ -1,8 +1,23 @@
-import 'dotenv/config';
-import express from 'express';
-import cors from 'cors';
+import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
+
+// Load environment variables from all possible locations
+const envPaths = [
+  path.join(__dirname, '.env'),
+  path.join(__dirname, '..', '.env'),
+  path.join(process.cwd(), '.env'),
+  path.join(process.cwd(), 'app', '.env'),
+];
+for (const envPath of envPaths) {
+  if (fs.existsSync(envPath)) {
+    dotenv.config({ path: envPath });
+  }
+}
+dotenv.config();
+
+import express from 'express';
+import cors from 'cors';
 import mongoose from 'mongoose';
 
 // Route imports
@@ -30,11 +45,23 @@ const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/dr-tij
 
 // Middlewares
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Ensure upload folders exist
-const uploadsDir = path.join(__dirname, '..', 'uploads');
+const possibleUploadDirs = [
+  path.join(__dirname, 'uploads'),
+  path.join(__dirname, '..', 'uploads'),
+  path.join(process.cwd(), 'app', 'uploads'),
+  path.join(process.cwd(), 'uploads'),
+];
+let uploadsDir = possibleUploadDirs[0];
+for (const dir of possibleUploadDirs) {
+  if (fs.existsSync(dir)) {
+    uploadsDir = dir;
+    break;
+  }
+}
 const tempDir = path.join(uploadsDir, 'temp');
 fs.mkdirSync(tempDir, { recursive: true });
 
@@ -197,9 +224,12 @@ app.get('/health', (req, res) => {
 
 // Production Static Frontend Hosting
 const possibleFrontendDirs = [
+  path.join(__dirname, 'public'),
   path.join(__dirname, '..', 'public'),
-  path.join(__dirname, '..', '..', 'frontend', 'dist'),
+  path.join(process.cwd(), 'app', 'public'),
   path.join(process.cwd(), 'public'),
+  path.join(__dirname, '..', '..', 'frontend', 'dist'),
+  path.join(process.cwd(), 'frontend', 'dist'),
   path.join(process.cwd(), 'dist'),
 ];
 
@@ -212,7 +242,7 @@ for (const dir of possibleFrontendDirs) {
 }
 
 if (frontendDir) {
-  console.log(`Serving Frontend from: ${frontendDir}`);
+  console.log(`✅ Serving Frontend from: ${frontendDir}`);
   app.use(express.static(frontendDir));
 
   // SPA Fallback for all non-API GET requests
@@ -222,6 +252,8 @@ if (frontendDir) {
     }
     res.sendFile(path.join(frontendDir!, 'index.html'));
   });
+} else {
+  console.warn('⚠️ No frontend build found in possible directories:', possibleFrontendDirs);
 }
 
 // Error handling middleware
