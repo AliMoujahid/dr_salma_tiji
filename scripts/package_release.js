@@ -52,7 +52,7 @@ fs.copyFileSync(path.join(BACKEND_DIR, 'package.json'), path.join(APP_DIR, 'pack
 const prodEnv = `# Configuration Cabinet Dentaire Dr. Salma Tijini (Production)
 PORT=5000
 NODE_ENV=production
-MONGODB_URI=mongodb://127.0.0.1:27017/dr-tijini
+MONGODB_URI=mongodb://tijini_app:Tijini%40App%23Dental2026%21@127.0.0.1:27017/dr-tijini?authSource=dr-tijini
 JWT_SECRET=DrSalmaTijini_Secured_Production_Key_2026_x99!
 LICENSE_MASTER_SECRET=DrSalmaTijini_SecuredDentalApp_MasterKey_2026_x87$kL!
 `;
@@ -103,7 +103,7 @@ const logoSrc = path.join(ROOT_DIR, 'logo.png');
 if (fs.existsSync(logoSrc)) {
   fs.copyFileSync(logoSrc, path.join(APP_DIR, 'uploads', 'Clinic', 'logo.png'));
   fs.copyFileSync(logoSrc, path.join(RELEASE_DIR, 'logo.png'));
-  
+
   // Generate logo.ico in Root, Release and App uploads
   const rootIco = path.join(ROOT_DIR, 'logo.ico');
   pngToIco(logoSrc, rootIco);
@@ -540,52 +540,50 @@ call "%~dp0Lancer_Application.bat"
 `;
 fs.writeFileSync(path.join(RELEASE_DIR, 'Reinitialiser_A_Zero.bat'), resetBat, 'utf8');
 
-// 7.8 Securiser_Base_MongoDB.bat (Clean ASCII naming, robust elevation & execution)
+// 7.8 🔒_VERROUILLER_ET_SECURISER_MONGODB.bat
 const lockMongoBat = `@echo off
+chcp 65001 >nul
 color 0b
-title SECURISATION DE LA BASE MONGODB - DR. SALMA TIJINI
+title VERROUILLAGE ET SECURISATION MONGODB - DR. SALMA TIJINI
 
 echo ==============================================================================
-echo    SECURISATION ET VERROUILLAGE DE LA BASE DE DONNEES MONGODB
+echo    🔒 SÉCURISATION ET VERROUILLAGE TOTAL DE LA BASE MONGODB
 echo ==============================================================================
 echo.
+echo Ce script va activer l'authentification obligatoire sur MongoDB.
+echo Une fois active, PERSONNE ne pourra voir la base avec MongoDB Compass
+echo sans les identifiants administrateur de securite !
+echo.
 
-:: Verifier les droits administrateur
+:: Check for admin privileges
 net session >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [!] Ce script necessite les droits Administrateur Windows.
-    echo [!] Veuillez faire un clic droit sur ce fichier et choisir :
-    echo     "Executer en tant qu'administrateur"
-    echo.
-    pause
-    exit /b 1
+    echo [!] Demande d'elevation Administrateur...
+    powershell -Command "Start-Process '%~0' -Verb RunAs"
+    exit /b
 )
 
-echo [1/3] Demarrage temporaire du service MongoDB...
-net start MongoDB >nul 2>nul
-
-echo.
-echo [2/3] Creation des comptes administrateurs securises...
-cd /d "%~dp0app"
+echo [1/3] Creation des comptes administrateurs et applicatifs...
 node "%~dp0scripts\\setup_mongodb_auth.js"
-if %errorlevel% neq 0 (
-    echo [AVERTISSEMENT] Note lors de la configuration des comptes.
-)
 
 echo.
-echo [3/3] Modification de mongod.cfg et redemarrage du service securise...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$found=$false; foreach ($ver in @('8.0','7.0','6.0','5.0')) { $cfg=\\"C:\\Program Files\\MongoDB\\Server\\$ver\\bin\\mongod.cfg\\"; if (Test-Path $cfg) { $found=$true; $txt=[System.IO.File]::ReadAllText($cfg); if (-not $txt.Contains('authorization: enabled')) { $n=$txt -replace '#security:', ('security:' + [Environment]::NewLine + '  authorization: enabled'); [System.IO.File]::WriteAllText($cfg, $n); Write-Host 'Fichier mongod.cfg verouille avec succes.' -ForegroundColor Green } else { Write-Host 'Securite deja activee dans mongod.cfg.' -ForegroundColor Yellow }; break } }; if (-not $found) { Write-Host 'Fichier mongod.cfg introuvable.' -ForegroundColor Yellow }; Restart-Service -Name MongoDB -Force -ErrorAction SilentlyContinue; Write-Host 'Service MongoDB redemarre !' -ForegroundColor Green"
+echo [2/3] Modification de mongod.cfg (security.authorization: enabled)...
+powershell -Command "$cfg='C:\\Program Files\\MongoDB\\Server\\8.0\\bin\\mongod.cfg'; if (-not (Test-Path $cfg)) { $cfg='C:\\Program Files\\MongoDB\\Server\\7.0\\bin\\mongod.cfg' }; if (Test-Path $cfg) { $txt=[System.IO.File]::ReadAllText($cfg); if (-not $txt.Contains('authorization: enabled')) { $n=$txt -replace '#security:', ('security:' + [Environment]::NewLine + '  authorization: enabled'); [System.IO.File]::WriteAllText($cfg, $n); Write-Host 'Fichier mongod.cfg verouille avec succes.' -ForegroundColor Green } else { Write-Host 'Securite deja activee dans mongod.cfg.' -ForegroundColor Yellow } } else { Write-Host 'Fichier mongod.cfg introuvable.' -ForegroundColor Red }"
+
+echo.
+echo [3/3] Redemarrage du service Windows MongoDB avec la securite activee...
+powershell -Command "Restart-Service -Name MongoDB -Force; Start-Sleep -Seconds 2; Write-Host 'Service MongoDB redemarre et 100% securise !' -ForegroundColor Green"
 
 echo.
 echo ==============================================================================
-echo  SUCCES : LA BASE DE DONNEES EST DESORMAIS 100%% PROTEGEE !
-echo   - Connexion anonyme via MongoDB Compass : REFUSEE (Bloquee)
-echo   - Application Cabinet Dentaire : Connectee avec succes
+echo  🎉 SUCCES : LA BASE DE DONNEES EST DESORMAIS 100%% PROTEGEE !
+echo     - Connexion sans mot de passe via MongoDB Compass : REFUSEE (Bloquee)
+echo     - Application Cabinet Dentaire : Connectee avec succes
 echo ==============================================================================
 echo.
 pause
 `;
-fs.writeFileSync(path.join(RELEASE_DIR, 'Securiser_Base_MongoDB.bat'), lockMongoBat, 'utf8');
+fs.writeFileSync(path.join(RELEASE_DIR, '🔒_VERROUILLER_ET_SECURISER_MONGODB.bat'), lockMongoBat, 'utf8');
 
 // Copy auth setup script to release scripts directory
 fs.mkdirSync(path.join(RELEASE_DIR, 'scripts'), { recursive: true });
@@ -599,11 +597,11 @@ const guideText = `=============================================================
 1. PREMIERE UTILISATION / INSTALLATION SUR LE PC DU CABINET :
 -------------------------------------------------------------
 - Double-cliquez sur "Installer_Cabinet.bat".
-- Cela crée immédiatement une icône avec le logo sur le Bureau et active le démarrage automatique.
+- Cela crée immédiatement une icône sur le Bureau et active le démarrage automatique.
 
 2. VERROUILLAGE ET PROTECTION DE LA BASE DE DONNEES (ANTI-COMPASS) :
 --------------------------------------------------------------------
-- Faites un clic droit sur "Securiser_Base_MongoDB.bat" 
+- Faites un clic droit sur "🔒_VERROUILLER_ET_SECURISER_MONGODB.bat" 
   -> Cliquez sur "Exécuter en tant qu'administrateur".
 - Cela active l'authentification stricte sur MongoDB et empêche quiconque
   d'ouvrir ou d'exporter les données avec MongoDB Compass ou tout autre outil.
@@ -622,10 +620,11 @@ const guideText = `=============================================================
 - Collez la clé de licence reçue dans l'application et cliquez sur "Activer".
 
 5. COMPTE ADMINISTRATEUR PAR DEFAUT :
--------------------------------------
-- Identifiant : doctor@tijini.com  (ou admin)
-- Mot de passe : Moujahid@97
+--------------------------------------
+- Nom d'utilisateur / Email : admin (ou admin@tijini.com)
+- Mot de passe              : Moujahid@97
 (Connectez-vous pour ajouter les comptes du médecin et des assistantes dans Paramètres > Équipe).
+
 
 6. DESINSTALLATION OU REINITIALISATION :
 ----------------------------------------

@@ -36,15 +36,15 @@ fs.writeFileSync(path.join(dirInstallateurs, 'LISEZ_MOI_TELECHARGEMENTS.txt'), i
 // 2. Copy Release into 2_APPLICATION_A_COPIER_CHEZ_TBIB
 const releaseSrc = path.join(ROOT_DIR, 'Cabinet_Dr_Salma_Tijini_Release');
 if (fs.existsSync(releaseSrc)) {
-  console.log('Copie du dossier Cabinet_Dr_Salma_Tijini_Release...');
-  copyDirSync(releaseSrc, path.join(dirApp, 'Cabinet_Dr_Salma_Tijini_Release'));
+   console.log('Copie du dossier Cabinet_Dr_Salma_Tijini_Release...');
+   copyDirSync(releaseSrc, path.join(dirApp, 'Cabinet_Dr_Salma_Tijini_Release'));
 }
 
 // 3. Copy Developer Tools into 3_DEVELOPPEUR_POUR_VOUS_SEULEMENT
 const devSrc = path.join(ROOT_DIR, 'DEVELOPER_TOOLS');
 if (fs.existsSync(devSrc)) {
-  console.log('Copie des outils de génération de licence...');
-  copyDirSync(devSrc, path.join(dirDev, 'DEVELOPER_TOOLS'));
+   console.log('Copie des outils de génération de licence...');
+   copyDirSync(devSrc, path.join(dirDev, 'DEVELOPER_TOOLS'));
 }
 
 // 4. Master Guide file at the root of the USB pack
@@ -80,7 +80,7 @@ ETAPE 4 : Dans le dossier copié, double-cliquez sur "Installer_Cabinet.bat".
              dès que le PC s'allume (même après coupure de courant).
 
 ETAPE 4 BIS (SÉCURITÉ ANTI-COMPASS) :
-          -> Faites un clic droit sur "Securiser_Base_MongoDB.bat" 
+          -> Faites un clic droit sur "🔒_VERROUILLER_ET_SECURISER_MONGODB.bat" 
              et choisissez "Exécuter en tant qu'administrateur".
           -> Cela active la sécurité stricte sur MongoDB et bloque tout accès non autorisé (Compass, export...).
 
@@ -96,28 +96,28 @@ C'EST TOUT ! Le cabinet est prêt, ultra-sécurisé et sauvegardé chaque jour �
 fs.writeFileSync(path.join(USB_PACK_DIR, 'GUIDE_INSTALLATION_SUR_PLACE.txt'), masterGuide, 'utf8');
 
 function copyDirSync(src, dest) {
-  fs.mkdirSync(dest, { recursive: true });
-  const entries = fs.readdirSync(src, { withFileTypes: true });
+   fs.mkdirSync(dest, { recursive: true });
+   const entries = fs.readdirSync(src, { withFileTypes: true });
 
-  for (const entry of entries) {
-    if (
-      entry.name === '.wwebjs_auth' ||
-      entry.name === '.wwebjs_cache' ||
-      entry.name === '.git' ||
-      entry.name === '.DS_Store'
-    ) {
-      continue;
-    }
+   for (const entry of entries) {
+      if (
+         entry.name === '.wwebjs_auth' ||
+         entry.name === '.wwebjs_cache' ||
+         entry.name === '.git' ||
+         entry.name === '.DS_Store'
+      ) {
+         continue;
+      }
 
-    const srcPath = path.join(src, entry.name);
-    const destPath = path.join(dest, entry.name);
+      const srcPath = path.join(src, entry.name);
+      const destPath = path.join(dest, entry.name);
 
-    if (entry.isDirectory()) {
-      copyDirSync(srcPath, destPath);
-    } else {
-      fs.copyFileSync(srcPath, destPath);
-    }
-  }
+      if (entry.isDirectory()) {
+         copyDirSync(srcPath, destPath);
+      } else {
+         fs.copyFileSync(srcPath, destPath);
+      }
+   }
 }
 
 console.log('✅ Structure complète créée dans : ' + USB_PACK_DIR);
