@@ -49,32 +49,30 @@ import ClinicConfig from './models/ClinicConfig';
 // Connect to MongoDB & Auto-Bootstrap default admin with resilient auto-retry
 const connectWithRetry = async () => {
   const primaryUri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/dr-tijini';
-  const fallbackUri = 'mongodb://127.0.0.1:27017/dr-tijini';
+  const anonymousUri = 'mongodb://127.0.0.1:27017/dr-tijini';
+  const secureUri = 'mongodb://tijini_app:Tijini%40App%23Dental2026%21@127.0.0.1:27017/dr-tijini?authSource=dr-tijini';
+
+  const urisToTry = Array.from(new Set([primaryUri, anonymousUri, secureUri]));
 
   let connected = false;
   let attempts = 0;
 
   while (!connected) {
     attempts++;
-    try {
-      await mongoose.connect(primaryUri, { serverSelectionTimeoutMS: 5000 });
-      connected = true;
-      console.log('✅ MongoDB connected successfully.');
-    } catch (err: any) {
-      console.warn(`⚠️ [MongoDB] Tentative #${attempts} échouée avec l'URI principale: ${err.message}`);
-      if (primaryUri !== fallbackUri) {
-        try {
-          await mongoose.connect(fallbackUri, { serverSelectionTimeoutMS: 5000 });
-          connected = true;
-          console.log('✅ MongoDB connected successfully via fallback local URI.');
-        } catch (fallbackErr: any) {
-          console.warn(`⚠️ [MongoDB] Fallbacks local échoué: ${fallbackErr.message}`);
-        }
+    for (const uri of urisToTry) {
+      try {
+        await mongoose.connect(uri, { serverSelectionTimeoutMS: 3000 });
+        connected = true;
+        console.log(`✅ MongoDB connecté avec succès (${uri.includes('@') ? 'Mode Sécurisé Authentifié' : 'Mode Standard Local'}).`);
+        break;
+      } catch (err: any) {
+        // Try next URI
       }
-      if (!connected) {
-        console.log('⏳ Attente de 3 secondes avant la prochaine tentative de connexion MongoDB...');
-        await new Promise((resolve) => setTimeout(resolve, 3000));
-      }
+    }
+
+    if (!connected) {
+      console.warn(`⚠️ [MongoDB] Tentative #${attempts} échouée. Nouvelle tentative dans 3 secondes...`);
+      await new Promise((resolve) => setTimeout(resolve, 3000));
     }
   }
 

@@ -80,7 +80,7 @@ ETAPE 4 : Dans le dossier copié, double-cliquez sur "Installer_Cabinet.bat".
              dès que le PC s'allume (même après coupure de courant).
 
 ETAPE 4 BIS (SÉCURITÉ ANTI-COMPASS) :
-          -> Faites un clic droit sur "🔒_VERROUILLER_ET_SECURISER_MONGODB.bat" 
+          -> Faites un clic droit sur "Securiser_Base_MongoDB.bat" 
              et choisissez "Exécuter en tant qu'administrateur".
           -> Cela active la sécurité stricte sur MongoDB et bloque tout accès non autorisé (Compass, export...).
 
