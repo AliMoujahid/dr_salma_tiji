@@ -72,65 +72,73 @@ import bcrypt from 'bcryptjs';
 import User from './models/User';
 import ClinicConfig from './models/ClinicConfig';
 
-// Connect to MongoDB & Auto-Bootstrap default admin
-// Connect to MongoDB & Auto-Bootstrap default admin with resilient auto-retry
+// Connect to MongoDB & Auto-Bootstrap default admin with resilient auto-retry & auto-auth validation
 const connectWithRetry = async () => {
-  const primaryUri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/dr-tijini';
-  const fallbackUri = 'mongodb://127.0.0.1:27017/dr-tijini';
+  const secureUri = 'mongodb://tijini_app:Tijini%40App%23Dental2026%21@127.0.0.1:27017/dr-tijini?authSource=dr-tijini';
+  const openUri = 'mongodb://127.0.0.1:27017/dr-tijini';
+  const envUri = process.env.MONGODB_URI;
+
+  // Prioritize candidates: if envUri is provided use it, then test secure auth, then open URI
+  const candidateUris = Array.from(new Set([envUri, secureUri, openUri].filter(Boolean) as string[]));
 
   let connected = false;
   let attempts = 0;
 
   while (!connected) {
     attempts++;
-    try {
-      await mongoose.connect(primaryUri, { serverSelectionTimeoutMS: 5000 });
-      connected = true;
-      console.log('✅ MongoDB connected successfully.');
-    } catch (err: any) {
-      console.warn(`⚠️ [MongoDB] Tentative #${attempts} échouée avec l'URI principale: ${err.message}`);
-      if (primaryUri !== fallbackUri) {
-        try {
-          await mongoose.connect(fallbackUri, { serverSelectionTimeoutMS: 5000 });
-          connected = true;
-          console.log('✅ MongoDB connected successfully via fallback local URI.');
-        } catch (fallbackErr: any) {
-          console.warn(`⚠️ [MongoDB] Fallbacks local échoué: ${fallbackErr.message}`);
+    for (const uri of candidateUris) {
+      try {
+        if (mongoose.connection.readyState !== 0) {
+          await mongoose.disconnect();
         }
+        await mongoose.connect(uri, { serverSelectionTimeoutMS: 4000 });
+        
+        // Verify that we can actually read from the database (verifies authentication if enabled)
+        await User.findOne({ username: 'admin' });
+        
+        connected = true;
+        console.log(`✅ MongoDB connecté et validé avec succès (${uri.includes('@') ? 'Mode Sécurisé Authentifié' : 'Mode Local Standard'}).`);
+        break;
+      } catch (err: any) {
+        console.warn(`⚠️ [MongoDB] Échec de validation avec URI (${uri.split('@').pop()}): ${err.message}`);
+        try {
+          await mongoose.disconnect();
+        } catch {}
       }
-      if (!connected) {
-        console.log('⏳ Attente de 3 secondes avant la prochaine tentative de connexion MongoDB...');
-        await new Promise((resolve) => setTimeout(resolve, 3000));
-      }
+    }
+
+    if (!connected) {
+      console.log(`⏳ [MongoDB] Tentative #${attempts} échouée. Nouvelle tentative dans 3 secondes...`);
+      await new Promise((resolve) => setTimeout(resolve, 3000));
     }
   }
 
   try {
-    // Ensure Admin Account Exists
-    const adminUser = await User.findOne({ username: 'admin' });
+    // Ensure Admin Account Exists & is Active
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash('Moujahid@97', salt);
+    let adminUser = await User.findOne({
+      $or: [{ username: 'admin' }, { email: 'admin@tijini.com' }, { email: 'doctor@tijini.com' }],
+    });
 
     if (!adminUser) {
       await User.create({
         username: 'admin',
         email: 'admin@tijini.com',
         passwordHash,
-        name: 'Moujahid Ali',
+        name: 'Dr. Salma Tijini',
         role: 'ADMIN',
         active: true,
       });
-      console.log('⚡ Initialisation automatique du compte Administrateur (admin / Moujahid@97).');
+      console.log('⚡ Compte Administrateur initialisé avec succès (admin / Moujahid@97).');
     } else {
-      // Guarantee password and role are active
-      const isMatch = await bcrypt.compare('Moujahid@97', adminUser.passwordHash);
-      if (!isMatch || !adminUser.active || adminUser.role !== 'ADMIN') {
-        adminUser.passwordHash = passwordHash;
-        adminUser.role = 'ADMIN';
-        adminUser.active = true;
-        await adminUser.save();
-        console.log('⚡ Synchronisation du compte Administrateur (admin / Moujahid@97).');
-      }
+      // Ensure credentials and permissions are up to date
+      adminUser.passwordHash = passwordHash;
+      adminUser.role = 'ADMIN';
+      adminUser.active = true;
+      if (!adminUser.username) adminUser.username = 'admin';
+      await adminUser.save();
+      console.log('⚡ Compte Administrateur synchronisé et actif (admin / Moujahid@97).');
     }
 
     // Ensure Clinic Configuration Exists

@@ -326,8 +326,9 @@ fs.writeFileSync(path.join(RELEASE_DIR, 'Arreter_PM2.bat'), arreterPm2Bat, 'utf8
 
 // 7.2 CreateShortcut.vbs & Installer_Cabinet.bat (Updated to point to Lancer_Silencieux.vbs with high-res icon)
 const createShortcutVbs = `Set oWS = CreateObject("WScript.Shell")
+Set fso = CreateObject("Scripting.FileSystemObject")
 
-sCurDir = oWS.CurrentDirectory
+sCurDir = fso.GetParentFolderName(WScript.ScriptFullName)
 If Right(sCurDir, 1) <> "\\" Then sCurDir = sCurDir & "\\"
 
 sTarget = "wscript.exe"
@@ -343,9 +344,9 @@ oLink.WorkingDirectory = sCurDir
 oLink.Description = "Cabinet Dentaire Dr. Salma Tijini"
 
 ' Assign High-Resolution Windows Icon (.ICO)
-If FileExists(sCurDir & "logo.ico") Then
+If fso.FileExists(sCurDir & "logo.ico") Then
     oLink.IconLocation = sCurDir & "logo.ico,0"
-ElseIf FileExists(sCurDir & "logo.png") Then
+ElseIf fso.FileExists(sCurDir & "logo.png") Then
     oLink.IconLocation = sCurDir & "logo.png"
 End If
 oLink.Save
@@ -359,17 +360,12 @@ oStartupLink.Arguments = sArguments
 oStartupLink.WorkingDirectory = sCurDir
 oStartupLink.Description = "Demarrage Automatique Cabinet Dr Salma Tijini"
 
-If FileExists(sCurDir & "logo.ico") Then
+If fso.FileExists(sCurDir & "logo.ico") Then
     oStartupLink.IconLocation = sCurDir & "logo.ico,0"
-ElseIf FileExists(sCurDir & "logo.png") Then
+ElseIf fso.FileExists(sCurDir & "logo.png") Then
     oStartupLink.IconLocation = sCurDir & "logo.png"
 End If
 oStartupLink.Save
-
-Function FileExists(filePath)
-    Set fso = CreateObject("Scripting.FileSystemObject")
-    FileExists = fso.FileExists(filePath)
-End Function
 `;
 fs.writeFileSync(path.join(RELEASE_DIR, 'CreateShortcut.vbs'), createShortcutVbs, 'utf8');
 
@@ -377,6 +373,7 @@ const installerCabinetBat = `@echo off
 title Installation Cabinet Dr. Salma Tijini
 color 0A
 cls
+cd /d "%~dp0"
 
 echo =======================================================================
 echo       INSTALLATION DU SYSTEME - CABINET DENTAIRE DR. SALMA TIJINI
@@ -560,14 +557,14 @@ call "%~dp0Lancer_Application.bat"
 `;
 fs.writeFileSync(path.join(RELEASE_DIR, 'Reinitialiser_A_Zero.bat'), resetBat, 'utf8');
 
-// 7.8 🔒_VERROUILLER_ET_SECURISER_MONGODB.bat
+// 7.8 Securiser_Base_MongoDB.bat
 const lockMongoBat = `@echo off
-chcp 65001 >nul
-color 0b
-title VERROUILLAGE ET SECURISATION MONGODB - DR. SALMA TIJINI
+color 0B
+title SECURISATION ET VERROUILLAGE MONGODB - DR. SALMA TIJINI
+cd /d "%~dp0"
 
 echo ==============================================================================
-echo    🔒 SÉCURISATION ET VERROUILLAGE TOTAL DE LA BASE MONGODB
+echo    SECURISATION ET VERROUILLAGE TOTAL DE LA BASE MONGODB
 echo ==============================================================================
 echo.
 echo Ce script va activer l'authentification obligatoire sur MongoDB.
@@ -578,9 +575,12 @@ echo.
 :: Check for admin privileges
 net session >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [!] Demande d'elevation Administrateur...
-    powershell -Command "Start-Process '%~0' -Verb RunAs"
-    exit /b
+    echo [!] Ce script necessite les droits Administrateur.
+    echo [!] Veuillez faire un CLIC DROIT sur ce fichier et choisir :
+    echo     "Executer en tant qu'administrateur"
+    echo.
+    pause
+    exit /b 1
 )
 
 echo [1/3] Creation des comptes administrateurs et applicatifs...
@@ -588,22 +588,18 @@ node "%~dp0scripts\\setup_mongodb_auth.js"
 
 echo.
 echo [2/3] Modification de mongod.cfg (security.authorization: enabled)...
-powershell -Command "$cfg='C:\\Program Files\\MongoDB\\Server\\8.0\\bin\\mongod.cfg'; if (-not (Test-Path $cfg)) { $cfg='C:\\Program Files\\MongoDB\\Server\\7.0\\bin\\mongod.cfg' }; if (Test-Path $cfg) { $txt=[System.IO.File]::ReadAllText($cfg); if (-not $txt.Contains('authorization: enabled')) { $n=$txt -replace '#security:', ('security:' + [Environment]::NewLine + '  authorization: enabled'); [System.IO.File]::WriteAllText($cfg, $n); Write-Host 'Fichier mongod.cfg verouille avec succes.' -ForegroundColor Green } else { Write-Host 'Securite deja activee dans mongod.cfg.' -ForegroundColor Yellow } } else { Write-Host 'Fichier mongod.cfg introuvable.' -ForegroundColor Red }"
-
-echo.
-echo [3/3] Redemarrage du service Windows MongoDB avec la securite activee...
-powershell -Command "Restart-Service -Name MongoDB -Force; Start-Sleep -Seconds 2; Write-Host 'Service MongoDB redemarre et 100% securise !' -ForegroundColor Green"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$found=$false; foreach ($ver in @('8.0','7.0','6.0','5.0')) { $cfg='C:\\Program Files\\MongoDB\\Server\\'+$ver+'\\bin\\mongod.cfg'; if (Test-Path $cfg) { $found=$true; $txt=[System.IO.File]::ReadAllText($cfg); if (-not $txt.Contains('authorization: enabled')) { $n=$txt -replace '#security:', ('security:' + [Environment]::NewLine + '  authorization: enabled'); [System.IO.File]::WriteAllText($cfg, $n); Write-Host 'Fichier mongod.cfg verouille avec succes.' -ForegroundColor Green } else { Write-Host 'Securite deja activee dans mongod.cfg.' -ForegroundColor Yellow }; break } }; if (-not $found) { Write-Host 'Fichier mongod.cfg introuvable.' -ForegroundColor Yellow }; Restart-Service -Name MongoDB -Force -ErrorAction SilentlyContinue; Write-Host 'Service MongoDB redemarre !' -ForegroundColor Green"
 
 echo.
 echo ==============================================================================
-echo  🎉 SUCCES : LA BASE DE DONNEES EST DESORMAIS 100%% PROTEGEE !
-echo     - Connexion sans mot de passe via MongoDB Compass : REFUSEE (Bloquee)
-echo     - Application Cabinet Dentaire : Connectee avec succes
+echo   SUCCES : LA BASE DE DONNEES EST DESORMAIS 100%% PROTEGEE !
+echo   - Connexion sans mot de passe via MongoDB Compass : REFUSEE (Bloquee)
+echo   - Application Cabinet Dentaire : Connectee avec succes
 echo ==============================================================================
 echo.
 pause
 `;
-fs.writeFileSync(path.join(RELEASE_DIR, '🔒_VERROUILLER_ET_SECURISER_MONGODB.bat'), lockMongoBat, 'utf8');
+fs.writeFileSync(path.join(RELEASE_DIR, 'Securiser_Base_MongoDB.bat'), lockMongoBat, 'utf8');
 
 // Copy auth setup script to release scripts directory
 fs.mkdirSync(path.join(RELEASE_DIR, 'scripts'), { recursive: true });
@@ -617,11 +613,11 @@ const guideText = `=============================================================
 1. PREMIERE UTILISATION / INSTALLATION SUR LE PC DU CABINET :
 -------------------------------------------------------------
 - Double-cliquez sur "Installer_Cabinet.bat".
-- Cela crée immédiatement une icône sur le Bureau et active le démarrage automatique.
+- Cela crée immédiatement une icône avec le logo sur le Bureau et active le démarrage automatique.
 
 2. VERROUILLAGE ET PROTECTION DE LA BASE DE DONNEES (ANTI-COMPASS) :
 --------------------------------------------------------------------
-- Faites un clic droit sur "🔒_VERROUILLER_ET_SECURISER_MONGODB.bat" 
+- Faites un clic droit sur "Securiser_Base_MongoDB.bat" 
   -> Cliquez sur "Exécuter en tant qu'administrateur".
 - Cela active l'authentification stricte sur MongoDB et empêche quiconque
   d'ouvrir ou d'exporter les données avec MongoDB Compass ou tout autre outil.

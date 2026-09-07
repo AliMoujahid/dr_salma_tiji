@@ -89,17 +89,25 @@ async function main() {
 
   // Step 4: Update .env files
   console.log('\n4️⃣ Mise à jour des fichiers .env avec la chaîne de connexion sécurisée...');
-  const backendEnvPath = path.join(__dirname, '..', 'backend', '.env');
-  const releaseEnvPath = path.join(__dirname, '..', 'Cabinet_Dr_Salma_Tijini_Release', 'app', '.env');
+  const possibleEnvFiles = [
+    path.join(__dirname, '..', 'app', '.env'),
+    path.join(__dirname, '..', '.env'),
+    path.join(__dirname, '..', 'backend', '.env'),
+    path.join(__dirname, '..', 'Cabinet_Dr_Salma_Tijini_Release', 'app', '.env'),
+    path.join(__dirname, '..', 'Cabinet_Dr_Salma_Tijini_Release', '.env'),
+    path.join(process.cwd(), 'app', '.env'),
+    path.join(process.cwd(), '.env'),
+  ];
 
-  const envContent = `PORT=5000\nMONGODB_URI=${SECURE_URI}\nJWT_SECRET=super-secret-dental-jwt-key-2026-dr-tijini\n`;
+  const envContent = `PORT=5000\nNODE_ENV=production\nMONGODB_URI=${SECURE_URI}\nJWT_SECRET=DrSalmaTijini_Secured_Production_Key_2026_x99!\nLICENSE_MASTER_SECRET=DrSalmaTijini_SecuredDentalApp_MasterKey_2026_x87$kL!\n`;
 
-  fs.writeFileSync(backendEnvPath, envContent, 'utf8');
-  console.log(`✅ Mis à jour : ${backendEnvPath}`);
-
-  if (fs.existsSync(path.dirname(releaseEnvPath))) {
-    fs.writeFileSync(releaseEnvPath, envContent, 'utf8');
-    console.log(`✅ Mis à jour : ${releaseEnvPath}`);
+  for (const envFile of possibleEnvFiles) {
+    try {
+      if (fs.existsSync(path.dirname(envFile))) {
+        fs.writeFileSync(envFile, envContent, 'utf8');
+        console.log(`✅ Mis à jour : ${envFile}`);
+      }
+    } catch {}
   }
 
   console.log('\n================================================================');
