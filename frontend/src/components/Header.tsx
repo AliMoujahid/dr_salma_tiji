@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Search, Bell, AlertTriangle, User, Sun, Moon, Menu } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { NotificationCenter } from './NotificationCenter';
+import { API_URL } from '../config/api';
 
 interface SearchResult {
   _id: string;
@@ -47,8 +48,6 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick, isSidebarCollapsed 
   const toggleTheme = () => {
     setTheme(theme === 'light' ? 'dark' : 'light');
   };
-
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
   useEffect(() => {
     if (searchQuery.length < 2) {
@@ -97,28 +96,28 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick, isSidebarCollapsed 
   };
 
   return (
-    <header className="relative w-full h-20 px-4 md:px-8 flex items-center justify-between bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200/80 dark:border-white/5 z-30 select-none gap-3 print:hidden transition-colors">
+    <header className="relative w-full h-14 md:h-16 px-4 md:px-6 flex items-center justify-between bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200/80 dark:border-white/5 z-30 select-none gap-3 print:hidden transition-colors shrink-0">
       {/* Global Search & Mobile/Desktop Menu Toggle */}
       <div className="flex items-center gap-3 flex-1 min-w-0">
         {/* Menu toggle hamburger */}
         <button
           onClick={onMenuClick}
           type="button"
-          className="p-2.5 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100 hover:bg-slate-200 dark:bg-slate-900/40 dark:hover:bg-slate-900/80 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-all cursor-pointer flex items-center justify-center shrink-0"
+          className="p-2 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100 hover:bg-slate-200 dark:bg-slate-900/40 dark:hover:bg-slate-900/80 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-all cursor-pointer flex items-center justify-center shrink-0"
           title={isSidebarCollapsed ? 'Afficher le menu complet' : 'Réduire / Masquer le menu'}
         >
-          <Menu className="w-5 h-5" />
+          <Menu className="w-4 h-4 md:w-5 md:h-5" />
         </button>
 
-        <div className="relative w-full max-w-[200px] xs:max-w-xs sm:max-w-md md:w-96" ref={dropdownRef}>
+        <div className="relative w-full max-w-[200px] xs:max-w-xs sm:max-w-md md:w-80" ref={dropdownRef}>
           <div className="relative">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
               type="text"
               placeholder="Rechercher..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full h-11 pl-10 pr-4 rounded-xl text-sm bg-slate-100/90 dark:bg-slate-900/60 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 shadow-xs transition-all"
+              className="w-full h-9 md:h-10 pl-9 pr-3 rounded-xl text-xs md:text-sm bg-slate-100/90 dark:bg-slate-900/60 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 shadow-xs transition-all"
             />
           </div>
 

@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { API_URL } from '../config/api';
 import { NotificationLog, MessageTemplate, NotificationSettings, Patient } from '../types';
 import { formatDate, formatDateTime } from '../utils/dateUtils';
 
@@ -77,8 +78,6 @@ export const NotificationManager: React.FC = () => {
   // WhatsApp Web Client Status state
   const [waStatus, setWaStatus] = useState<any>(null);
   const [loadingWaStatus, setLoadingWaStatus] = useState(false);
-
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
   const fetchWaStatus = () => {
     fetch(`${API_URL}/notifications/whatsapp-status`, {

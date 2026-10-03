@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { formatDate, formatBirthDateWithAge, calculateAge } from '../utils/dateUtils';
 import { CustomDatePicker } from '../components/CustomDatePicker';
+import { API_URL } from '../config/api';
 
 
 
@@ -55,8 +56,6 @@ export const Patients: React.FC = () => {
   const [allergiesInput, setAllergiesInput] = useState('');
   const [medicationsInput, setMedicationsInput] = useState('');
   const [notes, setNotes] = useState('');
-
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
   useEffect(() => {
     fetchPatients();

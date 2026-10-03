@@ -18,7 +18,9 @@ import { InvoiceEditor } from './pages/InvoiceEditor';
 import { Reports } from './pages/Reports';
 import { Settings } from './pages/Settings';
 import { NotificationManager } from './pages/NotificationManager';
+import { NanoPixStudio } from './pages/NanoPixStudio';
 import { ClinicConfig } from './types';
+import { API_URL } from './config/api';
 
 const queryClient = new QueryClient();
 
@@ -68,8 +70,6 @@ const AppLayout: React.FC = () => {
     }
   };
 
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-
   useEffect(() => {
     fetch(`${API_URL}/clinic/config`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -80,7 +80,7 @@ const AppLayout: React.FC = () => {
   }, [token]);
 
   return (
-    <div className="flex bg-[var(--bg-app)] text-[var(--text-primary)] min-h-screen font-sans selection:bg-blue-500/30 print:bg-white print:text-black print:block print:min-h-0 transition-colors duration-300">
+    <div className="flex bg-[var(--bg-app)] text-[var(--text-primary)] h-screen overflow-hidden font-sans selection:bg-blue-500/30 print:bg-white print:text-black print:block print:min-h-0 transition-colors duration-300">
       {/* Sidebar Layout */}
       <Sidebar 
         clinicNameFr={config?.cabinetFr} 
@@ -98,14 +98,14 @@ const AppLayout: React.FC = () => {
       />
 
       {/* Main Panel grid (Header + Content) */}
-      <div className="flex-1 flex flex-col min-w-0 print:block transition-all duration-300">
+      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden print:block transition-all duration-300">
         <Header 
           onMenuClick={toggleSidebar} 
           isSidebarCollapsed={isSidebarCollapsed}
         />
         
         {/* Main Content Area */}
-        <main className="flex-1 flex flex-col relative print:block print:p-0">
+        <main className="flex-1 min-h-0 flex flex-col relative overflow-hidden print:block print:p-0">
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/patients" element={<Patients />} />
@@ -116,6 +116,7 @@ const AppLayout: React.FC = () => {
             <Route path="/payments" element={<Navigate to="/invoices" replace />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/notifications" element={<NotificationManager />} />
+            <Route path="/nanopix" element={<NanoPixStudio />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
@@ -125,11 +126,11 @@ const AppLayout: React.FC = () => {
   );
 };
 
+
+
 export const App: React.FC = () => {
   const [licenseStatus, setLicenseStatus] = useState<LicenseStatusData | null>(null);
   const [checkingLicense, setCheckingLicense] = useState(true);
-
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
   const checkLicense = async () => {
     try {

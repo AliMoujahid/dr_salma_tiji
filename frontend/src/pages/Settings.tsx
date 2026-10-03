@@ -4,6 +4,7 @@ import { useToast } from '../context/ToastContext';
 import { Settings as SettingsIcon, Save, UploadCloud, Database, Download, CheckCircle2, User, Camera, Key, Lock, Clock, RefreshCw, Users, UserPlus, Trash2, Edit2, Shield, Sparkles, Building2, AlertTriangle, Printer, Phone, MapPin, Mail, Globe, Stethoscope, Layers, FileText } from 'lucide-react';
 import { ClinicConfig } from '../types';
 import { DentalActsManager } from '../components/DentalActsManager';
+import { API_URL } from '../config/api';
 
 export const Settings: React.FC = () => {
   const { user, token, isAdmin, updateUser } = useAuth();
@@ -60,8 +61,6 @@ export const Settings: React.FC = () => {
 
   // Professional Audit Logs history state
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
-
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
   useEffect(() => {
     fetchClinicConfig();

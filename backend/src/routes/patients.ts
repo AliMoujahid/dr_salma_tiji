@@ -4,6 +4,7 @@ import Patient from '../models/Patient';
 import Appointment from '../models/Appointment';
 import AuditLog from '../models/AuditLog';
 import { protect, AuthRequest } from '../middleware/auth';
+import { recordAudit } from '../middleware/security';
 
 const router = Router();
 
@@ -100,7 +101,7 @@ router.get('/:id', protect, async (req: AuthRequest, res: Response) => {
   }
 });
 
-// Create new patient
+// Create new patient with Audit Log
 router.post('/', protect, async (req: AuthRequest, res: Response) => {
   try {
     const {
@@ -146,13 +147,24 @@ router.post('/', protect, async (req: AuthRequest, res: Response) => {
       isFavorite: false,
     });
 
+    await recordAudit({
+      userId: req.user?._id,
+      userName: req.user?.name || 'Praticien',
+      action: 'CREATE_PATIENT',
+      severity: 'INFO',
+      targetId: newPatient._id,
+      targetName: newPatient.name,
+      details: `Création de la fiche patient "${newPatient.name}" (${newPatient.phone}).`,
+      req,
+    });
+
     res.status(201).json(newPatient);
   } catch (error: any) {
     res.status(500).json({ message: 'Erreur lors de la création du patient.', error: error.message });
   }
 });
 
-// Edit patient details
+// Edit patient details with Audit Log
 router.put('/:id', protect, async (req: AuthRequest, res: Response) => {
   try {
     if (!isValidObjectId(req.params.id)) {
@@ -165,6 +177,18 @@ router.put('/:id', protect, async (req: AuthRequest, res: Response) => {
       res.status(404).json({ message: 'Patient introuvable.' });
       return;
     }
+
+    await recordAudit({
+      userId: req.user?._id,
+      userName: req.user?.name || 'Praticien',
+      action: 'UPDATE_PATIENT',
+      severity: 'INFO',
+      targetId: updatedPatient._id,
+      targetName: updatedPatient.name,
+      details: `Mise à jour des informations du patient "${updatedPatient.name}".`,
+      req,
+    });
+
     res.json(updatedPatient);
   } catch (error: any) {
     res.status(500).json({ message: 'Erreur lors de la mise à jour du patient.', error: error.message });
@@ -186,6 +210,18 @@ router.put('/:id/archive', protect, async (req: AuthRequest, res: Response) => {
     }
     patient.isArchived = !patient.isArchived;
     await patient.save();
+
+    await recordAudit({
+      userId: req.user?._id,
+      userName: req.user?.name || 'Praticien',
+      action: 'UPDATE_PATIENT',
+      severity: 'INFO',
+      targetId: patient._id,
+      targetName: patient.name,
+      details: patient.isArchived ? `Archivage du dossier "${patient.name}".` : `Désarchivage du dossier "${patient.name}".`,
+      req,
+    });
+
     res.json({ message: patient.isArchived ? 'Patient archivé.' : 'Patient désarchivé.', patient });
   } catch (error: any) {
     res.status(500).json({ message: 'Erreur lors de la modification de l\'archivage.', error: error.message });
@@ -213,7 +249,7 @@ router.put('/:id/favorite', protect, async (req: AuthRequest, res: Response) => 
   }
 });
 
-// Delete patient completely (Soft Delete with Audit Log tracking)
+// Delete patient completely (Soft Delete with Audit Log tracking & restore capability)
 router.delete('/:id', protect, async (req: AuthRequest, res: Response) => {
   try {
     if (!isValidObjectId(req.params.id)) {
@@ -251,14 +287,16 @@ router.delete('/:id', protect, async (req: AuthRequest, res: Response) => {
     }
 
     // Create Audit Log with backupData snapshot for restore
-    await AuditLog.create({
+    await recordAudit({
       userId: req.user?._id,
       userName: req.user?.name || 'Inconnu',
       action: 'DELETE_PATIENT',
+      severity: 'WARNING',
       targetId: patient._id,
       targetName: patient.name,
       details: `Patient "${patient.name}" (${patient.nationalId || 'sans CIN'}) a été supprimé par ${req.user?.name}.`,
       backupData: patient.toObject(),
+      req,
     });
 
     res.json({ message: 'Patient supprimé et archivé dans l\'historique professionnel.' });
@@ -268,3 +306,4 @@ router.delete('/:id', protect, async (req: AuthRequest, res: Response) => {
 });
 
 export default router;
+

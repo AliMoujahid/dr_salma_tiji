@@ -2,16 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { BarChart3, TrendingUp, Download, CheckSquare, Users, CreditCard } from 'lucide-react';
 import { formatDate, calculateAge } from '../utils/dateUtils';
-
-
-
+import { API_URL } from '../config/api';
 
 export const Reports: React.FC = () => {
   const { token } = useAuth();
   const [financials, setFinancials] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
   useEffect(() => {
     fetchFinancials();

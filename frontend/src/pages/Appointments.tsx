@@ -28,6 +28,7 @@ import {
   Check,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { API_URL } from '../config/api';
 import { useToast } from '../context/ToastContext';
 import { Appointment, Patient } from '../types';
 import { SearchablePatientSelect } from '../components/SearchablePatientSelect';
@@ -143,8 +144,6 @@ export const Appointments: React.FC = () => {
   const [status, setStatus] = useState<'Scheduled' | 'Confirmed' | 'In Treatment' | 'Completed' | 'Cancelled' | 'No Show'>('Scheduled');
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
-
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
   useEffect(() => {
     fetchAppointments();

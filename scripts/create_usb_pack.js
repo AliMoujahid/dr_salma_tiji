@@ -90,6 +90,12 @@ ETAPE 5 : Double-cliquez sur l'icône du Bureau "Cabinet Dr Salma Tijini".
           -> Collez son Machine ID, générez la clé, et collez-la dans son application.
           -> Cliquez sur "Activer le Logiciel".
 
+ETAPE 6 (OPTIONNEL : ACCÈS DEPUIS UN 2ÈME PC / TABLETTE EN WIFI) :
+          -> Sur le PC Principal, double-cliquez sur "Afficher_IP_Reseau_Local.bat".
+          -> Sur le 2ème PC (ex: PC Réception ou tablette), ouvrez Google Chrome
+             et tapez l'adresse affichée (ex: http://192.168.1.50:5000).
+          -> Aucun logiciel à installer sur le 2ème PC ! Tout fonctionne en réseau instantanément.
+
 C'EST TOUT ! Le cabinet est prêt, ultra-sécurisé et sauvegardé chaque jour à 23h00.
 =======================================================================
 `;

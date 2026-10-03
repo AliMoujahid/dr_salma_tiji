@@ -1,5 +1,6 @@
 import React from 'react';
 import { Invoice, ClinicConfig } from '../types';
+import { UPLOADS_URL } from '../config/api';
 
 interface InvoicePrintLayoutProps {
   invoice: Invoice;
@@ -123,9 +124,6 @@ export function formatNumberToWordsWithCentimes(netVal: number): string {
 }
 
 export const InvoicePrintLayout: React.FC<InvoicePrintLayoutProps> = ({ invoice, config }) => {
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-  const UPLOADS_URL = API_URL.replace('/api', '/uploads');
-
   const formattedDate = () => {
     if (!invoice.date) return '.........';
     const dateObj = new Date(invoice.date);

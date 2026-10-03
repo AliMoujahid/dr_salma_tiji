@@ -385,10 +385,13 @@ echo  2. Configurer le demarrage automatique invisible avec Windows
 echo     (AUCUNE fenetre console noire n'apparaitra !)
 echo.
 
-echo [1/2] Creation du raccourci silencieux sur votre Bureau et au demarrage...
+echo [1/3] Creation du raccourci silencieux sur votre Bureau et au demarrage...
 cscript //nologo "%~dp0CreateShortcut.vbs"
 
-echo [2/2] Configuration du demarrage automatique avec Windows validee.
+echo [2/3] Configuration du demarrage automatique avec Windows validee.
+
+echo [3/3] Configuration du Pare-Feu Windows (Acces Reseau Local / Multi-Postes)...
+netsh advfirewall firewall add rule name="Cabinet Dentaire Dr Salma Tijini (Port 5000)" dir=in action=allow protocol=TCP localport=5000 >nul 2>nul
 
 echo.
 echo =======================================================================
@@ -396,6 +399,7 @@ echo   [OK] INSTALLATION ET DEMARRAGE AUTOMATIQUE CONFIGURES AVEC SUCCES !
 echo.
 echo   - Raccourci silencieux ajoute sur le Bureau : "Cabinet Dr Salma Tijini"
 echo   - Demarrage 100%% invisible au redemarrage du PC : ACTIVE
+echo   - Acces Reseau Local (Multi-Postes / WiFi) : ACTIVE
 echo.
 echo   Des que vous cliquez sur le raccourci ou allumez le PC,
 echo   l'application demarre sans aucune fenetre console noire !
@@ -404,6 +408,28 @@ echo.
 pause
 `;
 fs.writeFileSync(path.join(RELEASE_DIR, 'Installer_Cabinet.bat'), installerCabinetBat, 'utf8');
+
+// 7.2.b Afficher_IP_Reseau_Local.bat (Pour connecter d'autres PC / Tablettes sur le même WiFi)
+const afficherIpBat = `@echo off
+title Adresse Reseau Local - Cabinet Dentaire Dr. Salma Tijini
+color 0B
+cls
+echo =======================================================================
+echo     ACCES DEPUIS UN AUTRE PC DU CABINET (RESEAU LOCAL / WIFI)
+echo =======================================================================
+echo.
+echo Pour acceder a l'application depuis un 2eme ordinateur (Reception / Fauteuil):
+echo.
+for /f "tokens=2 delims=:" %%a in ('ipconfig ^| findstr /c:"IPv4"') do (
+    echo   -^> Ouvrez le navigateur sur l'autre PC/Tablette et tapez : http:%%a:5000
+)
+echo.
+echo (Assurez-vous que les 2 ordinateurs sont connectes sur la meme Box WiFi).
+echo =======================================================================
+echo.
+pause
+`;
+fs.writeFileSync(path.join(RELEASE_DIR, 'Afficher_IP_Reseau_Local.bat'), afficherIpBat, 'utf8');
 
 // 7.3 Arreter_Application.bat
 const arreterAppBat = `@echo off
@@ -646,6 +672,13 @@ const guideText = `=============================================================
 ----------------------------------------
 - Double-cliquez sur "Desinstaller_Cabinet.bat" pour désinstaller l'application et retirer les raccourcis.
 - Double-cliquez sur "Reinitialiser_A_Zero.bat" pour effacer la licence et retester l'activation depuis le début.
+
+7. UTILISATION MULTI-POSTES (ACCEDER DEPUIS UN AUTRE PC / TABLETTE EN WIFI) :
+-----------------------------------------------------------------------------
+- Vous pouvez ouvrir l'application depuis le PC de la secrétaire, un 2ème PC ou une tablette
+  sans RIEN installer sur les autres ordinateurs !
+- Double-cliquez sur "Afficher_IP_Reseau_Local.bat" sur le PC Principal pour voir l'adresse.
+- Sur le 2ème PC, ouvrez simplement Google Chrome et tapez l'adresse affichée (ex: http://192.168.1.50:5000).
 
 =======================================================================
 `;

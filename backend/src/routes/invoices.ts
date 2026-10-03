@@ -4,6 +4,7 @@ import Invoice from '../models/Invoice';
 import Patient from '../models/Patient';
 import PaymentTransaction from '../models/Payment';
 import { protect, AuthRequest } from '../middleware/auth';
+import { recordAudit } from '../middleware/security';
 
 const router = Router();
 
@@ -107,6 +108,8 @@ router.post('/', protect, async (req: AuthRequest, res: Response) => {
       return;
     }
 
+    const patient = await Patient.findById(patientId);
+
     // Format line items with amount (A payer), advance (Avance), and remaining (Reste)
     const formattedItems = items.map((item: any) => {
       const amount = Math.max(0, parseFloat(item.amount) || 0);
@@ -186,6 +189,17 @@ router.post('/', protect, async (req: AuthRequest, res: Response) => {
       }
     }
 
+    await recordAudit({
+      userId: req.user?._id,
+      userName: req.user?.name || 'Praticien',
+      action: 'CREATE_INVOICE',
+      severity: 'INFO',
+      targetId: newInvoice._id,
+      targetName: `Facture N° ${invoiceNumber}`,
+      details: `Création de la facture N° ${invoiceNumber} pour ${patient?.name || 'Patient'} - Total: ${netAmount} DH (Avance: ${finalPaidAmount} DH).`,
+      req,
+    });
+
     const populated = await Invoice.findById(newInvoice._id)
       .populate('patientId', 'name phone nationalId')
       .populate('createdBy', 'name');
@@ -260,6 +274,18 @@ router.put('/:id', protect, async (req: AuthRequest, res: Response) => {
     if (date && !isNaN(new Date(date).getTime())) invoice.date = new Date(date);
 
     await invoice.save();
+
+    await recordAudit({
+      userId: req.user?._id,
+      userName: req.user?.name || 'Praticien',
+      action: 'UPDATE_INVOICE',
+      severity: 'INFO',
+      targetId: invoice._id,
+      targetName: `Facture N° ${invoice.invoiceNumber}`,
+      details: `Mise à jour des honoraires de la facture N° ${invoice.invoiceNumber} (Montant Net: ${invoice.netAmount} DH).`,
+      req,
+    });
+
     const populated = await Invoice.findById(invoice._id)
       .populate('patientId', 'name phone nationalId')
       .populate('createdBy', 'name');
@@ -283,6 +309,19 @@ router.delete('/:id', protect, async (req: AuthRequest, res: Response) => {
       res.status(404).json({ message: 'Facture introuvable.' });
       return;
     }
+
+    await recordAudit({
+      userId: req.user?._id,
+      userName: req.user?.name || 'Praticien',
+      action: 'DELETE_INVOICE',
+      severity: 'WARNING',
+      targetId: deleted._id,
+      targetName: `Facture N° ${deleted.invoiceNumber}`,
+      details: `Suppression définitive de la facture N° ${deleted.invoiceNumber} (${deleted.netAmount} DH).`,
+      backupData: deleted.toObject(),
+      req,
+    });
+
     res.json({ message: 'Facture supprimée avec succès.' });
   } catch (error: any) {
     res.status(500).json({ message: 'Erreur lors de la suppression de la facture.', error: error.message });
@@ -290,3 +329,4 @@ router.delete('/:id', protect, async (req: AuthRequest, res: Response) => {
 });
 
 export default router;
+

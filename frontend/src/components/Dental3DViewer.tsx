@@ -23,6 +23,7 @@ import { ToothHistory, ToothStatusType, ToothMetadata, XRayMeasurement } from '.
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { XRayViewerModal } from './XRayViewerModal';
+import { API_URL } from '../config/api';
 import { formatDate } from '../utils/dateUtils';
 
 import { TreatmentAnimationModal } from './TreatmentAnimationModal';
@@ -606,7 +607,6 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId }) => 
   const [treatmentAnimType, setTreatmentAnimType] = useState<string | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
   // Arch teeth arrays
   const adultUpper = [18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26, 27, 28];

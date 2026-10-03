@@ -7,6 +7,7 @@ import { useToast } from '../context/ToastContext';
 import { InvoicePrintLayout } from '../components/InvoicePrintLayout';
 import { SearchablePatientSelect } from '../components/SearchablePatientSelect';
 import { CustomDatePicker } from '../components/CustomDatePicker';
+import { API_URL } from '../config/api';
 
 
 export const InvoiceEditor: React.FC = () => {
@@ -41,8 +42,6 @@ export const InvoiceEditor: React.FC = () => {
   // Edit / Duplicate ID target
   const [editInvoiceId, setEditInvoiceId] = useState<string | null>(null);
   const [printInvoiceData, setPrintInvoiceData] = useState<Invoice | null>(null);
-
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
   useEffect(() => {
     fetchInvoices();

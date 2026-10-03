@@ -22,6 +22,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { DentalAct } from '../types';
+import { API_URL } from '../config/api';
 
 export const DENTAL_CATEGORIES = [
   'Consultation & Bilan',
@@ -55,8 +56,6 @@ export const DentalActsManager: React.FC = () => {
   const [formDescription, setFormDescription] = useState('');
   const [formIsFavorite, setFormIsFavorite] = useState(false);
   const [saving, setSaving] = useState(false);
-
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
   useEffect(() => {
     fetchActs();

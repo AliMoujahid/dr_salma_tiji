@@ -9,8 +9,16 @@ import Invoice from '../models/Invoice';
 import PaymentTransaction from '../models/Payment';
 import ClinicConfig from '../models/ClinicConfig';
 import DocumentModel from '../models/Document';
+import DentalAct from '../models/DentalAct';
+import NotificationSettings from '../models/NotificationSettings';
+import MessageTemplate from '../models/MessageTemplate';
+import FollowUpReminder from '../models/FollowUpReminder';
+import AuditLog from '../models/AuditLog';
+import NotificationLog from '../models/NotificationLog';
+import WhatsAppReceivedMedia from '../models/WhatsAppReceivedMedia';
 import { protect, restrictTo, AuthRequest } from '../middleware/auth';
 import { backupScheduler } from '../services/backupScheduler';
+import { recordAudit } from '../middleware/security';
 
 const router = Router();
 const upload = multer({ dest: 'uploads/temp/' });
@@ -40,6 +48,16 @@ router.post('/run-now', protect, restrictTo('ADMIN', 'DOCTOR'), async (req: Auth
   try {
     const result = await backupScheduler.runBackupWithRetry(3);
     if (result.success) {
+      await recordAudit({
+        userId: req.user?._id,
+        userName: req.user?.name || 'Administrateur',
+        action: 'TRIGGER_BACKUP',
+        severity: 'INFO',
+        targetName: 'Sauvegarde Manuel / On-Demand',
+        details: `Déclenchement manuel d'une sauvegarde complète du cabinet.`,
+        req,
+      });
+
       res.json({
         success: true,
         message: 'Sauvegarde effectuée avec succès !',
@@ -57,14 +75,6 @@ router.post('/run-now', protect, restrictTo('ADMIN', 'DOCTOR'), async (req: Auth
     res.status(500).json({ message: 'Erreur lors de l\'exécution de la sauvegarde.', error: error.message });
   }
 });
-
-import DentalAct from '../models/DentalAct';
-import NotificationSettings from '../models/NotificationSettings';
-import MessageTemplate from '../models/MessageTemplate';
-import FollowUpReminder from '../models/FollowUpReminder';
-import AuditLog from '../models/AuditLog';
-import NotificationLog from '../models/NotificationLog';
-import WhatsAppReceivedMedia from '../models/WhatsAppReceivedMedia';
 
 /**
  * GET /api/backup/export
@@ -90,6 +100,16 @@ router.get('/export', protect, restrictTo('ADMIN', 'DOCTOR'), async (req: AuthRe
       whatsAppReceivedMedia: await WhatsAppReceivedMedia.find(),
       exportedAt: new Date().toISOString(),
     };
+
+    await recordAudit({
+      userId: req.user?._id,
+      userName: req.user?.name || 'Administrateur',
+      action: 'TRIGGER_BACKUP',
+      severity: 'WARNING',
+      targetName: 'Export JSON Base de Données',
+      details: `Export complet de la base de données au format JSON téléchargé.`,
+      req,
+    });
 
     res.setHeader('Content-disposition', `attachment; filename=dental_clinic_backup_${Date.now()}.json`);
     res.setHeader('Content-type', 'application/json');
@@ -164,6 +184,16 @@ router.post(
       if (parsedData.notificationLogs?.length) await NotificationLog.insertMany(parsedData.notificationLogs);
       if (parsedData.whatsAppReceivedMedia?.length) await WhatsAppReceivedMedia.insertMany(parsedData.whatsAppReceivedMedia);
 
+      await recordAudit({
+        userId: req.user?._id,
+        userName: req.user?.name || 'Administrateur',
+        action: 'RESTORE_BACKUP',
+        severity: 'CRITICAL',
+        targetName: 'Restauration Base Complète',
+        details: `Restauration complète de la base de données effectuée depuis un fichier JSON.`,
+        req,
+      });
+
       res.json({ message: 'Base de données restaurée avec succès.' });
     } catch (error: any) {
       res.status(500).json({ message: 'Erreur lors de la restauration de la base de données.', error: error.message });
@@ -178,3 +208,4 @@ router.post(
 );
 
 export default router;
+

@@ -1,7 +1,9 @@
 import { Router, Response } from 'express';
 import mongoose from 'mongoose';
 import ToothHistory from '../models/ToothHistory';
+import Patient from '../models/Patient';
 import { protect, AuthRequest } from '../middleware/auth';
+import { recordAudit } from '../middleware/security';
 
 const router = Router();
 
@@ -91,6 +93,8 @@ router.post('/', protect, async (req: AuthRequest, res: Response) => {
       return;
     }
 
+    const patient = await Patient.findById(patientId);
+
     const record = await ToothHistory.create({
       patientId,
       toothNumber: tNum,
@@ -103,6 +107,17 @@ router.post('/', protect, async (req: AuthRequest, res: Response) => {
       photosBefore: Array.isArray(photosBefore) ? photosBefore : [],
       photosAfter: Array.isArray(photosAfter) ? photosAfter : [],
       xrays: Array.isArray(xrays) ? xrays : [],
+    });
+
+    await recordAudit({
+      userId: req.user?._id,
+      userName: req.user?.name || 'Praticien',
+      action: 'UPDATE_TOOTH_HISTORY',
+      severity: 'INFO',
+      targetId: record._id,
+      targetName: `Dent #${tNum} - ${patient?.name || 'Patient'}`,
+      details: `Acte "${procedureName || status}" appliqué sur la dent #${tNum} (Statut: ${status}).`,
+      req,
     });
 
     res.status(201).json(record);
@@ -124,6 +139,18 @@ router.put('/:id', protect, async (req: AuthRequest, res: Response) => {
       res.status(404).json({ message: 'Enregistrement de la dent introuvable.' });
       return;
     }
+
+    await recordAudit({
+      userId: req.user?._id,
+      userName: req.user?.name || 'Praticien',
+      action: 'UPDATE_TOOTH_HISTORY',
+      severity: 'INFO',
+      targetId: record._id,
+      targetName: `Dent #${record.toothNumber}`,
+      details: `Modification de l'acte dentaire #${record.toothNumber} (${record.status}).`,
+      req,
+    });
+
     res.json(record);
   } catch (error: any) {
     res.status(500).json({ message: 'Erreur lors de la mise à jour de l\'enregistrement dentaire.', error: error.message });
@@ -143,6 +170,18 @@ router.delete('/:id', protect, async (req: AuthRequest, res: Response) => {
       res.status(404).json({ message: 'Enregistrement introuvable.' });
       return;
     }
+
+    await recordAudit({
+      userId: req.user?._id,
+      userName: req.user?.name || 'Praticien',
+      action: 'UPDATE_TOOTH_HISTORY',
+      severity: 'WARNING',
+      targetId: record._id,
+      targetName: `Dent #${record.toothNumber}`,
+      details: `Suppression de l'historique de soin sur la dent #${record.toothNumber}.`,
+      req,
+    });
+
     res.json({ message: 'Historique supprimé.' });
   } catch (error: any) {
     res.status(500).json({ message: 'Erreur lors de la suppression de l\'enregistrement.', error: error.message });
@@ -150,3 +189,4 @@ router.delete('/:id', protect, async (req: AuthRequest, res: Response) => {
 });
 
 export default router;
+

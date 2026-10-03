@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { MonitorPlay, Users, Armchair, CheckCircle2, Play, ChevronRight } from 'lucide-react';
+import { API_URL } from '../config/api';
 
 interface WaitingRoomData {
   waiting: any[];
@@ -16,8 +17,6 @@ export const WaitingRoom: React.FC = () => {
   const navigate = useNavigate();
   const [data, setData] = useState<WaitingRoomData | null>(null);
   const [loading, setLoading] = useState(true);
-
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
   useEffect(() => {
     fetchQueue();

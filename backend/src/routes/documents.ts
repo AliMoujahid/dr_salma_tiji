@@ -6,6 +6,7 @@ import mongoose from 'mongoose';
 import Patient from '../models/Patient';
 import DocumentModel from '../models/Document';
 import { protect, AuthRequest } from '../middleware/auth';
+import { recordAudit } from '../middleware/security';
 
 const router = Router();
 
@@ -13,26 +14,44 @@ const isValidObjectId = (id: any): boolean => {
   return typeof id === 'string' && mongoose.Types.ObjectId.isValid(id);
 };
 
-// Configure dynamic disk storage based on patient details
+// Explicit whitelisted extensions for medical clinic environment
+const ALLOWED_EXTENSIONS = new Set([
+  // Images & Radiographies
+  '.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.tif', '.tiff', '.dcm',
+  // Documents & Prescriptions
+  '.pdf', '.doc', '.docx', '.txt', '.rtf', '.odt',
+  // Videos (Clinical demonstrations)
+  '.mp4', '.mov', '.webm', '.mkv', '.avi',
+  // Audio
+  '.mp3', '.wav', '.ogg', '.m4a', '.flac', '.aac'
+]);
+
+// Explicit list of strictly forbidden dangerous extensions
+const FORBIDDEN_EXTENSIONS = new Set([
+  '.exe', '.bat', '.cmd', '.sh', '.vbs', '.js', '.ts', '.mjs', '.cjs',
+  '.php', '.phtml', '.php3', '.php4', '.php5', '.phps',
+  '.html', '.htm', '.xhtml', '.svg', '.dll', '.scr', '.jar', '.com',
+  '.ps1', '.vbe', '.wsf', '.hta', '.msi', '.msp', '.py', '.rb'
+]);
+
+// Configure dynamic and secure disk storage based on patient details
 const storage = multer.diskStorage({
   destination: async function (req: any, file, cb) {
     try {
       const patientId = req.body.patientId || req.query.patientId;
-      const category = req.body.category || req.query.category || 'Documents'; // Photos, XRays, Documents, Videos, Audio
+      const category = (req.body.category || req.query.category || 'Documents').replace(/[^a-zA-Z0-9]/g, '');
 
       let patientName = 'Unknown_Patient';
       if (isValidObjectId(patientId)) {
         const patient = await Patient.findById(patientId);
         if (patient) {
-          // Normalize patient name to be safe for directory naming on Windows/Linux
+          // Normalize patient name strictly against path traversal
           patientName = patient.name.replace(/[^a-zA-Z0-9\s-_]/g, '').replace(/\s+/g, '_').trim() || 'Patient';
         }
       }
 
       // Root uploads folder: backend/uploads/Patients/[Patient_Name]/[Category]
       const dirPath = path.join(__dirname, '..', '..', 'uploads', 'Patients', patientName, category);
-
-      // Create recursive directory if it doesn't exist
       fs.mkdirSync(dirPath, { recursive: true });
 
       cb(null, dirPath);
@@ -41,15 +60,39 @@ const storage = multer.diskStorage({
     }
   },
   filename: function (req, file, cb) {
-    // Keep original extension, append timestamp
-    const ext = path.extname(file.originalname);
-    const basename = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9\s-_]/g, '').replace(/\s+/g, '_') || 'file';
+    const ext = path.extname(file.originalname).toLowerCase();
+    
+    // Strict extension check inside filename generator
+    if (!ALLOWED_EXTENSIONS.has(ext) || FORBIDDEN_EXTENSIONS.has(ext)) {
+      return cb(new Error('Extension de fichier non autorisée pour des raisons de sécurité.'), '');
+    }
+
+    const basename = path.basename(file.originalname, ext)
+      .replace(/[^a-zA-Z0-9\s-_]/g, '')
+      .replace(/\s+/g, '_')
+      .slice(0, 50) || 'doc';
+      
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
     cb(null, `${basename}-${uniqueSuffix}${ext}`);
   },
 });
 
-const upload = multer({ storage: storage });
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 50 * 1024 * 1024, // 50 MB max
+  },
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (FORBIDDEN_EXTENSIONS.has(ext)) {
+      return cb(new Error('Fichier exécutable ou script interdit par la politique de sécurité.'));
+    }
+    if (!ALLOWED_EXTENSIONS.has(ext)) {
+      return cb(new Error(`Extension non autorisée (${ext}). Veuillez utiliser des formats médicaux standards (JPG, PNG, PDF, MP4...).`));
+    }
+    cb(null, true);
+  },
+});
 
 // Helper to reliably compute relative upload path with leading slash
 const getRelativeUploadPath = (fullPath: string): string => {
@@ -61,11 +104,11 @@ const getRelativeUploadPath = (fullPath: string): string => {
   return '/' + path.basename(fullPath);
 };
 
-// Upload a single file
+// 1. Upload a single file with Audit Log
 router.post('/upload', protect, upload.single('file'), async (req: AuthRequest, res: Response) => {
   try {
     if (!req.file) {
-      res.status(400).json({ message: 'Aucun fichier n\'a été téléversé.' });
+      res.status(400).json({ message: 'Aucun fichier n\'a été téléversé ou le fichier a été rejeté.' });
       return;
     }
 
@@ -79,6 +122,15 @@ router.post('/upload', protect, upload.single('file'), async (req: AuthRequest, 
       return;
     }
 
+    const patient = await Patient.findById(patientId);
+    if (!patient) {
+      try {
+        if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+      } catch {}
+      res.status(404).json({ message: 'Patient introuvable.' });
+      return;
+    }
+
     const relativePath = getRelativeUploadPath(req.file.path);
     const ext = path.extname(req.file.originalname).toLowerCase().replace('.', '');
 
@@ -89,7 +141,7 @@ router.post('/upload', protect, upload.single('file'), async (req: AuthRequest, 
     } else if (['mp3', 'wav', 'ogg', 'm4a', 'flac', 'aac'].includes(ext)) {
       fileType = 'Audio';
       category = 'Audio';
-    } else if (['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'svg'].includes(ext)) {
+    } else if (['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'tif', 'tiff', 'dcm'].includes(ext)) {
       fileType = category === 'XRays' ? 'XRay' : 'Photo';
       category = category === 'XRays' ? 'XRays' : 'Photos';
     } else {
@@ -106,6 +158,17 @@ router.post('/upload', protect, upload.single('file'), async (req: AuthRequest, 
       fileSize: req.file.size,
     });
 
+    await recordAudit({
+      userId: req.user?._id,
+      userName: req.user?.name || 'Praticien',
+      action: 'UPLOAD_DOCUMENT',
+      severity: 'INFO',
+      targetId: newDoc._id,
+      targetName: newDoc.fileName,
+      details: `Ajout du document "${newDoc.fileName}" (${newDoc.fileType}) au dossier de "${patient.name}".`,
+      req,
+    });
+
     res.status(201).json(newDoc);
   } catch (error: any) {
     console.error('Error in document upload route:', error);
@@ -113,7 +176,7 @@ router.post('/upload', protect, upload.single('file'), async (req: AuthRequest, 
   }
 });
 
-// Get all files for a patient
+// 2. Get all files for a patient
 router.get('/patient/:patientId', protect, async (req: AuthRequest, res: Response) => {
   try {
     const { patientId } = req.params;
@@ -140,7 +203,7 @@ router.get('/patient/:patientId', protect, async (req: AuthRequest, res: Respons
   }
 });
 
-// Rename file
+// 3. Rename file
 router.put('/:id/rename', protect, async (req: AuthRequest, res: Response) => {
   try {
     if (!isValidObjectId(req.params.id)) {
@@ -160,14 +223,16 @@ router.put('/:id/rename', protect, async (req: AuthRequest, res: Response) => {
       return;
     }
 
+    const oldName = doc.fileName;
+
     // Rename file physically on disk safely
     const absolutePath = path.join(__dirname, '..', '..', 'uploads', doc.filePath.replace(/^\/+/, ''));
     const dir = path.dirname(absolutePath);
     const ext = path.extname(absolutePath);
     
-    // Add extension if not present in the new name
-    const trimmedName = newName.trim();
-    const formattedNewName = trimmedName.endsWith(ext) ? trimmedName : trimmedName + ext;
+    // Add extension if not present in the new name & sanitize
+    const cleanBase = newName.trim().replace(/[^a-zA-Z0-9\s-_.]/g, '');
+    const formattedNewName = cleanBase.endsWith(ext) ? cleanBase : cleanBase + ext;
     const newAbsolutePath = path.join(dir, formattedNewName);
 
     try {
@@ -178,21 +243,30 @@ router.put('/:id/rename', protect, async (req: AuthRequest, res: Response) => {
       console.warn('Physical file rename warning:', fsErr.message);
     }
 
-    // Update database reference
     doc.fileName = formattedNewName;
-    
-    // Reconstruct relative filePath
     const relativeDir = path.dirname(doc.filePath);
     doc.filePath = path.join(relativeDir, formattedNewName).replace(/\\/g, '/');
 
     await doc.save();
+
+    await recordAudit({
+      userId: req.user?._id,
+      userName: req.user?.name || 'Praticien',
+      action: 'RENAME_DOCUMENT',
+      severity: 'INFO',
+      targetId: doc._id,
+      targetName: doc.fileName,
+      details: `Renommage du document "${oldName}" en "${formattedNewName}".`,
+      req,
+    });
+
     res.json(doc);
   } catch (error: any) {
     res.status(500).json({ message: 'Erreur lors du renommage du fichier.', error: error.message });
   }
 });
 
-// Delete file
+// 4. Delete file
 router.delete('/:id', protect, async (req: AuthRequest, res: Response) => {
   try {
     if (!isValidObjectId(req.params.id)) {
@@ -217,6 +291,18 @@ router.delete('/:id', protect, async (req: AuthRequest, res: Response) => {
     }
 
     await doc.deleteOne();
+
+    await recordAudit({
+      userId: req.user?._id,
+      userName: req.user?.name || 'Praticien',
+      action: 'DELETE_DOCUMENT',
+      severity: 'WARNING',
+      targetId: doc._id,
+      targetName: doc.fileName,
+      details: `Suppression définitive du document clinique "${doc.fileName}".`,
+      req,
+    });
+
     res.json({ message: 'Fichier supprimé avec succès.' });
   } catch (error: any) {
     res.status(500).json({ message: 'Erreur lors de la suppression du fichier.', error: error.message });

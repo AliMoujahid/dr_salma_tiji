@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { DentalChart } from '../components/DentalChart';
 import { Dental3DViewer } from '../components/Dental3DViewer';
+import { API_URL, UPLOADS_URL } from '../config/api';
 import {
   User,
   Heart,
@@ -126,12 +127,10 @@ export const PatientProfile: React.FC = () => {
   const [logPaymentNotes, setLogPaymentNotes] = useState('');
   const [showPaymentModal, setShowPaymentModal] = useState(false);
 
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-  const UPLOADS_BASE = API_URL.replace(/\/api\/?$/, '');
   const getDocUrl = (pathStr: string) => {
     if (!pathStr) return '';
     const cleanPath = pathStr.startsWith('/') ? pathStr : '/' + pathStr;
-    return `${UPLOADS_BASE}/uploads${cleanPath}`;
+    return `${UPLOADS_URL}${cleanPath}`;
   };
 
   useEffect(() => {

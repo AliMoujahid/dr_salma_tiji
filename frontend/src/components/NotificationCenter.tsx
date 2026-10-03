@@ -17,6 +17,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { NotificationLog } from '../types';
+import { API_URL } from '../config/api';
 
 export const NotificationCenter: React.FC = () => {
   const { token } = useAuth();
@@ -28,8 +29,6 @@ export const NotificationCenter: React.FC = () => {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [clearingAll, setClearingAll] = useState<boolean>(false);
   const containerRef = useRef<HTMLDivElement>(null);
-
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
   useEffect(() => {
     fetchLogs();

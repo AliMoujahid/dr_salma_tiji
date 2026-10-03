@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Lock, User, Activity, Eye, EyeOff, Sparkles } from 'lucide-react';
 import { AntigravityParticles } from '../components/AntigravityParticles';
+import { API_URL } from '../config/api';
 
 export const Login: React.FC = () => {
   const { login } = useAuth();
@@ -13,7 +14,6 @@ export const Login: React.FC = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
   const [clinicConfig, setClinicConfig] = useState<{ cabinetFr?: string; drFr?: string; logoUrl?: string } | null>(null);
 
   React.useEffect(() => {

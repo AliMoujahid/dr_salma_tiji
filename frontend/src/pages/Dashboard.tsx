@@ -20,6 +20,7 @@ import {
   Layers,
   ArrowRight,
 } from 'lucide-react';
+import { API_URL } from '../config/api';
 
 interface Stats {
   totalPatients: number;
@@ -39,8 +40,6 @@ export const Dashboard: React.FC = () => {
   const [stats, setStats] = useState<Stats | null>(null);
   const [financials, setFinancials] = useState<any>({ monthlyRevenue: [], commonTreatments: [] });
   const [loading, setLoading] = useState(true);
-
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
   useEffect(() => {
     const fetchDashboardData = async () => {

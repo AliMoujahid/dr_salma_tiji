@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   RefreshCw,
 } from 'lucide-react';
+import { API_URL } from '../config/api';
 
 interface LicenseActivationModalProps {
   machineId: string;
@@ -31,8 +32,6 @@ export const LicenseActivationModal: React.FC<LicenseActivationModalProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
   const handleCopyMachineId = () => {
     navigator.clipboard.writeText(machineId);
