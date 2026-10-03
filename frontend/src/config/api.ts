@@ -13,7 +13,7 @@ const getBaseUrl = (): string => {
 };
 
 export const BASE_URL = getBaseUrl();
-export const API_URL = import.meta.env.VITE_API_URL || `${BASE_URL}/api`;
+export const API_URL = `${BASE_URL}/api`;
 export const UPLOADS_URL = `${BASE_URL}/uploads`;
 
 export const getUploadUrl = (path?: string | null): string => {
