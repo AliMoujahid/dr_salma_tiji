@@ -418,13 +418,20 @@ echo =======================================================================
 echo     ACCES DEPUIS UN AUTRE PC DU CABINET (RESEAU LOCAL / WIFI)
 echo =======================================================================
 echo.
-echo Pour acceder a l'application depuis un 2eme ordinateur (Reception / Fauteuil):
+echo Pour acceder a l'application depuis un 2eme PC, Tablette ou iPad :
 echo.
+echo [Option 1 - Recommandee] Tapez simplement le nom du PC :
+echo   -^> http://%COMPUTERNAME%:5000
+echo.
+echo [Option 2] Ou utilisez l'adresse IP du PC :
 for /f "tokens=2 delims=:" %%a in ('ipconfig ^| findstr /c:"IPv4"') do (
-    echo   -^> Ouvrez le navigateur sur l'autre PC/Tablette et tapez : http:%%a:5000
+    echo   -^> http:%%a:5000
 )
 echo.
-echo (Assurez-vous que les 2 ordinateurs sont connectes sur la meme Box WiFi).
+echo -----------------------------------------------------------------------
+echo  Astuce : Sur l'autre PC (Reception), ouvrez ce lien dans Google Chrome,
+echo  puis cliquez sur les 3 points en haut a droite ^> "Enregistrer et partager"
+echo  ^> "Creer un raccourci" pour avoir l'icone sur le Bureau !
 echo =======================================================================
 echo.
 pause
