@@ -188,8 +188,8 @@ app.use('/api/license', licenseRoutes);
 
 // License validation middleware for protected medical data API routes
 app.use('/api', (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  // Allow license status checks and login without valid license
-  if (req.path.startsWith('/license') || req.path === '/auth/login') {
+  // Allow license status checks, events stream, and login without valid license
+  if (req.path.startsWith('/license') || req.path === '/auth/login' || req.path.startsWith('/events')) {
     return next();
   }
 
