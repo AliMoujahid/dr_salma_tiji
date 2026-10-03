@@ -1,52 +1,26 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
-  Search,
   Plus,
   Trash2,
   Edit2,
   Printer,
-  Save,
   RotateCcw,
   RotateCw,
   FlipHorizontal,
   FlipVertical,
   Hand,
   ZoomIn,
-  ZoomOut,
-  Maximize2,
-  Minimize2,
   Sun,
-  Contrast,
-  Sliders,
-  Sparkles,
   Camera,
-  Activity,
-  FileText,
-  Layers,
-  ChevronLeft,
-  ChevronRight,
-  Download,
-  Upload,
-  CheckCircle2,
-  AlertCircle,
-  Eye,
-  Settings,
+  Compass,
+  Ruler,
+  Scan,
+  UserCheck,
+  Sparkles,
   Grid,
   Square,
   Circle,
   Pencil,
-  Type,
-  Maximize,
-  Compass,
-  Ruler,
-  Scan,
-  RefreshCw,
-  X,
-  UserCheck,
-  Calendar,
-  Share2,
-  HelpCircle,
-  FolderOpen,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -83,21 +57,21 @@ interface NanoPixPatient {
 
 export const NanoPixStudio: React.FC = () => {
   const { token } = useAuth();
-  const { showToast } = useToast();
+  const { toast } = useToast();
 
   // --- MAIN TABS (Patient | Acquisition | Viewer | Report) ---
   const [activeTab, setActiveTab] = useState<'Patient' | 'Acquisition' | 'Viewer' | 'Report'>('Patient');
 
   // --- SENSOR STATUS ---
-  const [sensorConnected, setSensorConnected] = useState(true);
-  const [sensorModel, setSensorModel] = useState<'NanoPix 1' | 'NanoPix 2'>('NanoPix 2');
+  const [sensorConnected] = useState(true);
+  const [sensorModel] = useState<'NanoPix 1' | 'NanoPix 2'>('NanoPix 2');
 
   // --- PATIENTS DATA ---
   const [patients, setPatients] = useState<NanoPixPatient[]>([
     {
       id: 'p_default_1',
       chartNo: '20260904_191218',
-      name: 'ali moujahid',
+      name: 'ALI MOUJAHID',
       gender: 'Male',
       birthDate: '2026-09-04',
       age: 0,
@@ -127,7 +101,7 @@ export const NanoPixStudio: React.FC = () => {
     {
       id: 'p_default_2',
       chartNo: '20260908_114002',
-      name: 'Fatima Zahra Mansouri',
+      name: 'FATIMA ZAHRA MANSOURI',
       gender: 'Female',
       birthDate: '1992-05-14',
       age: 34,
@@ -227,12 +201,11 @@ export const NanoPixStudio: React.FC = () => {
   const [rotationAngle, setRotationAngle] = useState<number>(0);
   const [flipH, setFlipH] = useState<boolean>(false);
   const [flipV, setFlipV] = useState<boolean>(false);
-  const [zoomLevel, setZoomLevel] = useState<number>(1);
-  const [panOffset, setPanOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [zoomLevel] = useState<number>(1);
   const [showGrid, setShowGrid] = useState<boolean>(false);
 
   // Measurements & Annotations State
-  const [rulerPoints, setRulerPoints] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>({
+  const [rulerPoints] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>({
     x1: 160,
     y1: 100,
     x2: 160,
@@ -255,12 +228,12 @@ export const NanoPixStudio: React.FC = () => {
   // Trigger simulated RVG Sensor Shot
   const handleTriggerAcquisition = () => {
     if (!sensorConnected) {
-      showToast('error', 'Capteur RVG Eighteeth NanoPix hors-ligne. Branchez le câble USB.');
+      toast.error('Capteur hors-ligne', 'Capteur RVG Eighteeth NanoPix hors-ligne. Branchez le câble USB.');
       return;
     }
 
     setIsExposing(true);
-    showToast('info', `Capture en cours sur le capteur NanoPix 2 (Dent #${selectedTooth})...`);
+    toast.info('Acquisition RVG', `Capture en cours sur le capteur NanoPix 2 (Dent #${selectedTooth})...`);
 
     setTimeout(() => {
       setIsExposing(false);
@@ -293,7 +266,7 @@ export const NanoPixStudio: React.FC = () => {
       );
 
       setSelectedStudyId(newStudyId);
-      showToast('success', `Cliché RVG dent #${selectedTooth} acquis avec succès !`);
+      toast.success('Cliché Acquis', `Cliché RVG dent #${selectedTooth} acquis avec succès !`);
       setActiveTab('Viewer');
     }, 1200);
   };
@@ -310,9 +283,7 @@ export const NanoPixStudio: React.FC = () => {
     setRotationAngle(0);
     setFlipH(false);
     setFlipV(false);
-    setZoomLevel(1);
-    setPanOffset({ x: 0, y: 0 });
-    showToast('info', 'Filtres et réglages réinitialisés.');
+    toast.info('Réinitialisation', 'Filtres et réglages visuels réinitialisés.');
   };
 
   // Adult teeth FDI notation array
@@ -329,45 +300,43 @@ export const NanoPixStudio: React.FC = () => {
   }, [rulerPoints]);
 
   return (
-    <div className="flex flex-col h-full w-full bg-[#03060f] text-slate-100 font-sans select-none overflow-hidden">
+    <div className="nanopix-studio flex flex-col h-full w-full bg-slate-100 dark:bg-[#03060f] text-slate-800 dark:text-slate-100 font-sans select-none overflow-hidden transition-colors">
       {/* 1. TOP NANOPIX MENU BAR (File, Tools, Help) */}
-      <div className="flex items-center justify-between px-3 h-5 bg-[#090d1a] border-b border-[#141d33] text-[10px] text-slate-400 shrink-0">
+      <div className="flex items-center justify-between px-3 h-5.5 bg-slate-200/90 dark:bg-[#090d1a] border-b border-slate-300 dark:border-[#141d33] text-[10px] text-slate-600 dark:text-slate-400 shrink-0">
         <div className="flex items-center gap-3">
-          <span className="text-white font-bold tracking-wider text-[11px]">NanoPix</span>
-          <button className="hover:text-white cursor-pointer transition-colors">File</button>
-          <button className="hover:text-white cursor-pointer transition-colors">Tools</button>
-          <button className="hover:text-white cursor-pointer transition-colors">Help</button>
+          <span className="text-blue-600 dark:text-white font-extrabold tracking-wider text-[11px]">NanoPix</span>
+          <button className="hover:text-blue-600 dark:hover:text-white cursor-pointer transition-colors">File</button>
+          <button className="hover:text-blue-600 dark:hover:text-white cursor-pointer transition-colors">Tools</button>
+          <button className="hover:text-blue-600 dark:hover:text-white cursor-pointer transition-colors">Help</button>
         </div>
-        <div className="flex items-center gap-2 text-[9px] text-slate-500 font-mono">
+        <div className="flex items-center gap-2 text-[9px] text-slate-500 dark:text-slate-400 font-mono">
           <span>Eighteeth Medical Digital Imaging v3.4.2</span>
         </div>
       </div>
 
       {/* 2. TOP EIGHTEETH NANOPIX APPLICATION HEADER */}
-      <header className="flex items-center justify-between px-3 h-9 bg-[#070b16] border-b border-[#141d33] z-20 shrink-0">
+      <header className="flex items-center justify-between px-3 h-10 bg-white dark:bg-[#070b16] border-b border-slate-200 dark:border-[#141d33] z-20 shrink-0 shadow-xs">
         <div className="flex items-center gap-4">
           {/* Eighteeth Brand Logo */}
           <div className="flex items-center gap-1.5">
-            <div className="w-5.5 h-5.5 rounded-full bg-white flex items-center justify-center p-0.5 shadow">
-              <div className="w-full h-full bg-[#004bb4] rounded-full flex items-center justify-center text-white font-black text-[10px]">
-                8
-              </div>
+            <div className="w-5.5 h-5.5 rounded-full bg-blue-600 flex items-center justify-center p-0.5 shadow-sm">
+              <span className="text-white font-black text-[11px] leading-none">8</span>
             </div>
-            <span className="text-xs font-extrabold tracking-tight text-white">Eighteeth</span>
+            <span className="text-xs font-black tracking-tight text-slate-900 dark:text-white">Eighteeth</span>
           </div>
 
-          {/* 4 MAIN WORKFLOW TABS (Exact match to NanoPix pill buttons) */}
-          <div className="flex items-center bg-[#0d1424] p-0.5 rounded-lg border border-[#1b2a47] gap-0.5">
+          {/* 4 MAIN WORKFLOW TABS (Pill buttons) */}
+          <div className="flex items-center bg-slate-100 dark:bg-[#0d1424] p-0.5 rounded-lg border border-slate-300 dark:border-[#1b2a47] gap-0.5">
             {(['Patient', 'Acquisition', 'Viewer', 'Report'] as const).map((tab) => {
               const isActive = activeTab === tab;
               return (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
-                  className={`px-3 py-0.5 rounded text-[11px] font-semibold transition-all cursor-pointer ${
+                  className={`px-3 py-1 rounded text-[11px] font-semibold transition-all cursor-pointer ${
                     isActive
-                      ? 'bg-[#1864cc] text-white shadow-sm font-bold'
-                      : 'text-slate-300 hover:text-white hover:bg-white/5'
+                      ? 'bg-blue-600 dark:bg-[#1864cc] text-white shadow-sm font-bold'
+                      : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/5'
                   }`}
                 >
                   {tab}
@@ -381,109 +350,109 @@ export const NanoPixStudio: React.FC = () => {
         <div className="flex items-center gap-2">
           {selectedPatient ? (
             <div className="text-right flex items-center gap-2 text-[11px]">
-              <span className="font-mono text-slate-400 text-[10px]">{selectedPatient.chartNo}</span>
-              <span className="font-bold text-white uppercase">{selectedPatient.name}</span>
-              <span className="text-slate-400 font-medium">({selectedPatient.birthDate})</span>
+              <span className="font-mono text-blue-600 dark:text-blue-400 font-bold text-[10px]">{selectedPatient.chartNo}</span>
+              <span className="font-bold text-slate-900 dark:text-white uppercase">{selectedPatient.name}</span>
+              <span className="text-slate-500 dark:text-slate-400 font-medium">({selectedPatient.birthDate})</span>
             </div>
           ) : (
-            <span className="text-[11px] text-slate-400 italic">Please select a patient.</span>
+            <span className="text-[11px] text-slate-400 italic">Sélectionnez un patient</span>
           )}
         </div>
       </header>
 
       {/* 3. SUB-ACTION BAR (Specific to Active Tab) */}
-      <div className="flex items-center justify-between px-3 h-7 bg-[#090e1c] border-b border-[#141d33] text-xs shrink-0">
+      <div className="flex items-center justify-between px-3 h-8 bg-slate-50 dark:bg-[#090e1c] border-b border-slate-200 dark:border-[#141d33] text-xs shrink-0">
         {/* Left Sub-tools */}
         <div className="flex items-center gap-1.5">
           {activeTab === 'Patient' && (
             <div className="flex items-center gap-1">
               <button
-                onClick={() => showToast('info', 'Formulaire de création patient radio.')}
-                className="p-1 bg-[#121c33] hover:bg-[#1b2b4d] rounded text-slate-200 border border-[#1d2d50] cursor-pointer"
+                onClick={() => toast.info('Patient Radio', 'Formulaire de création patient radio.')}
+                className="p-1.5 bg-white dark:bg-[#121c33] hover:bg-slate-100 dark:hover:bg-[#1b2b4d] rounded text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-[#1d2d50] shadow-2xs cursor-pointer transition-colors"
                 title="Ajouter Patient"
               >
-                <Plus className="w-3 h-3" />
+                <Plus className="w-3.5 h-3.5" />
               </button>
               <button
-                onClick={() => showToast('info', 'Édition fiche patient.')}
-                className="p-1 bg-[#121c33] hover:bg-[#1b2b4d] rounded text-slate-200 border border-[#1d2d50] cursor-pointer"
+                onClick={() => toast.info('Édition', 'Édition fiche patient.')}
+                className="p-1.5 bg-white dark:bg-[#121c33] hover:bg-slate-100 dark:hover:bg-[#1b2b4d] rounded text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-[#1d2d50] shadow-2xs cursor-pointer transition-colors"
                 title="Modifier"
               >
-                <Edit2 className="w-3 h-3" />
+                <Edit2 className="w-3.5 h-3.5" />
               </button>
               <button
-                onClick={() => showToast('warning', 'Suppression.')}
-                className="p-1 bg-[#121c33] hover:bg-[#1b2b4d] rounded text-slate-200 border border-[#1d2d50] cursor-pointer"
+                onClick={() => toast.warning('Suppression', 'Suppression de cliché.')}
+                className="p-1.5 bg-white dark:bg-[#121c33] hover:bg-slate-100 dark:hover:bg-[#1b2b4d] rounded text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-[#1d2d50] shadow-2xs cursor-pointer transition-colors"
                 title="Supprimer"
               >
-                <Trash2 className="w-3 h-3" />
+                <Trash2 className="w-3.5 h-3.5" />
               </button>
               <button
-                onClick={() => showToast('info', 'Carte d\'identité médicale.')}
-                className="p-1 bg-[#121c33] hover:bg-[#1b2b4d] rounded text-slate-200 border border-[#1d2d50] cursor-pointer"
+                onClick={() => toast.info('Carte Patient', 'Carte d\'identité médicale.')}
+                className="p-1.5 bg-white dark:bg-[#121c33] hover:bg-slate-100 dark:hover:bg-[#1b2b4d] rounded text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-[#1d2d50] shadow-2xs cursor-pointer transition-colors"
                 title="Carte Patient"
               >
-                <UserCheck className="w-3 h-3" />
+                <UserCheck className="w-3.5 h-3.5" />
               </button>
             </div>
           )}
 
           {activeTab === 'Acquisition' && (
             <div className="flex items-center gap-1">
-              <button onClick={() => setRotationAngle((p) => p - 90)} className="p-1 bg-[#121c33] hover:bg-[#1b2b4d] rounded text-slate-200 border border-[#1d2d50] cursor-pointer">
-                <RotateCcw className="w-3 h-3" />
+              <button onClick={() => setRotationAngle((p) => p - 90)} className="p-1.5 bg-white dark:bg-[#121c33] hover:bg-slate-100 dark:hover:bg-[#1b2b4d] rounded text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-[#1d2d50] shadow-2xs cursor-pointer transition-colors" title="Rotation Anti-horaire">
+                <RotateCcw className="w-3.5 h-3.5" />
               </button>
-              <button onClick={() => setRotationAngle((p) => p + 90)} className="p-1 bg-[#121c33] hover:bg-[#1b2b4d] rounded text-slate-200 border border-[#1d2d50] cursor-pointer">
-                <RotateCw className="w-3 h-3" />
+              <button onClick={() => setRotationAngle((p) => p + 90)} className="p-1.5 bg-white dark:bg-[#121c33] hover:bg-slate-100 dark:hover:bg-[#1b2b4d] rounded text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-[#1d2d50] shadow-2xs cursor-pointer transition-colors" title="Rotation Horaire">
+                <RotateCw className="w-3.5 h-3.5" />
               </button>
-              <button onClick={() => setFlipH((p) => !p)} className="p-1 bg-[#121c33] hover:bg-[#1b2b4d] rounded text-slate-200 border border-[#1d2d50] cursor-pointer">
-                <FlipHorizontal className="w-3 h-3" />
+              <button onClick={() => setFlipH((p) => !p)} className="p-1.5 bg-white dark:bg-[#121c33] hover:bg-slate-100 dark:hover:bg-[#1b2b4d] rounded text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-[#1d2d50] shadow-2xs cursor-pointer transition-colors" title="Miroir Horizontal">
+                <FlipHorizontal className="w-3.5 h-3.5" />
               </button>
-              <button onClick={() => setFlipV((p) => !p)} className="p-1 bg-[#121c33] hover:bg-[#1b2b4d] rounded text-slate-200 border border-[#1d2d50] cursor-pointer">
-                <FlipVertical className="w-3 h-3" />
+              <button onClick={() => setFlipV((p) => !p)} className="p-1.5 bg-white dark:bg-[#121c33] hover:bg-slate-100 dark:hover:bg-[#1b2b4d] rounded text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-[#1d2d50] shadow-2xs cursor-pointer transition-colors" title="Miroir Vertical">
+                <FlipVertical className="w-3.5 h-3.5" />
               </button>
             </div>
           )}
 
           {activeTab === 'Viewer' && (
             <div className="flex items-center gap-1">
-              <button onClick={() => setRotationAngle((p) => p - 90)} className="p-1 bg-[#121c33] hover:bg-[#1b2b4d] rounded text-slate-200 border border-[#1d2d50] cursor-pointer" title="Rotate CCW"><RotateCcw className="w-3 h-3" /></button>
-              <button onClick={() => setRotationAngle((p) => p + 90)} className="p-1 bg-[#121c33] hover:bg-[#1b2b4d] rounded text-slate-200 border border-[#1d2d50] cursor-pointer" title="Rotate CW"><RotateCw className="w-3 h-3" /></button>
-              <button onClick={() => setFlipH((p) => !p)} className="p-1 bg-[#121c33] hover:bg-[#1b2b4d] rounded text-slate-200 border border-[#1d2d50] cursor-pointer" title="Flip H"><FlipHorizontal className="w-3 h-3" /></button>
-              <button onClick={() => setFlipV((p) => !p)} className="p-1 bg-[#121c33] hover:bg-[#1b2b4d] rounded text-slate-200 border border-[#1d2d50] cursor-pointer" title="Flip V"><FlipVertical className="w-3 h-3" /></button>
-              <button onClick={() => setViewerTool('pan')} className={`p-1 rounded border cursor-pointer ${viewerTool === 'pan' ? 'bg-blue-600 text-white border-blue-400' : 'bg-[#121c33] text-slate-200 border-[#1d2d50]'}`} title="Pan"><Hand className="w-3 h-3" /></button>
-              <button onClick={() => setViewerTool('zoom')} className={`p-1 rounded border cursor-pointer ${viewerTool === 'zoom' ? 'bg-blue-600 text-white border-blue-400' : 'bg-[#121c33] text-slate-200 border-[#1d2d50]'}`} title="Zoom"><ZoomIn className="w-3 h-3" /></button>
-              <button onClick={() => setIsInverted((p) => !p)} className={`p-1 rounded border cursor-pointer ${isInverted ? 'bg-amber-600 text-white border-amber-400' : 'bg-[#121c33] text-slate-200 border-[#1d2d50]'}`} title="Invert"><Sun className="w-3 h-3" /></button>
-              <button onClick={() => setViewerTool('ruler')} className={`p-1 rounded border cursor-pointer ${viewerTool === 'ruler' ? 'bg-blue-600 text-white border-blue-400' : 'bg-[#121c33] text-slate-200 border-[#1d2d50]'}`} title="Ruler"><Ruler className="w-3 h-3" /></button>
-              <button onClick={() => setViewerTool('angle')} className={`p-1 rounded border cursor-pointer ${viewerTool === 'angle' ? 'bg-blue-600 text-white border-blue-400' : 'bg-[#121c33] text-slate-200 border-[#1d2d50]'}`} title="Angle"><Compass className="w-3 h-3" /></button>
-              <button onClick={() => setViewerTool('draw')} className={`p-1 rounded border cursor-pointer ${viewerTool === 'draw' ? 'bg-blue-600 text-white border-blue-400' : 'bg-[#121c33] text-slate-200 border-[#1d2d50]'}`} title="Pen"><Pencil className="w-3 h-3" /></button>
-              <button onClick={() => setViewerTool('rect')} className={`p-1 rounded border cursor-pointer ${viewerTool === 'rect' ? 'bg-blue-600 text-white border-blue-400' : 'bg-[#121c33] text-slate-200 border-[#1d2d50]'}`} title="Rectangle"><Square className="w-3 h-3" /></button>
-              <button onClick={() => setViewerTool('circle')} className={`p-1 rounded border cursor-pointer ${viewerTool === 'circle' ? 'bg-blue-600 text-white border-blue-400' : 'bg-[#121c33] text-slate-200 border-[#1d2d50]'}`} title="Circle"><Circle className="w-3 h-3" /></button>
-              <button onClick={() => setViewerTool('loupe')} className={`p-1 rounded border cursor-pointer ${viewerTool === 'loupe' ? 'bg-blue-600 text-white border-blue-400' : 'bg-[#121c33] text-slate-200 border-[#1d2d50]'}`} title="Loupe"><Sparkles className="w-3 h-3" /></button>
-              <button onClick={() => setShowGrid((p) => !p)} className={`p-1 rounded border cursor-pointer ${showGrid ? 'bg-blue-600 text-white border-blue-400' : 'bg-[#121c33] text-slate-200 border-[#1d2d50]'}`} title="Grid"><Grid className="w-3 h-3" /></button>
+              <button onClick={() => setRotationAngle((p) => p - 90)} className="p-1.5 bg-white dark:bg-[#121c33] hover:bg-slate-100 dark:hover:bg-[#1b2b4d] rounded text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-[#1d2d50] shadow-2xs cursor-pointer" title="Rotate CCW"><RotateCcw className="w-3.5 h-3.5" /></button>
+              <button onClick={() => setRotationAngle((p) => p + 90)} className="p-1.5 bg-white dark:bg-[#121c33] hover:bg-slate-100 dark:hover:bg-[#1b2b4d] rounded text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-[#1d2d50] shadow-2xs cursor-pointer" title="Rotate CW"><RotateCw className="w-3.5 h-3.5" /></button>
+              <button onClick={() => setFlipH((p) => !p)} className="p-1.5 bg-white dark:bg-[#121c33] hover:bg-slate-100 dark:hover:bg-[#1b2b4d] rounded text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-[#1d2d50] shadow-2xs cursor-pointer" title="Flip H"><FlipHorizontal className="w-3.5 h-3.5" /></button>
+              <button onClick={() => setFlipV((p) => !p)} className="p-1.5 bg-white dark:bg-[#121c33] hover:bg-slate-100 dark:hover:bg-[#1b2b4d] rounded text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-[#1d2d50] shadow-2xs cursor-pointer" title="Flip V"><FlipVertical className="w-3.5 h-3.5" /></button>
+              <button onClick={() => setViewerTool('pan')} className={`p-1.5 rounded border shadow-2xs cursor-pointer transition-colors ${viewerTool === 'pan' ? 'bg-blue-600 text-white border-blue-500' : 'bg-white dark:bg-[#121c33] text-slate-700 dark:text-slate-200 border-slate-300 dark:border-[#1d2d50]'}`} title="Pan"><Hand className="w-3.5 h-3.5" /></button>
+              <button onClick={() => setViewerTool('zoom')} className={`p-1.5 rounded border shadow-2xs cursor-pointer transition-colors ${viewerTool === 'zoom' ? 'bg-blue-600 text-white border-blue-500' : 'bg-white dark:bg-[#121c33] text-slate-700 dark:text-slate-200 border-slate-300 dark:border-[#1d2d50]'}`} title="Zoom"><ZoomIn className="w-3.5 h-3.5" /></button>
+              <button onClick={() => setIsInverted((p) => !p)} className={`p-1.5 rounded border shadow-2xs cursor-pointer transition-colors ${isInverted ? 'bg-amber-600 text-white border-amber-500' : 'bg-white dark:bg-[#121c33] text-slate-700 dark:text-slate-200 border-slate-300 dark:border-[#1d2d50]'}`} title="Invert"><Sun className="w-3.5 h-3.5" /></button>
+              <button onClick={() => setViewerTool('ruler')} className={`p-1.5 rounded border shadow-2xs cursor-pointer transition-colors ${viewerTool === 'ruler' ? 'bg-blue-600 text-white border-blue-500' : 'bg-white dark:bg-[#121c33] text-slate-700 dark:text-slate-200 border-slate-300 dark:border-[#1d2d50]'}`} title="Ruler"><Ruler className="w-3.5 h-3.5" /></button>
+              <button onClick={() => setViewerTool('angle')} className={`p-1.5 rounded border shadow-2xs cursor-pointer transition-colors ${viewerTool === 'angle' ? 'bg-blue-600 text-white border-blue-500' : 'bg-white dark:bg-[#121c33] text-slate-700 dark:text-slate-200 border-slate-300 dark:border-[#1d2d50]'}`} title="Angle"><Compass className="w-3.5 h-3.5" /></button>
+              <button onClick={() => setViewerTool('draw')} className={`p-1.5 rounded border shadow-2xs cursor-pointer transition-colors ${viewerTool === 'draw' ? 'bg-blue-600 text-white border-blue-500' : 'bg-white dark:bg-[#121c33] text-slate-700 dark:text-slate-200 border-slate-300 dark:border-[#1d2d50]'}`} title="Pen"><Pencil className="w-3.5 h-3.5" /></button>
+              <button onClick={() => setViewerTool('rect')} className={`p-1.5 rounded border shadow-2xs cursor-pointer transition-colors ${viewerTool === 'rect' ? 'bg-blue-600 text-white border-blue-500' : 'bg-white dark:bg-[#121c33] text-slate-700 dark:text-slate-200 border-slate-300 dark:border-[#1d2d50]'}`} title="Rectangle"><Square className="w-3.5 h-3.5" /></button>
+              <button onClick={() => setViewerTool('circle')} className={`p-1.5 rounded border shadow-2xs cursor-pointer transition-colors ${viewerTool === 'circle' ? 'bg-blue-600 text-white border-blue-500' : 'bg-white dark:bg-[#121c33] text-slate-700 dark:text-slate-200 border-slate-300 dark:border-[#1d2d50]'}`} title="Circle"><Circle className="w-3.5 h-3.5" /></button>
+              <button onClick={() => setViewerTool('loupe')} className={`p-1.5 rounded border shadow-2xs cursor-pointer transition-colors ${viewerTool === 'loupe' ? 'bg-blue-600 text-white border-blue-500' : 'bg-white dark:bg-[#121c33] text-slate-700 dark:text-slate-200 border-slate-300 dark:border-[#1d2d50]'}`} title="Loupe"><Sparkles className="w-3.5 h-3.5" /></button>
+              <button onClick={() => setShowGrid((p) => !p)} className={`p-1.5 rounded border shadow-2xs cursor-pointer transition-colors ${showGrid ? 'bg-blue-600 text-white border-blue-500' : 'bg-white dark:bg-[#121c33] text-slate-700 dark:text-slate-200 border-slate-300 dark:border-[#1d2d50]'}`} title="Grid"><Grid className="w-3.5 h-3.5" /></button>
             </div>
           )}
 
           {activeTab === 'Report' && (
             <div className="flex items-center gap-2 text-xs">
-              <span className="text-slate-400 font-semibold">Report Format :</span>
-              <span className="text-blue-400 font-mono font-bold">Standard A4 Format</span>
+              <span className="text-slate-600 dark:text-slate-400 font-semibold">Format du Rapport :</span>
+              <span className="text-blue-600 dark:text-blue-400 font-mono font-bold">Standard A4 Médical</span>
             </div>
           )}
         </div>
 
-        {/* Right Sub-tools (Date selector or Sensor bulb) */}
+        {/* Right Sub-tools */}
         <div className="flex items-center gap-2">
           {activeTab === 'Patient' && (
             <div className="flex items-center gap-1.5">
               <div className="flex items-center gap-1">
-                <input type="radio" checked readOnly className="accent-blue-500 w-2.5 h-2.5" />
-                <span className="text-[11px] text-slate-300">Date</span>
+                <input type="radio" checked readOnly className="accent-blue-600 w-3 h-3" />
+                <span className="text-[11px] text-slate-700 dark:text-slate-300 font-medium">Date</span>
               </div>
               <select
                 value={dateFilter}
                 onChange={(e) => setDateFilter(e.target.value)}
-                className="bg-[#0f172a] border border-[#1d2d50] text-slate-200 text-[10px] px-1.5 py-0.5 rounded focus:outline-none"
+                className="bg-white dark:bg-[#0f172a] border border-slate-300 dark:border-[#1d2d50] text-slate-800 dark:text-slate-200 text-[10px] px-2 py-0.5 rounded focus:outline-none shadow-2xs"
               >
                 <option>All Dates</option>
                 <option>Aujourd'hui</option>
@@ -495,8 +464,8 @@ export const NanoPixStudio: React.FC = () => {
 
           {activeTab === 'Acquisition' && (
             <div className="flex items-center gap-2">
-              <span className={`w-2 h-2 rounded-full ${sensorConnected ? 'bg-cyan-400 animate-pulse' : 'bg-slate-500'}`} />
-              <span className="text-[10px] font-mono text-slate-300">{sensorConnected ? 'Ready for Exposure' : 'Offline'}</span>
+              <span className={`w-2.5 h-2.5 rounded-full ${sensorConnected ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+              <span className="text-[11px] font-mono text-slate-700 dark:text-slate-300 font-medium">{sensorConnected ? 'Prêt pour l\'exposition' : 'Hors-ligne'}</span>
             </div>
           )}
         </div>
@@ -505,39 +474,39 @@ export const NanoPixStudio: React.FC = () => {
       {/* 4. MAIN VIEWPORT (Patient | Acquisition | Viewer | Report) */}
       <div className="flex-1 flex overflow-hidden min-h-0 relative">
         {/* ========================================================================= */}
-        {/* TAB 1: PATIENT MANAGER MODULE (Exact Match to Screenshot 1)               */}
+        {/* TAB 1: PATIENT MANAGER MODULE                                             */}
         {/* ========================================================================= */}
         {activeTab === 'Patient' && (
           <div className="flex-1 flex overflow-hidden min-h-0">
             {/* Left Panel: Search & Patient Info & Table */}
-            <div className="w-72 bg-[#050914] border-r border-[#141d33] flex flex-col justify-between p-2 shrink-0 overflow-y-auto no-scrollbar gap-1.5">
+            <div className="w-80 bg-white dark:bg-[#050914] border-r border-slate-200 dark:border-[#141d33] flex flex-col justify-between p-2.5 shrink-0 overflow-y-auto no-scrollbar gap-2 transition-colors">
               {/* Top Search Controls */}
               <div className="flex flex-col gap-1.5">
-                <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">SEARCH</span>
+                <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">SEARCH</span>
                 <div className="flex gap-1">
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search..."
-                    className="flex-1 bg-[#0b1224] border border-[#1a2947] rounded px-2 py-0.5 text-[11px] text-white focus:outline-none focus:border-blue-500"
+                    placeholder="Recherche patient..."
+                    className="flex-1 bg-slate-50 dark:bg-[#0b1224] border border-slate-300 dark:border-[#1a2947] rounded px-2.5 py-1 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-blue-500"
                   />
-                  <button className="px-1.5 py-0.5 bg-[#142342] hover:bg-[#1d325e] rounded text-white text-[11px] border border-[#1a2947] cursor-pointer">
+                  <button className="px-2 py-1 bg-slate-100 dark:bg-[#142342] hover:bg-slate-200 dark:hover:bg-[#1d325e] rounded text-slate-700 dark:text-white text-xs border border-slate-300 dark:border-[#1a2947] cursor-pointer">
                     +
                   </button>
-                  <button className="px-2.5 py-0.5 bg-[#1864cc] hover:bg-blue-600 rounded text-white text-[11px] font-semibold cursor-pointer">
+                  <button className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold cursor-pointer shadow-2xs">
                     Search
                   </button>
                 </div>
 
                 {/* Quick Search */}
-                <div className="flex flex-col gap-0.5 mt-0.5">
-                  <span className="text-[8.5px] font-bold uppercase tracking-wider text-slate-500">QUICK SEARCH</span>
-                  <div className="flex flex-col gap-0.5">
-                    <button className="w-full py-1 px-2 text-left rounded bg-[#0d162b] hover:bg-[#13203f] border border-[#162544] text-[10px] text-slate-300 font-medium transition-all cursor-pointer">
+                <div className="flex flex-col gap-1 mt-1">
+                  <span className="text-[8.5px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">QUICK SEARCH</span>
+                  <div className="flex flex-col gap-1">
+                    <button className="w-full py-1 px-2.5 text-left rounded bg-slate-50 dark:bg-[#0d162b] hover:bg-slate-100 dark:hover:bg-[#13203f] border border-slate-200 dark:border-[#162544] text-[11px] text-slate-700 dark:text-slate-300 font-medium transition-all cursor-pointer">
                       Recently Acquired
                     </button>
-                    <button className="w-full py-1 px-2 text-left rounded bg-[#0d162b] hover:bg-[#13203f] border border-[#162544] text-[10px] text-slate-300 font-medium transition-all cursor-pointer">
+                    <button className="w-full py-1 px-2.5 text-left rounded bg-slate-50 dark:bg-[#0d162b] hover:bg-slate-100 dark:hover:bg-[#13203f] border border-slate-200 dark:border-[#162544] text-[11px] text-slate-700 dark:text-slate-300 font-medium transition-all cursor-pointer">
                       Recently Printed
                     </button>
                   </div>
@@ -545,27 +514,27 @@ export const NanoPixStudio: React.FC = () => {
 
                 {/* Selected Patient Detail Card */}
                 {selectedPatient && (
-                  <div className="bg-[#0b1224] border border-[#1a2947] rounded p-1.5 flex flex-col gap-1 mt-0.5">
-                    <div className="flex items-start gap-2">
-                      <div className="w-10 h-10 rounded-full bg-slate-200 border border-white/20 shrink-0 flex items-center justify-center font-bold text-slate-800 text-xs">
+                  <div className="bg-slate-50 dark:bg-[#0b1224] border border-slate-200 dark:border-[#1a2947] rounded-lg p-2.5 flex flex-col gap-1.5 mt-1 shadow-xs">
+                    <div className="flex items-start gap-2.5">
+                      <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-slate-200 border border-blue-200 dark:border-white/20 shrink-0 flex items-center justify-center font-bold text-blue-700 dark:text-slate-800 text-xs">
                         {selectedPatient.name.charAt(0).toUpperCase()}
                       </div>
-                      <table className="flex-1 text-[9.5px] text-slate-300">
+                      <table className="flex-1 text-[10px] text-slate-700 dark:text-slate-300">
                         <tbody>
-                          <tr className="border-b border-white/5">
-                            <td className="py-0.5 text-slate-400 font-semibold w-16">Chart No.</td>
-                            <td className="py-0.5 font-mono font-bold text-blue-400">{selectedPatient.chartNo}</td>
+                          <tr className="border-b border-slate-200 dark:border-white/5">
+                            <td className="py-0.5 text-slate-500 dark:text-slate-400 font-semibold w-20">Chart No.</td>
+                            <td className="py-0.5 font-mono font-bold text-blue-600 dark:text-blue-400">{selectedPatient.chartNo}</td>
                           </tr>
-                          <tr className="border-b border-white/5">
-                            <td className="py-0.5 text-slate-400 font-semibold">Name</td>
-                            <td className="py-0.5 uppercase font-bold text-white truncate max-w-[110px]">{selectedPatient.name}</td>
+                          <tr className="border-b border-slate-200 dark:border-white/5">
+                            <td className="py-0.5 text-slate-500 dark:text-slate-400 font-semibold">Name</td>
+                            <td className="py-0.5 uppercase font-bold text-slate-900 dark:text-white truncate max-w-[120px]">{selectedPatient.name}</td>
                           </tr>
-                          <tr className="border-b border-white/5">
-                            <td className="py-0.5 text-slate-400 font-semibold">Gender/Age</td>
-                            <td className="py-0.5">{selectedPatient.gender}/{selectedPatient.age}Y</td>
+                          <tr className="border-b border-slate-200 dark:border-white/5">
+                            <td className="py-0.5 text-slate-500 dark:text-slate-400 font-semibold">Gender/Age</td>
+                            <td className="py-0.5">{selectedPatient.gender}/{selectedPatient.age} ans</td>
                           </tr>
                           <tr>
-                            <td className="py-0.5 text-slate-400 font-semibold">Date of Birth</td>
+                            <td className="py-0.5 text-slate-500 dark:text-slate-400 font-semibold">Date of Birth</td>
                             <td className="py-0.5">{selectedPatient.birthDate}</td>
                           </tr>
                         </tbody>
@@ -573,7 +542,7 @@ export const NanoPixStudio: React.FC = () => {
                     </div>
                     <button
                       onClick={() => setActiveTab('Viewer')}
-                      className="w-full py-0.5 bg-[#1864cc] hover:bg-blue-600 text-white rounded text-[10px] font-bold cursor-pointer transition-all text-center"
+                      className="w-full py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-[11px] font-bold cursor-pointer transition-all text-center shadow-xs"
                     >
                       Show Detail
                     </button>
@@ -582,17 +551,17 @@ export const NanoPixStudio: React.FC = () => {
               </div>
 
               {/* Patient List Table Container */}
-              <div className="flex-1 min-h-[90px] bg-[#0b1224] border border-[#1a2947] rounded overflow-hidden flex flex-col mt-1">
+              <div className="flex-1 min-h-[110px] bg-white dark:bg-[#0b1224] border border-slate-200 dark:border-[#1a2947] rounded-lg overflow-hidden flex flex-col mt-1 shadow-xs">
                 <div className="overflow-y-auto flex-1 no-scrollbar">
-                  <table className="w-full text-left text-[9.5px]">
-                    <thead className="bg-[#080d1a] text-slate-400 font-bold sticky top-0 border-b border-[#1a2947]">
+                  <table className="w-full text-left text-[10px]">
+                    <thead className="bg-slate-100 dark:bg-[#080d1a] text-slate-600 dark:text-slate-400 font-bold sticky top-0 border-b border-slate-200 dark:border-[#1a2947]">
                       <tr>
-                        <th className="py-1 px-1.5">Chart No. ▲</th>
-                        <th className="py-1 px-1.5">Name</th>
-                        <th className="py-1 px-1.5">DOB</th>
+                        <th className="py-1.5 px-2">Chart No. ▲</th>
+                        <th className="py-1.5 px-2">Name</th>
+                        <th className="py-1.5 px-2">DOB</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[#142038]">
+                    <tbody className="divide-y divide-slate-100 dark:divide-[#142038]">
                       {patients
                         .filter((p) => p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.chartNo.includes(searchQuery))
                         .map((p) => {
@@ -603,12 +572,14 @@ export const NanoPixStudio: React.FC = () => {
                               onClick={() => setSelectedPatientId(p.id)}
                               onDoubleClick={() => setActiveTab('Viewer')}
                               className={`cursor-pointer transition-colors ${
-                                isSelected ? 'bg-[#1864cc] text-white font-bold' : 'hover:bg-white/5 text-slate-300'
+                                isSelected
+                                  ? 'bg-blue-600 text-white font-bold'
+                                  : 'hover:bg-slate-50 dark:hover:bg-white/5 text-slate-700 dark:text-slate-300'
                               }`}
                             >
-                              <td className="py-1 px-1.5 font-mono">{p.chartNo}</td>
-                              <td className="py-1 px-1.5 uppercase truncate max-w-[85px]">{p.name}</td>
-                              <td className="py-1 px-1.5 text-slate-400">{p.birthDate}</td>
+                              <td className="py-1.5 px-2 font-mono">{p.chartNo}</td>
+                              <td className="py-1.5 px-2 uppercase truncate max-w-[95px]">{p.name}</td>
+                              <td className="py-1.5 px-2 opacity-80">{p.birthDate}</td>
                             </tr>
                           );
                         })}
@@ -619,24 +590,24 @@ export const NanoPixStudio: React.FC = () => {
             </div>
 
             {/* Right Large Main Display Canvas */}
-            <div className="flex-1 bg-[#02040a] flex flex-col justify-between p-2 relative overflow-hidden min-h-0">
+            <div className="flex-1 bg-slate-900 dark:bg-[#02040a] flex flex-col justify-between p-3 relative overflow-hidden min-h-0">
               {/* Radiograph View Area */}
               <div className="flex-1 flex items-center justify-center relative min-h-0 overflow-hidden">
-                <div className="max-h-[50vh] aspect-[4/3] bg-black rounded-lg border border-[#141d33] overflow-hidden relative flex items-center justify-center shadow-2xl">
+                <div className="max-h-[55vh] aspect-[4/3] bg-black rounded-xl border border-slate-700 dark:border-[#141d33] overflow-hidden relative flex items-center justify-center shadow-2xl">
                   <img
                     src={selectedStudy?.url || DEFAULT_RVG_XRAYS['18']}
                     alt="X-ray Study"
                     className="w-full h-full object-contain grayscale contrast-125 brightness-95"
                   />
-                  <div className="absolute top-1.5 left-1.5 bg-black/80 px-1.5 py-0.5 rounded text-[9px] font-mono text-cyan-400 border border-white/10">
+                  <div className="absolute top-2 left-2 bg-black/80 px-2 py-0.5 rounded text-[10px] font-mono text-cyan-400 border border-white/15">
                     {selectedStudy?.timestamp || '2026-09-04 19:14:29'} IO {selectedStudy?.tooth || 18}
                   </div>
                 </div>
               </div>
 
               {/* Bottom Thumbnails Strip */}
-              <div className="h-14 bg-[#070b16] border border-[#141d33] rounded px-2 py-1 flex items-center justify-between gap-3 shrink-0">
-                <div className="flex items-center gap-1.5 overflow-x-auto flex-1 no-scrollbar">
+              <div className="h-16 bg-white dark:bg-[#070b16] border border-slate-200 dark:border-[#141d33] rounded-lg px-3 py-1.5 flex items-center justify-between gap-3 shrink-0 shadow-xs">
+                <div className="flex items-center gap-2 overflow-x-auto flex-1 no-scrollbar">
                   {selectedPatient?.studies.map((study) => (
                     <div
                       key={study.id}
@@ -644,20 +615,20 @@ export const NanoPixStudio: React.FC = () => {
                         setSelectedStudyId(study.id);
                         setActiveTab('Viewer');
                       }}
-                      className="w-14 h-10 bg-black rounded border border-[#1b2b47] hover:border-blue-400 overflow-hidden cursor-pointer relative shrink-0"
+                      className="w-16 h-12 bg-black rounded-md border border-slate-300 dark:border-[#1b2b47] hover:border-blue-500 overflow-hidden cursor-pointer relative shrink-0 transition-all shadow-xs"
                     >
                       <img src={study.url} alt="Study" className="w-full h-full object-cover grayscale" />
-                      <span className="absolute bottom-0 right-0 bg-blue-600 text-white font-mono text-[7px] px-1 font-bold">
+                      <span className="absolute bottom-0 right-0 bg-blue-600 text-white font-mono text-[8px] px-1 font-bold">
                         #{study.tooth}
                       </span>
                     </div>
                   ))}
                 </div>
 
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-2">
                   <button
                     onClick={() => setActiveTab('Acquisition')}
-                    className="px-2.5 py-1 bg-[#1864cc] hover:bg-blue-600 text-white rounded text-[11px] font-bold transition-all cursor-pointer"
+                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-bold transition-all cursor-pointer shadow-xs"
                   >
                     + Prise de Cliché
                   </button>
@@ -668,20 +639,20 @@ export const NanoPixStudio: React.FC = () => {
         )}
 
         {/* ========================================================================= */}
-        {/* TAB 2: ACQUISITION MODULE (Exact Match to Screenshot 2)                   */}
+        {/* TAB 2: ACQUISITION MODULE                                                 */}
         {/* ========================================================================= */}
         {activeTab === 'Acquisition' && (
           <div className="flex-1 flex overflow-hidden min-h-0">
             {/* Left Controls & Image Processing Panel */}
-            <div className="w-48 bg-[#050914] border-r border-[#141d33] p-1.5 flex flex-col justify-between shrink-0 overflow-y-auto no-scrollbar gap-1 text-[10px]">
-              <div className="flex flex-col gap-1">
+            <div className="w-56 bg-white dark:bg-[#050914] border-r border-slate-200 dark:border-[#141d33] p-2.5 flex flex-col justify-between shrink-0 overflow-y-auto no-scrollbar gap-2 text-[11px] transition-colors">
+              <div className="flex flex-col gap-2">
                 {/* NEW STUDY Dropdown */}
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-[8.5px] font-bold uppercase tracking-wider text-slate-400">NEW STUDY</span>
+                <div className="flex flex-col gap-1">
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">NEW STUDY</span>
                   <select
                     value={studyType}
                     onChange={(e) => setStudyType(e.target.value)}
-                    className="bg-[#0b1224] border border-[#1a2947] text-white text-[10px] px-1.5 py-0.5 rounded focus:outline-none"
+                    className="bg-slate-50 dark:bg-[#0b1224] border border-slate-300 dark:border-[#1a2947] text-slate-900 dark:text-white text-xs px-2 py-1 rounded focus:outline-none"
                   >
                     <option>IO Sensor</option>
                     <option>Bitewing</option>
@@ -690,12 +661,12 @@ export const NanoPixStudio: React.FC = () => {
                 </div>
 
                 {/* TEETH LAYOUT Dropdown */}
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-[8.5px] font-bold uppercase tracking-wider text-slate-400">TEETH LAYOUT</span>
+                <div className="flex flex-col gap-1">
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">TEETH LAYOUT</span>
                   <select
                     value={teethLayout}
                     onChange={(e) => setTeethLayout(e.target.value as any)}
-                    className="bg-[#0b1224] border border-[#1a2947] text-white text-[10px] px-1.5 py-0.5 rounded focus:outline-none"
+                    className="bg-slate-50 dark:bg-[#0b1224] border border-slate-300 dark:border-[#1a2947] text-slate-900 dark:text-white text-xs px-2 py-1 rounded focus:outline-none"
                   >
                     <option value="Adult">Adult</option>
                     <option value="Child">Child</option>
@@ -703,12 +674,12 @@ export const NanoPixStudio: React.FC = () => {
                 </div>
 
                 {/* IMAGE PROCESSING */}
-                <div className="flex flex-col gap-1 pt-1 border-t border-[#141d33]">
-                  <span className="text-[8.5px] font-bold uppercase tracking-wider text-slate-400">IMAGE PROCESSING</span>
+                <div className="flex flex-col gap-1.5 pt-2 border-t border-slate-200 dark:border-[#141d33]">
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">IMAGE PROCESSING</span>
                   <select
                     value={imageProcessingMode}
                     onChange={(e) => setImageProcessingMode(e.target.value as any)}
-                    className="bg-[#0b1224] border border-[#1a2947] text-blue-400 font-bold text-[10px] px-1.5 py-0.5 rounded focus:outline-none"
+                    className="bg-slate-50 dark:bg-[#0b1224] border border-slate-300 dark:border-[#1a2947] text-blue-600 dark:text-blue-400 font-bold text-xs px-2 py-1 rounded focus:outline-none"
                   >
                     <option value="Endodontic">Endodontic</option>
                     <option value="Periodontic">Periodontic</option>
@@ -717,19 +688,19 @@ export const NanoPixStudio: React.FC = () => {
                   </select>
 
                   {/* Smart Contrast Stepper */}
-                  <div className="flex items-center justify-between text-[10px]">
-                    <span className="text-slate-300 text-[9.5px]">Smart Contrast</span>
-                    <div className="flex items-center gap-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-600 dark:text-slate-300 text-[11px]">Smart Contrast</span>
+                    <div className="flex items-center gap-1.5">
                       <button
                         onClick={() => setSmartContrastLevel((p) => Math.max(1, p - 1))}
-                        className="w-3.5 h-3.5 rounded bg-[#142342] text-white font-bold flex items-center justify-center text-[9px]"
+                        className="w-5 h-5 rounded bg-slate-200 dark:bg-[#142342] text-slate-800 dark:text-white font-bold flex items-center justify-center text-xs hover:bg-slate-300 cursor-pointer"
                       >
                         -
                       </button>
-                      <span className="w-3 text-center font-bold text-blue-400 text-[10px]">{smartContrastLevel}</span>
+                      <span className="w-4 text-center font-bold text-blue-600 dark:text-blue-400 text-xs">{smartContrastLevel}</span>
                       <button
                         onClick={() => setSmartContrastLevel((p) => Math.min(5, p + 1))}
-                        className="w-3.5 h-3.5 rounded bg-[#142342] text-white font-bold flex items-center justify-center text-[9px]"
+                        className="w-5 h-5 rounded bg-slate-200 dark:bg-[#142342] text-slate-800 dark:text-white font-bold flex items-center justify-center text-xs hover:bg-slate-300 cursor-pointer"
                       >
                         +
                       </button>
@@ -738,38 +709,44 @@ export const NanoPixStudio: React.FC = () => {
 
                   <button
                     onClick={() => setSmartSharpen((p) => !p)}
-                    className={`w-full py-0.5 text-[10px] font-semibold rounded border cursor-pointer ${
-                      smartSharpen ? 'bg-[#1864cc] text-white border-blue-400' : 'bg-[#0d162b] text-slate-300 border-[#1a2947]'
+                    className={`w-full py-1 text-xs font-semibold rounded border cursor-pointer transition-colors ${
+                      smartSharpen
+                        ? 'bg-blue-600 text-white border-blue-500 shadow-2xs'
+                        : 'bg-slate-50 dark:bg-[#0d162b] text-slate-700 dark:text-slate-300 border-slate-300 dark:border-[#1a2947]'
                     }`}
                   >
                     Smart Sharpen
                   </button>
 
-                  <div className="grid grid-cols-2 gap-1">
+                  <div className="grid grid-cols-2 gap-1.5">
                     <button
                       onClick={() => setIsSmoothed((p) => !p)}
-                      className={`py-0.5 text-[9px] font-semibold rounded border cursor-pointer ${
-                        isSmoothed ? 'bg-[#1864cc] text-white border-blue-400' : 'bg-[#0d162b] text-slate-300 border-[#1a2947]'
+                      className={`py-1 text-[10px] font-semibold rounded border cursor-pointer transition-colors ${
+                        isSmoothed
+                          ? 'bg-blue-600 text-white border-blue-500'
+                          : 'bg-slate-50 dark:bg-[#0d162b] text-slate-700 dark:text-slate-300 border-slate-300 dark:border-[#1a2947]'
                       }`}
                     >
                       Smooth
                     </button>
                     <button
                       onClick={() => setIsInverted((p) => !p)}
-                      className={`py-0.5 text-[9px] font-semibold rounded border cursor-pointer ${
-                        isInverted ? 'bg-amber-600 text-white border-amber-400' : 'bg-[#0d162b] text-slate-300 border-[#1a2947]'
+                      className={`py-1 text-[10px] font-semibold rounded border cursor-pointer transition-colors ${
+                        isInverted
+                          ? 'bg-amber-600 text-white border-amber-500'
+                          : 'bg-slate-50 dark:bg-[#0d162b] text-slate-700 dark:text-slate-300 border-slate-300 dark:border-[#1a2947]'
                       }`}
                     >
                       Inverse
                     </button>
                   </div>
 
-                  <div className="flex items-center justify-between text-[9.5px]">
-                    <span className="text-slate-400">Colorize</span>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-500 dark:text-slate-400">Colorize</span>
                     <select
                       value={colorizeMode}
                       onChange={(e) => setColorizeMode(e.target.value as any)}
-                      className="bg-[#0b1224] border border-[#1a2947] text-slate-200 text-[9px] px-1 py-0.5 rounded focus:outline-none"
+                      className="bg-slate-50 dark:bg-[#0b1224] border border-slate-300 dark:border-[#1a2947] text-slate-800 dark:text-slate-200 text-[10px] px-1.5 py-0.5 rounded focus:outline-none"
                     >
                       <option value="Normal">Normal</option>
                       <option value="Heatmap">Heatmap</option>
@@ -780,19 +757,19 @@ export const NanoPixStudio: React.FC = () => {
 
                   <button
                     onClick={handleResetFilters}
-                    className="w-full py-0.5 text-[9px] text-slate-300 bg-[#0d162b] hover:bg-[#13203f] border border-[#1a2947] rounded cursor-pointer"
+                    className="w-full py-1 text-xs text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-[#0d162b] hover:bg-slate-200 dark:hover:bg-[#13203f] border border-slate-300 dark:border-[#1a2947] rounded cursor-pointer transition-colors"
                   >
                     Reset
                   </button>
                 </div>
 
                 {/* BRIGHTNESS & CONTRAST */}
-                <div className="flex flex-col gap-1 pt-1 border-t border-[#141d33]">
-                  <span className="text-[8.5px] font-bold uppercase tracking-wider text-slate-400">BRIGHTNESS & CONTRAST</span>
-                  <div className="flex flex-col gap-0.5">
-                    <div className="flex justify-between text-[8.5px] text-slate-400">
+                <div className="flex flex-col gap-1.5 pt-2 border-t border-slate-200 dark:border-[#141d33]">
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">BRIGHTNESS & CONTRAST</span>
+                  <div className="flex flex-col gap-1">
+                    <div className="flex justify-between text-[10px] text-slate-600 dark:text-slate-400">
                       <span>Brightness</span>
-                      <span className="font-mono text-white">{brightness} %</span>
+                      <span className="font-mono font-bold text-slate-900 dark:text-white">{brightness} %</span>
                     </div>
                     <input
                       type="range"
@@ -800,14 +777,14 @@ export const NanoPixStudio: React.FC = () => {
                       max="50"
                       value={brightness}
                       onChange={(e) => setBrightness(parseInt(e.target.value, 10))}
-                      className="w-full accent-blue-500 h-1 bg-[#0b1224] rounded cursor-pointer"
+                      className="w-full accent-blue-600 h-1.5 bg-slate-200 dark:bg-[#0b1224] rounded cursor-pointer"
                     />
                   </div>
 
-                  <div className="flex flex-col gap-0.5">
-                    <div className="flex justify-between text-[8.5px] text-slate-400">
+                  <div className="flex flex-col gap-1">
+                    <div className="flex justify-between text-[10px] text-slate-600 dark:text-slate-400">
                       <span>Contrast</span>
-                      <span className="font-mono text-white">{contrast} %</span>
+                      <span className="font-mono font-bold text-slate-900 dark:text-white">{contrast} %</span>
                     </div>
                     <input
                       type="range"
@@ -815,17 +792,8 @@ export const NanoPixStudio: React.FC = () => {
                       max="50"
                       value={contrast}
                       onChange={(e) => setContrast(parseInt(e.target.value, 10))}
-                      className="w-full accent-blue-500 h-1 bg-[#0b1224] rounded cursor-pointer"
+                      className="w-full accent-blue-600 h-1.5 bg-slate-200 dark:bg-[#0b1224] rounded cursor-pointer"
                     />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-1">
-                    <button onClick={() => { setBrightness(0); setContrast(0); }} className="py-0.5 text-[9px] bg-[#0d162b] border border-[#1a2947] rounded text-slate-300 cursor-pointer">
-                      Auto
-                    </button>
-                    <button onClick={() => { setBrightness(0); setContrast(0); }} className="py-0.5 text-[9px] bg-[#0d162b] border border-[#1a2947] rounded text-slate-300 cursor-pointer">
-                      Reset
-                    </button>
                   </div>
                 </div>
               </div>
@@ -834,26 +802,26 @@ export const NanoPixStudio: React.FC = () => {
               <button
                 onClick={handleTriggerAcquisition}
                 disabled={isExposing}
-                className="w-full py-1.5 bg-[#1864cc] hover:bg-blue-600 text-white rounded font-bold text-[11px] shadow cursor-pointer transition-all flex items-center justify-center gap-1 shrink-0"
+                className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-xs shadow-md cursor-pointer transition-all flex items-center justify-center gap-1.5 shrink-0"
               >
-                <Camera className={`w-3 h-3 ${isExposing ? 'animate-spin' : ''}`} />
-                <span>{isExposing ? 'Exposition...' : `Acquérir Dent #${selectedTooth}`}</span>
+                <Camera className={`w-4 h-4 ${isExposing ? 'animate-spin' : ''}`} />
+                <span>{isExposing ? 'Exposition en cours...' : `Acquérir Dent #${selectedTooth}`}</span>
               </button>
             </div>
 
             {/* Central Area: Live View & Bottom FDI Teeth Grid */}
-            <div className="flex-1 flex flex-col bg-[#02040a] justify-between overflow-hidden min-h-0">
+            <div className="flex-1 flex flex-col bg-slate-900 dark:bg-[#02040a] justify-between overflow-hidden min-h-0">
               {/* Central Viewport */}
-              <div className="flex-1 flex items-center justify-center p-1.5 relative min-h-0 overflow-hidden">
+              <div className="flex-1 flex items-center justify-center p-3 relative min-h-0 overflow-hidden">
                 {isExposing ? (
-                  <div className="flex flex-col items-center gap-1.5">
-                    <div className="w-10 h-10 rounded-full border-2 border-cyan-400 border-t-transparent animate-spin flex items-center justify-center">
-                      <Scan className="w-4 h-4 text-cyan-400 animate-pulse" />
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="w-12 h-12 rounded-full border-3 border-cyan-400 border-t-transparent animate-spin flex items-center justify-center">
+                      <Scan className="w-5 h-5 text-cyan-400 animate-pulse" />
                     </div>
-                    <span className="text-[11px] font-bold text-white">Capture en cours...</span>
+                    <span className="text-xs font-bold text-white">Capture capteur en cours...</span>
                   </div>
                 ) : (
-                  <div className="max-h-[30vh] sm:max-h-[34vh] aspect-[4/3] w-auto max-w-[380px] bg-black rounded border border-[#141d33] overflow-hidden relative flex items-center justify-center shadow-2xl">
+                  <div className="max-h-[35vh] aspect-[4/3] w-auto max-w-[420px] bg-black rounded-xl border border-slate-700 dark:border-[#141d33] overflow-hidden relative flex items-center justify-center shadow-2xl">
                     <img
                       src={selectedStudy?.url || DEFAULT_RVG_XRAYS['18']}
                       alt="X-ray Live"
@@ -866,7 +834,7 @@ export const NanoPixStudio: React.FC = () => {
                       }}
                       className="w-full h-full object-contain grayscale"
                     />
-                    <div className="absolute top-1 left-1 bg-black/80 px-1.5 py-0.5 rounded text-[8.5px] font-mono text-cyan-400 border border-white/10">
+                    <div className="absolute top-2 left-2 bg-black/80 px-2 py-0.5 rounded text-[9px] font-mono text-cyan-400 border border-white/15">
                       IO {selectedTooth} • {selectedPatient?.name}
                     </div>
                   </div>
@@ -874,9 +842,9 @@ export const NanoPixStudio: React.FC = () => {
               </div>
 
               {/* Bottom Anatomical FDI Teeth Selector Grid */}
-              <div className="bg-[#050914] border-t border-[#141d33] px-2 py-1 flex flex-col gap-0.5 shrink-0">
+              <div className="bg-white dark:bg-[#050914] border-t border-slate-200 dark:border-[#141d33] px-3 py-2 flex flex-col gap-1 shrink-0 transition-colors">
                 {/* Upper Teeth Row */}
-                <div className="flex items-center justify-center gap-0.5 overflow-x-auto no-scrollbar">
+                <div className="flex items-center justify-center gap-1 overflow-x-auto no-scrollbar">
                   {upperAdultTeeth.map((tooth, idx) => {
                     const isSelected = tooth === selectedTooth;
                     const tag = idx < 8 ? `R${8 - idx}` : `L${idx - 7}`;
@@ -884,20 +852,22 @@ export const NanoPixStudio: React.FC = () => {
                       <button
                         key={tooth}
                         onClick={() => setSelectedTooth(tooth)}
-                        className={`w-[25px] h-[28px] rounded flex flex-col items-center justify-between p-0.5 border text-[7.5px] font-bold cursor-pointer transition-all shrink-0 ${
-                          isSelected ? 'bg-[#1864cc] text-white border-blue-400' : 'bg-[#0d162b] text-slate-300 border-[#1a2947] hover:bg-[#13203f]'
+                        className={`w-[28px] h-[32px] rounded-md flex flex-col items-center justify-between p-0.5 border text-[8px] font-bold cursor-pointer transition-all shrink-0 ${
+                          isSelected
+                            ? 'bg-blue-600 text-white border-blue-500 shadow-xs'
+                            : 'bg-slate-50 dark:bg-[#0d162b] text-slate-700 dark:text-slate-300 border-slate-200 dark:border-[#1a2947] hover:bg-slate-100 dark:hover:bg-[#13203f]'
                         }`}
                       >
                         <span>{tooth}</span>
-                        <div className={`w-1.5 h-2 rounded-t-xs ${isSelected ? 'bg-cyan-200' : 'bg-slate-500'}`} />
-                        <span className="text-[6px] text-slate-400 font-mono">{tag}</span>
+                        <div className={`w-2 h-2.5 rounded-t-xs ${isSelected ? 'bg-cyan-200' : 'bg-slate-400 dark:bg-slate-500'}`} />
+                        <span className="text-[6.5px] opacity-70 font-mono">{tag}</span>
                       </button>
                     );
                   })}
                 </div>
 
                 {/* Lower Teeth Row */}
-                <div className="flex items-center justify-center gap-0.5 overflow-x-auto no-scrollbar">
+                <div className="flex items-center justify-center gap-1 overflow-x-auto no-scrollbar">
                   {lowerAdultTeeth.map((tooth, idx) => {
                     const isSelected = tooth === selectedTooth;
                     const tag = idx < 8 ? `R${8 - idx}` : `L${idx - 7}`;
@@ -905,12 +875,14 @@ export const NanoPixStudio: React.FC = () => {
                       <button
                         key={tooth}
                         onClick={() => setSelectedTooth(tooth)}
-                        className={`w-[25px] h-[28px] rounded flex flex-col items-center justify-between p-0.5 border text-[7.5px] font-bold cursor-pointer transition-all shrink-0 ${
-                          isSelected ? 'bg-[#1864cc] text-white border-blue-400' : 'bg-[#0d162b] text-slate-300 border-[#1a2947] hover:bg-[#13203f]'
+                        className={`w-[28px] h-[32px] rounded-md flex flex-col items-center justify-between p-0.5 border text-[8px] font-bold cursor-pointer transition-all shrink-0 ${
+                          isSelected
+                            ? 'bg-blue-600 text-white border-blue-500 shadow-xs'
+                            : 'bg-slate-50 dark:bg-[#0d162b] text-slate-700 dark:text-slate-300 border-slate-200 dark:border-[#1a2947] hover:bg-slate-100 dark:hover:bg-[#13203f]'
                         }`}
                       >
-                        <span className="text-[6px] text-slate-400 font-mono">{tag}</span>
-                        <div className={`w-1.5 h-2 rounded-b-xs ${isSelected ? 'bg-cyan-200' : 'bg-slate-500'}`} />
+                        <span className="text-[6.5px] opacity-70 font-mono">{tag}</span>
+                        <div className={`w-2 h-2.5 rounded-b-xs ${isSelected ? 'bg-cyan-200' : 'bg-slate-400 dark:bg-slate-500'}`} />
                         <span>{tooth}</span>
                       </button>
                     );
@@ -921,19 +893,18 @@ export const NanoPixStudio: React.FC = () => {
           </div>
         )}
 
-
         {/* ========================================================================= */}
-        {/* TAB 3: VIEWER MODULE (Exact Match to Screenshot 3)                         */}
+        {/* TAB 3: VIEWER MODULE                                                      */}
         {/* ========================================================================= */}
         {activeTab === 'Viewer' && (
           <div className="flex-1 flex overflow-hidden min-h-0">
             {/* Left Adjustment Sidebar */}
-            <div className="w-52 bg-[#050914] border-r border-[#141d33] p-2 flex flex-col gap-2 shrink-0 overflow-y-auto no-scrollbar text-[10px]">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">IMAGE PROCESSING</span>
+            <div className="w-56 bg-white dark:bg-[#050914] border-r border-slate-200 dark:border-[#141d33] p-2.5 flex flex-col gap-2.5 shrink-0 overflow-y-auto no-scrollbar text-[11px] transition-colors">
+              <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">IMAGE PROCESSING</span>
               <select
                 value={imageProcessingMode}
                 onChange={(e) => setImageProcessingMode(e.target.value as any)}
-                className="bg-[#0b1224] border border-[#1a2947] text-blue-400 font-bold text-xs px-2 py-1 rounded focus:outline-none"
+                className="bg-slate-50 dark:bg-[#0b1224] border border-slate-300 dark:border-[#1a2947] text-blue-600 dark:text-blue-400 font-bold text-xs px-2 py-1 rounded focus:outline-none"
               >
                 <option value="Endodontic">Endodontic</option>
                 <option value="Periodontic">Periodontic</option>
@@ -942,36 +913,36 @@ export const NanoPixStudio: React.FC = () => {
               </select>
 
               <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-300 text-[11px]">Smart Contrast</span>
+                <span className="text-slate-600 dark:text-slate-300 text-[11px]">Smart Contrast</span>
                 <div className="flex items-center gap-1.5">
-                  <button onClick={() => setSmartContrastLevel((p) => Math.max(1, p - 1))} className="w-5 h-5 rounded bg-[#142342] text-white font-bold flex items-center justify-center text-xs">-</button>
-                  <span className="w-4 text-center font-bold text-blue-400 text-xs">{smartContrastLevel}</span>
-                  <button onClick={() => setSmartContrastLevel((p) => Math.min(5, p + 1))} className="w-5 h-5 rounded bg-[#142342] text-white font-bold flex items-center justify-center text-xs">+</button>
+                  <button onClick={() => setSmartContrastLevel((p) => Math.max(1, p - 1))} className="w-5 h-5 rounded bg-slate-200 dark:bg-[#142342] text-slate-800 dark:text-white font-bold flex items-center justify-center text-xs hover:bg-slate-300 cursor-pointer">-</button>
+                  <span className="w-4 text-center font-bold text-blue-600 dark:text-blue-400 text-xs">{smartContrastLevel}</span>
+                  <button onClick={() => setSmartContrastLevel((p) => Math.min(5, p + 1))} className="w-5 h-5 rounded bg-slate-200 dark:bg-[#142342] text-slate-800 dark:text-white font-bold flex items-center justify-center text-xs hover:bg-slate-300 cursor-pointer">+</button>
                 </div>
               </div>
 
-              <div className="flex flex-col gap-2 pt-2 border-t border-[#141d33]">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">BRIGHTNESS & CONTRAST</span>
+              <div className="flex flex-col gap-2 pt-2 border-t border-slate-200 dark:border-[#141d33]">
+                <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">BRIGHTNESS & CONTRAST</span>
                 <div className="flex flex-col gap-1">
-                  <div className="flex justify-between text-[10px] text-slate-400">
+                  <div className="flex justify-between text-[10px] text-slate-600 dark:text-slate-400">
                     <span>Brightness</span>
-                    <span className="font-mono text-white">{brightness} %</span>
+                    <span className="font-mono font-bold text-slate-900 dark:text-white">{brightness} %</span>
                   </div>
-                  <input type="range" min="-50" max="50" value={brightness} onChange={(e) => setBrightness(parseInt(e.target.value, 10))} className="w-full accent-blue-500 h-1 bg-[#0b1224] rounded" />
+                  <input type="range" min="-50" max="50" value={brightness} onChange={(e) => setBrightness(parseInt(e.target.value, 10))} className="w-full accent-blue-600 h-1.5 bg-slate-200 dark:bg-[#0b1224] rounded" />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <div className="flex justify-between text-[10px] text-slate-400">
+                  <div className="flex justify-between text-[10px] text-slate-600 dark:text-slate-400">
                     <span>Contrast</span>
-                    <span className="font-mono text-white">{contrast} %</span>
+                    <span className="font-mono font-bold text-slate-900 dark:text-white">{contrast} %</span>
                   </div>
-                  <input type="range" min="-50" max="50" value={contrast} onChange={(e) => setContrast(parseInt(e.target.value, 10))} className="w-full accent-blue-500 h-1 bg-[#0b1224] rounded" />
+                  <input type="range" min="-50" max="50" value={contrast} onChange={(e) => setContrast(parseInt(e.target.value, 10))} className="w-full accent-blue-600 h-1.5 bg-slate-200 dark:bg-[#0b1224] rounded" />
                 </div>
               </div>
 
               {/* Ruler readout box */}
-              <div className="p-2.5 bg-[#0b1224] border border-[#1a2947] rounded text-xs flex flex-col gap-1 mt-auto">
-                <span className="text-[10px] font-bold text-slate-400">Mesure Canalaire :</span>
-                <span className="text-cyan-400 font-mono font-bold text-sm">{rulerDistanceMm} mm</span>
+              <div className="p-2.5 bg-slate-50 dark:bg-[#0b1224] border border-slate-200 dark:border-[#1a2947] rounded-lg text-xs flex flex-col gap-1 mt-auto shadow-2xs">
+                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">Mesure Canalaire :</span>
+                <span className="text-cyan-600 dark:text-cyan-400 font-mono font-bold text-sm">{rulerDistanceMm} mm</span>
               </div>
             </div>
 
@@ -1003,10 +974,10 @@ export const NanoPixStudio: React.FC = () => {
                       ${isInverted ? 'invert(1)' : ''}
                     `,
                   }}
-                  className="rounded object-contain max-h-[70vh] shadow-2xl"
+                  className="rounded-lg object-contain max-h-[70vh] shadow-2xl"
                 />
 
-                {/* Exact Screenshot 3 Metadata Tag: 2026-09-04 19:14:29 IO 18 */}
+                {/* Metadata Tag */}
                 <div className="absolute top-2 left-2 text-[11px] font-mono font-bold text-slate-200 drop-shadow-md">
                   {selectedStudy?.timestamp || '2026-09-04 19:14:29'} IO {selectedStudy?.tooth || 18}
                 </div>
@@ -1040,20 +1011,20 @@ export const NanoPixStudio: React.FC = () => {
               )}
             </div>
 
-            {/* Right Series Strip (Screenshot 3 Right Column) */}
-            <div className="w-36 bg-[#050914] border-l border-[#141d33] p-2 flex flex-col gap-2 shrink-0 overflow-y-auto no-scrollbar">
+            {/* Right Series Strip */}
+            <div className="w-40 bg-white dark:bg-[#050914] border-l border-slate-200 dark:border-[#141d33] p-2 flex flex-col gap-2 shrink-0 overflow-y-auto no-scrollbar transition-colors">
               {selectedPatient?.studies.map((study) => (
                 <div
                   key={study.id}
                   onClick={() => setSelectedStudyId(study.id)}
-                  className={`rounded border overflow-hidden cursor-pointer transition-all ${
-                    study.id === selectedStudyId ? 'border-blue-500 ring-2 ring-blue-500/30' : 'border-[#1a2947]'
+                  className={`rounded-lg border overflow-hidden cursor-pointer transition-all shadow-xs ${
+                    study.id === selectedStudyId ? 'border-blue-500 ring-2 ring-blue-500/30' : 'border-slate-300 dark:border-[#1a2947]'
                   }`}
                 >
                   <div className="h-20 bg-black">
                     <img src={study.url} alt="Series" className="w-full h-full object-cover grayscale" />
                   </div>
-                  <div className="p-1 bg-[#090e1c] text-[9px] font-mono text-slate-400 truncate">
+                  <div className="p-1 bg-slate-50 dark:bg-[#090e1c] text-[9px] font-mono text-slate-700 dark:text-slate-400 truncate">
                     {study.timestamp} IO {study.tooth}
                   </div>
                 </div>
@@ -1063,54 +1034,54 @@ export const NanoPixStudio: React.FC = () => {
         )}
 
         {/* ========================================================================= */}
-        {/* TAB 4: REPORT MODULE (Exact Match to Screenshot 4)                        */}
+        {/* TAB 4: REPORT MODULE                                                      */}
         {/* ========================================================================= */}
         {activeTab === 'Report' && (
           <div className="flex-1 flex overflow-hidden">
             {/* Left Controls */}
-            <div className="w-64 bg-[#050914] border-r border-[#141d33] p-3 flex flex-col gap-3 shrink-0 overflow-y-auto no-scrollbar">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">TEMPLATE</span>
+            <div className="w-64 bg-white dark:bg-[#050914] border-r border-slate-200 dark:border-[#141d33] p-3 flex flex-col gap-3 shrink-0 overflow-y-auto no-scrollbar transition-colors">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">TEMPLATE</span>
               <select
                 value={reportTemplate}
                 onChange={(e) => setReportTemplate(e.target.value as any)}
-                className="bg-[#0b1224] border border-[#1a2947] text-white text-xs px-2.5 py-1 rounded focus:outline-none"
+                className="bg-slate-50 dark:bg-[#0b1224] border border-slate-300 dark:border-[#1a2947] text-slate-900 dark:text-white text-xs px-2.5 py-1 rounded focus:outline-none"
               >
                 <option value="Template A">Template A</option>
                 <option value="Template B">Template B</option>
                 <option value="Template C">Template C</option>
               </select>
 
-              <div className="flex flex-col gap-1.5 pt-2 border-t border-[#141d33]">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">REPORT HISTORY</span>
-                <button onClick={() => showToast('success', 'Rapport sauvegardé.')} className="w-full py-1.5 bg-[#0d162b] border border-[#1a2947] rounded text-xs text-slate-300 hover:bg-[#13203f] cursor-pointer">
-                  Save Report
+              <div className="flex flex-col gap-1.5 pt-2 border-t border-slate-200 dark:border-[#141d33]">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">HISTORIQUE RAPPORT</span>
+                <button onClick={() => toast.success('Sauvegarde', 'Rapport sauvegardé avec succès.')} className="w-full py-1.5 bg-slate-100 dark:bg-[#0d162b] border border-slate-300 dark:border-[#1a2947] rounded text-xs text-slate-800 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-[#13203f] cursor-pointer transition-colors">
+                  Sauvegarder Rapport
                 </button>
-                <button onClick={() => showToast('info', 'Rapport chargé.')} className="w-full py-1.5 bg-[#0d162b] border border-[#1a2947] rounded text-xs text-slate-300 hover:bg-[#13203f] cursor-pointer">
-                  Load Report
+                <button onClick={() => toast.info('Chargement', 'Rapport modèle chargé.')} className="w-full py-1.5 bg-slate-100 dark:bg-[#0d162b] border border-slate-300 dark:border-[#1a2947] rounded text-xs text-slate-800 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-[#13203f] cursor-pointer transition-colors">
+                  Charger Modèle
                 </button>
-                <button onClick={() => window.print()} className="w-full py-2 bg-[#1864cc] hover:bg-blue-600 rounded text-xs font-bold text-white shadow cursor-pointer mt-2 flex items-center justify-center gap-1.5">
-                  <Printer className="w-3.5 h-3.5" />
-                  <span>Imprimer</span>
+                <button onClick={() => window.print()} className="w-full py-2 bg-blue-600 hover:bg-blue-700 rounded text-xs font-bold text-white shadow-md cursor-pointer mt-2 flex items-center justify-center gap-1.5 transition-colors">
+                  <Printer className="w-4 h-4" />
+                  <span>Imprimer le Rapport</span>
                 </button>
               </div>
             </div>
 
-            {/* Center A4 Sheet with Green Boundary Frames (Screenshot 4) */}
-            <div className="flex-1 bg-[#617482] overflow-y-auto p-4 flex justify-center print:p-0 print:bg-white">
-              <div className="w-[190mm] min-h-[265mm] bg-white text-slate-900 p-8 shadow-2xl flex flex-col justify-between print:shadow-none print:p-4">
+            {/* Center A4 Sheet with Green Boundary Frames */}
+            <div className="flex-1 bg-slate-300 dark:bg-[#617482] overflow-y-auto p-4 flex justify-center print:p-0 print:bg-white transition-colors">
+              <div className="w-[190mm] min-h-[265mm] bg-white text-slate-900 p-8 shadow-2xl flex flex-col justify-between print:shadow-none print:p-4 rounded-sm">
                 <div className="flex flex-col gap-4">
                   {/* Green Box 1: Header */}
-                  <div className="border border-green-500 p-3 rounded bg-transparent flex justify-between items-center text-xs">
+                  <div className="border border-emerald-500 p-3 rounded bg-transparent flex justify-between items-center text-xs">
                     <div className="text-[10px] font-mono text-slate-500">2026-09-15</div>
                     <div className="text-right text-[10px] leading-tight">
                       <div className="font-mono">Chart No: {selectedPatient?.chartNo} • Gender: {selectedPatient?.gender}</div>
-                      <div className="font-bold uppercase">Name: {selectedPatient?.name}</div>
-                      <div>Date of Birth: {selectedPatient?.birthDate} • Age: {selectedPatient?.age}Y</div>
+                      <div className="font-bold uppercase text-slate-900">Name: {selectedPatient?.name}</div>
+                      <div>Date of Birth: {selectedPatient?.birthDate} • Age: {selectedPatient?.age} ans</div>
                     </div>
                   </div>
 
                   {/* Green Box 2: Radio Image */}
-                  <div className="border border-green-500 p-3 rounded bg-black flex flex-col items-center justify-center">
+                  <div className="border border-emerald-500 p-3 rounded bg-black flex flex-col items-center justify-center">
                     <div className="w-[100mm] h-[75mm] relative">
                       <img src={selectedStudy?.url || DEFAULT_RVG_XRAYS['18']} alt="Report" className="w-full h-full object-cover grayscale contrast-125" />
                     </div>
@@ -1120,19 +1091,19 @@ export const NanoPixStudio: React.FC = () => {
                   </div>
 
                   {/* Green Box 3: Text diagnosis area */}
-                  <div className="border border-green-500 p-3 rounded">
-                    <span className="text-[10px] font-bold text-slate-500 block mb-1">Text</span>
+                  <div className="border border-emerald-500 p-3 rounded">
+                    <span className="text-[10px] font-bold text-slate-500 block mb-1">Observations Cliniques :</span>
                     <textarea
                       rows={6}
                       value={reportDiagnosis}
                       onChange={(e) => setReportDiagnosis(e.target.value)}
-                      className="w-full text-xs text-slate-900 border-0 focus:outline-none resize-none font-sans"
+                      className="w-full text-xs text-slate-900 border-0 focus:outline-none resize-none font-sans bg-transparent"
                     />
                   </div>
                 </div>
 
                 {/* Footer Box */}
-                <div className="border border-green-500 p-2 rounded text-[10px] flex justify-between text-slate-600">
+                <div className="border border-emerald-500 p-2 rounded text-[10px] flex justify-between text-slate-600">
                   <span>Dr. Salma Tijini — Chirurgien Dentiste</span>
                   <span>Signature & Cachet</span>
                 </div>

@@ -228,6 +228,42 @@ html:not(.dark) .login-page input::placeholder {
   color: #cbd5e1 !important;
 }
 
+/* =========================================================
+   NANOPIX STUDIO - MEDICAL RVG DENTAL WORKSTATION THEME
+   ========================================================= */
+.nanopix-studio {
+  color-scheme: light dark;
+}
+
+html:not(.dark) .nanopix-studio select {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+html:not(.dark) .nanopix-studio input[type="text"] {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+html:not(.dark) .nanopix-studio input[type="text"]::placeholder {
+  color: #94a3b8 !important;
+}
+
+html.dark .nanopix-studio select {
+  background-color: #0b1224 !important;
+  color: #f1f5f9 !important;
+  border-color: #1a2947 !important;
+}
+
+html.dark .nanopix-studio input[type="text"] {
+  background-color: #0b1224 !important;
+  color: #f1f5f9 !important;
+  border-color: #1a2947 !important;
+}
+
+
 /* Sub-panels and inner backgrounds */
 html:not(.dark) .bg-white\/3,
 html:not(.dark) .bg-white\/5,

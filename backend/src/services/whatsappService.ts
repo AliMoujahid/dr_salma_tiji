@@ -141,10 +141,10 @@ class WhatsAppService {
           console.error('Failed to generate local QR code URL:', err.message);
           this.qrCodeDataUrl = null;
         }
-        console.log('\n===============================================================');
-        console.log(' 📱 SCANNEZ CE QR CODE AVEC WHATSAPP (CABINET DENTAIRE)');
-        console.log('===============================================================\n');
-        qrcodeTerminal.generate(qr, { small: true });
+        // console.log('\n===============================================================');
+        console.log(' 📱 SCANNEZ QR CODE AVEC WHATSAPP (CABINET DENTAIRE)');
+        // console.log('===============================================================\n');
+        // qrcodeTerminal.generate(qr, { small: true });
       });
 
       // Event: Authenticated successfully
@@ -324,7 +324,7 @@ class WhatsAppService {
     if (this.client) {
       try {
         await Promise.race([
-          this.client.logout().catch(() => {}),
+          this.client.logout().catch(() => { }),
           new Promise((resolve) => setTimeout(resolve, 2500)),
         ]);
       } catch (e) {
@@ -333,7 +333,7 @@ class WhatsAppService {
 
       try {
         await Promise.race([
-          this.client.destroy().catch(() => {}),
+          this.client.destroy().catch(() => { }),
           new Promise((resolve) => setTimeout(resolve, 2500)),
         ]);
       } catch (e) {
@@ -355,7 +355,7 @@ class WhatsAppService {
   public async forceResetSession(): Promise<WhatsAppStatus> {
     console.log('[WhatsApp] Réinitialisation forcée de la session demandée...');
     await this.logout();
-    
+
     // Asynchronously launch new client
     setTimeout(() => {
       this.initClient(false).catch((err) => {
