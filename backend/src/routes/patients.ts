@@ -5,6 +5,7 @@ import Appointment from '../models/Appointment';
 import AuditLog from '../models/AuditLog';
 import { protect, AuthRequest } from '../middleware/auth';
 import { recordAudit } from '../middleware/security';
+import { liveSyncService } from '../services/liveSyncService';
 
 const router = Router();
 
@@ -158,6 +159,12 @@ router.post('/', protect, async (req: AuthRequest, res: Response) => {
       req,
     });
 
+    liveSyncService.broadcast('PATIENTS_CHANGED', 'create', {
+      entityId: newPatient._id.toString(),
+      entityName: newPatient.name,
+      sourceUser: req.user?.name,
+    });
+
     res.status(201).json(newPatient);
   } catch (error: any) {
     res.status(500).json({ message: 'Erreur lors de la création du patient.', error: error.message });
@@ -187,6 +194,12 @@ router.put('/:id', protect, async (req: AuthRequest, res: Response) => {
       targetName: updatedPatient.name,
       details: `Mise à jour des informations du patient "${updatedPatient.name}".`,
       req,
+    });
+
+    liveSyncService.broadcast('PATIENTS_CHANGED', 'update', {
+      entityId: updatedPatient._id.toString(),
+      entityName: updatedPatient.name,
+      sourceUser: req.user?.name,
     });
 
     res.json(updatedPatient);
@@ -222,6 +235,12 @@ router.put('/:id/archive', protect, async (req: AuthRequest, res: Response) => {
       req,
     });
 
+    liveSyncService.broadcast('PATIENTS_CHANGED', 'archive', {
+      entityId: patient._id.toString(),
+      entityName: patient.name,
+      sourceUser: req.user?.name,
+    });
+
     res.json({ message: patient.isArchived ? 'Patient archivé.' : 'Patient désarchivé.', patient });
   } catch (error: any) {
     res.status(500).json({ message: 'Erreur lors de la modification de l\'archivage.', error: error.message });
@@ -243,6 +262,13 @@ router.put('/:id/favorite', protect, async (req: AuthRequest, res: Response) => 
     }
     patient.isFavorite = !patient.isFavorite;
     await patient.save();
+
+    liveSyncService.broadcast('PATIENTS_CHANGED', 'favorite', {
+      entityId: patient._id.toString(),
+      entityName: patient.name,
+      sourceUser: req.user?.name,
+    });
+
     res.json({ message: patient.isFavorite ? 'Ajouté aux favoris.' : 'Retiré des favoris.', patient });
   } catch (error: any) {
     res.status(500).json({ message: 'Erreur lors du toggle favori.', error: error.message });
@@ -297,6 +323,12 @@ router.delete('/:id', protect, async (req: AuthRequest, res: Response) => {
       details: `Patient "${patient.name}" (${patient.nationalId || 'sans CIN'}) a été supprimé par ${req.user?.name}.`,
       backupData: patient.toObject(),
       req,
+    });
+
+    liveSyncService.broadcast('PATIENTS_CHANGED', 'delete', {
+      entityId: patient._id.toString(),
+      entityName: patient.name,
+      sourceUser: req.user?.name,
     });
 
     res.json({ message: 'Patient supprimé et archivé dans l\'historique professionnel.' });

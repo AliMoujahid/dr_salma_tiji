@@ -21,6 +21,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { API_URL } from '../config/api';
+import { useLiveSync } from '../context/LiveSyncContext';
 
 interface Stats {
   totalPatients: number;
@@ -41,27 +42,32 @@ export const Dashboard: React.FC = () => {
   const [financials, setFinancials] = useState<any>({ monthlyRevenue: [], commonTreatments: [] });
   const [loading, setLoading] = useState(true);
 
+  const fetchDashboardData = async () => {
+    try {
+      const headers = { Authorization: `Bearer ${token}` };
+
+      const statsRes = await fetch(`${API_URL}/reports/dashboard-stats`, { headers });
+      const statsData = await statsRes.json();
+      setStats(statsData);
+
+      const finRes = await fetch(`${API_URL}/reports/financials`, { headers });
+      const finData = await finRes.json();
+      setFinancials(finData);
+    } catch (err) {
+      console.error('Error fetching dashboard details:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        const headers = { Authorization: `Bearer ${token}` };
-
-        const statsRes = await fetch(`${API_URL}/reports/dashboard-stats`, { headers });
-        const statsData = await statsRes.json();
-        setStats(statsData);
-
-        const finRes = await fetch(`${API_URL}/reports/financials`, { headers });
-        const finData = await finRes.json();
-        setFinancials(finData);
-      } catch (err) {
-        console.error('Error fetching dashboard details:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchDashboardData();
   }, [token]);
+
+  // Real-Time Live Sync: Refresh dashboard counters and charts when changes occur
+  useLiveSync(['PATIENTS_CHANGED', 'APPOINTMENTS_CHANGED', 'WAITING_ROOM_CHANGED', 'FINANCIALS_CHANGED'], () => {
+    fetchDashboardData();
+  });
 
   // Format today's date in French
   const todayFormatted = new Intl.DateTimeFormat('fr-FR', {

@@ -35,6 +35,7 @@ import notificationRoutes from './routes/notifications';
 import licenseRoutes from './routes/license';
 import auditLogRoutes from './routes/auditLogs';
 import dentalActsRoutes, { ensureDefaultActs } from './routes/dentalActs';
+import liveSyncRoutes from './routes/liveSync';
 import { reminderScheduler } from './services/reminderScheduler';
 import { backupScheduler } from './services/backupScheduler';
 import { licenseService } from './services/licenseService';
@@ -219,6 +220,7 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/audit-logs', auditLogRoutes);
 app.use('/api/dental-acts', dentalActsRoutes);
+app.use('/api/events', liveSyncRoutes);
 
 import { whatsappService } from './services/whatsappService';
 

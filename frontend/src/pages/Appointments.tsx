@@ -34,6 +34,7 @@ import { Appointment, Patient } from '../types';
 import { SearchablePatientSelect } from '../components/SearchablePatientSelect';
 import { CustomDatePicker } from '../components/CustomDatePicker';
 import { formatDate, formatTime } from '../utils/dateUtils';
+import { useLiveSync } from '../context/LiveSyncContext';
 
 const MONTH_NAMES_FR = [
   'Janvier',
@@ -149,6 +150,12 @@ export const Appointments: React.FC = () => {
     fetchAppointments();
     fetchPatients();
   }, []);
+
+  // Real-Time Live Sync: Refresh appointments & patients immediately upon any network activity
+  useLiveSync(['APPOINTMENTS_CHANGED', 'PATIENTS_CHANGED'], () => {
+    fetchAppointments();
+    fetchPatients();
+  });
 
   const fetchAppointments = () => {
     setLoading(true);

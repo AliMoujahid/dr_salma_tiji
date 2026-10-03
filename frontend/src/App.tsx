@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
+import { LiveSyncProvider } from './context/LiveSyncContext';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { LicenseActivationModal } from './components/LicenseActivationModal';
@@ -185,17 +186,19 @@ export const App: React.FC = () => {
       <BrowserRouter>
         <AuthProvider>
           <ToastProvider>
-            <Routes>
-              <Route path="/login" element={<Login />} />
-              <Route
-                path="/*"
-                element={
-                  <ProtectedRoute>
-                    <AppLayout />
-                  </ProtectedRoute>
-                }
-              />
-            </Routes>
+            <LiveSyncProvider>
+              <Routes>
+                <Route path="/login" element={<Login />} />
+                <Route
+                  path="/*"
+                  element={
+                    <ProtectedRoute>
+                      <AppLayout />
+                    </ProtectedRoute>
+                  }
+                />
+              </Routes>
+            </LiveSyncProvider>
           </ToastProvider>
         </AuthProvider>
       </BrowserRouter>

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { MonitorPlay, Users, Armchair, CheckCircle2, Play, ChevronRight } from 'lucide-react';
 import { API_URL } from '../config/api';
+import { useLiveSync } from '../context/LiveSyncContext';
 
 interface WaitingRoomData {
   waiting: any[];
@@ -20,10 +21,12 @@ export const WaitingRoom: React.FC = () => {
 
   useEffect(() => {
     fetchQueue();
-    // Poll queue every 30 seconds for live updates
-    const interval = setInterval(fetchQueue, 30000);
-    return () => clearInterval(interval);
   }, []);
+
+  // Real-Time Live Sync: Instant refresh when appointment or patient status changes
+  useLiveSync(['WAITING_ROOM_CHANGED', 'APPOINTMENTS_CHANGED'], () => {
+    fetchQueue();
+  });
 
   const fetchQueue = () => {
     fetch(`${API_URL}/appointments/waiting-room`, {

@@ -7,6 +7,7 @@ import { useToast } from '../context/ToastContext';
 import { formatDate, formatBirthDateWithAge, calculateAge } from '../utils/dateUtils';
 import { CustomDatePicker } from '../components/CustomDatePicker';
 import { API_URL } from '../config/api';
+import { useLiveSync } from '../context/LiveSyncContext';
 
 
 
@@ -60,6 +61,11 @@ export const Patients: React.FC = () => {
   useEffect(() => {
     fetchPatients();
   }, [currentPage, debouncedSearch, showArchived, showFavoritesOnly]);
+
+  // Real-Time Live Sync: Refresh list immediately when any PC adds/edits/deletes a patient
+  useLiveSync('PATIENTS_CHANGED', () => {
+    fetchPatients();
+  });
 
   const fetchPatients = () => {
     setLoading(true);

@@ -5,6 +5,7 @@ import { useToast } from '../context/ToastContext';
 import { DentalChart } from '../components/DentalChart';
 import { Dental3DViewer } from '../components/Dental3DViewer';
 import { API_URL, UPLOADS_URL } from '../config/api';
+import { useLiveSync } from '../context/LiveSyncContext';
 import {
   User,
   Heart,
@@ -136,6 +137,13 @@ export const PatientProfile: React.FC = () => {
   useEffect(() => {
     fetchPatientProfile();
   }, [id]);
+
+  // Real-Time Live Sync: Refresh patient record and tabs when changes occur
+  useLiveSync(['PATIENTS_CHANGED', 'APPOINTMENTS_CHANGED', 'DOCUMENTS_CHANGED', 'FINANCIALS_CHANGED'], (payload) => {
+    if (!payload.entityId || payload.entityId === id) {
+      fetchPatientProfile();
+    }
+  });
 
   const fetchPatientProfile = async () => {
     if (!id) return;

@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import Appointment from '../models/Appointment';
 import Patient from '../models/Patient';
 import { protect, AuthRequest } from '../middleware/auth';
+import { liveSyncService } from '../services/liveSyncService';
 
 const router = Router();
 
@@ -111,6 +112,12 @@ router.post('/', protect, async (req: AuthRequest, res: Response) => {
       .populate('patientId', 'name phone email profilePictureUrl')
       .populate('doctorId', 'name');
 
+    liveSyncService.broadcast('APPOINTMENTS_CHANGED', 'create', {
+      entityId: newAppt._id.toString(),
+      sourceUser: req.user?.name,
+    });
+    liveSyncService.broadcast('WAITING_ROOM_CHANGED', 'refresh');
+
     res.status(201).json(populated);
   } catch (error: any) {
     res.status(500).json({ message: 'Erreur lors de la création du rendez-vous.', error: error.message });
@@ -147,6 +154,12 @@ router.put('/:id', protect, async (req: AuthRequest, res: Response) => {
       return;
     }
 
+    liveSyncService.broadcast('APPOINTMENTS_CHANGED', 'update', {
+      entityId: String(req.params.id),
+      sourceUser: req.user?.name,
+    });
+    liveSyncService.broadcast('WAITING_ROOM_CHANGED', 'refresh');
+
     res.json(updatedAppt);
   } catch (error: any) {
     res.status(500).json({ message: 'Erreur lors de la mise à jour du rendez-vous.', error: error.message });
@@ -166,6 +179,13 @@ router.delete('/:id', protect, async (req: AuthRequest, res: Response) => {
       res.status(404).json({ message: 'Rendez-vous introuvable.' });
       return;
     }
+
+    liveSyncService.broadcast('APPOINTMENTS_CHANGED', 'delete', {
+      entityId: String(req.params.id),
+      sourceUser: req.user?.name,
+    });
+    liveSyncService.broadcast('WAITING_ROOM_CHANGED', 'refresh');
+
     res.json({ message: 'Rendez-vous supprimé avec succès.' });
   } catch (error: any) {
     res.status(500).json({ message: 'Erreur lors de la suppression du rendez-vous.', error: error.message });
