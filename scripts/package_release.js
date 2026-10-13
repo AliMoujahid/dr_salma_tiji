@@ -201,30 +201,50 @@ Set fso = CreateObject("Scripting.FileSystemObject")
 sCurDir = fso.GetParentFolderName(WScript.ScriptFullName)
 If Right(sCurDir, 1) <> "\\" Then sCurDir = sCurDir & "\\"
 
-' 1. S'assurer que le service MongoDB est configure en automatique et demarre
-WshShell.Run "cmd /c sc config MongoDB start= auto & net start MongoDB", 0, True
+' Verification HTTP pure sans fenetre console (0 cmd.exe, 0 netstat)
+Function IsAppAlreadyRunning()
+    On Error Resume Next
+    Dim http
+    Set http = CreateObject("MSXML2.ServerXMLHTTP.6.0")
+    http.setTimeouts 500, 500, 500, 500
+    http.open "GET", "http://127.0.0.1:5000/api/health", False
+    http.send
+    If Err.Number = 0 Then
+        IsAppAlreadyRunning = True
+    Else
+        IsAppAlreadyRunning = False
+    End If
+    Set http = Nothing
+    On Error GoTo 0
+End Function
 
-' 2. Verifier si l'application tourne deja sur le port 5000
-Dim oExec, sOutput
-Set oExec = WshShell.Exec("cmd /c netstat -ano | findstr :5000 | findstr LISTENING")
-sOutput = oExec.StdOut.ReadAll()
-
-If InStr(sOutput, "LISTENING") > 0 Then
+' 1. Si deja demarree, ouvrir directement le navigateur
+If IsAppAlreadyRunning() Then
     WshShell.Run "http://localhost:5000", 1, False
     WScript.Quit 0
 End If
 
-' 3. Demarrer le serveur via PM2 embarque ou Node en arriere-plan 100% invisible (Style = 0)
-If fso.FileExists(sCurDir & "app\\node_modules\\pm2\\bin\\pm2") Then
-    WshShell.Run "cmd /c ""cd /d """ & sCurDir & """ && node app\\node_modules\\pm2\\bin\\pm2 start ecosystem.config.js""", 0, False
-ElseIf fso.FolderExists(sCurDir & "app") Then
-    WshShell.Run "cmd /c ""cd /d """ & sCurDir & "app"" && node server.js""", 0, False
+' 2. S'assurer que le service MongoDB est demarre (100% silencieux)
+On Error Resume Next
+WshShell.Run "net start MongoDB", 0, False
+On Error GoTo 0
+
+' 3. Demarrer le serveur Node en arriere-plan 100% invisible (Style = 0, sans cmd.exe)
+If fso.FolderExists(sCurDir & "app") Then
+    WshShell.CurrentDirectory = sCurDir & "app"
+    WshShell.Run "node server.js", 0, False
 Else
-    WshShell.Run "cmd /c ""cd /d """ & sCurDir & "backend"" && node dist/server.js""", 0, False
+    WshShell.CurrentDirectory = sCurDir & "backend"
+    WshShell.Run "node dist/server.js", 0, False
 End If
 
-' 4. Attendre l'initialisation et ouvrir le navigateur
-WScript.Sleep 2500
+' 4. Attendre que le serveur soit pret (boucle intelligente)
+Dim i
+For i = 1 To 15
+    WScript.Sleep 500
+    If IsAppAlreadyRunning() Then Exit For
+Next
+
 WshShell.Run "http://localhost:5000", 1, False
 `;
 fs.writeFileSync(path.join(RELEASE_DIR, 'Lancer_Silencieux.vbs'), lancerSilencieuxVbs, 'utf8');
@@ -721,4 +741,16 @@ function copyDirSync(src, dest) {
 console.log('\n================================================================');
 console.log('🎉 DOSSIER RELEASE CRÉÉ AVEC SUCCÈS !');
 console.log(`📁 Emplacement : ${RELEASE_DIR}`);
+
+const USB_PACK_APP_DIR = path.join(ROOT_DIR, 'PACK_INSTALLATION_CLE_USB', '2_APPLICATION_A_COPIER_CHEZ_TBIB', 'Cabinet_Dr_Salma_Tijini_Release');
+if (fs.existsSync(path.dirname(USB_PACK_APP_DIR))) {
+  console.log('🔄 Synchronisation avec PACK_INSTALLATION_CLE_USB...');
+  try {
+    copyDirSync(RELEASE_DIR, USB_PACK_APP_DIR);
+    console.log('✅ PACK_INSTALLATION_CLE_USB synchronisé avec succès !');
+  } catch (err) {
+    console.warn('⚠️ Note synchro clé USB:', err.message);
+  }
+}
+
 console.log('================================================================\n');

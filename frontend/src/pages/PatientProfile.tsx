@@ -30,6 +30,7 @@ import {
   Volume2,
   Film,
   MessageSquare,
+  Radio,
 } from 'lucide-react';
 import { Patient, Invoice, PaymentTransaction, Appointment, Document } from '../types';
 import { formatDate, formatDateTime, formatBirthDateWithAge, formatRelativeDateTime } from '../utils/dateUtils';
@@ -777,6 +778,25 @@ export const PatientProfile: React.FC = () => {
                   ))}
                 </div>
 
+                {uploadCategory === 'XRays' && patient && (
+                  <div className="p-3.5 bg-gradient-to-br from-cyan-950/40 via-blue-950/30 to-slate-900 border border-cyan-500/30 rounded-xl flex flex-col gap-2.5">
+                    <div className="flex items-center gap-2 text-cyan-400">
+                      <Radio className="w-4 h-4" />
+                      <span className="text-xs font-bold">Capteur Eighteeth RVG</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                      Prenez et gérez des radiographies rétro-alvéolaires avec le capteur NanoPix 1.
+                    </p>
+                    <button
+                      onClick={() => navigate('/nanopix', { state: { patientId: patient._id } })}
+                      className="w-full py-2 px-3 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 shadow transition-all cursor-pointer"
+                    >
+                      <Radio className="w-3.5 h-3.5" />
+                      <span>Ouvrir Studio NanoPix</span>
+                    </button>
+                  </div>
+                )}
+
                 <div className="border border-dashed border-slate-300 dark:border-white/10 hover:border-blue-500/50 transition-all rounded-xl p-6 flex flex-col items-center justify-center gap-2 cursor-pointer relative bg-slate-50 dark:bg-slate-950/20">
                   <UploadCloud className="w-8 h-8 text-slate-400 dark:text-slate-500" />
                   <span className="text-xxs text-slate-600 dark:text-slate-400 font-bold text-center">Déposez ou sélectionnez un fichier</span>
@@ -811,9 +831,20 @@ export const PatientProfile: React.FC = () => {
 
                   return (
                     <>
-                      <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
-                        Fichiers - {uploadCategory} ({filteredDocs.length})
-                      </h4>
+                      <div className="flex items-center justify-between gap-3">
+                        <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
+                          Fichiers - {uploadCategory} ({filteredDocs.length})
+                        </h4>
+                        {uploadCategory === 'XRays' && patient && (
+                          <button
+                            onClick={() => navigate('/nanopix', { state: { patientId: patient._id } })}
+                            className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                          >
+                            <Radio className="w-3.5 h-3.5" />
+                            <span>Acquérir avec Studio NanoPix</span>
+                          </button>
+                        )}
+                      </div>
                       
                       {filteredDocs.length === 0 ? (
                         <p className="text-xs text-slate-400 text-center py-10">Aucun fichier dans la catégorie "{uploadCategory}".</p>

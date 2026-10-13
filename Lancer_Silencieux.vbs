@@ -9,31 +9,55 @@ Set fso = CreateObject("Scripting.FileSystemObject")
 sScriptDir = fso.GetParentFolderName(WScript.ScriptFullName)
 If Right(sScriptDir, 1) <> "\" Then sScriptDir = sScriptDir & "\"
 
-' 1. Vérifier si l'application tourne déjà sur le port 5000
-Dim oExec, sOutput
-Set oExec = WshShell.Exec("cmd /c netstat -ano | findstr :5000 | findstr LISTENING")
-sOutput = oExec.StdOut.ReadAll()
+' Fonction de verification HTTP pure (0 fenetre CMD, 0 netstat)
+Function IsAppAlreadyRunning()
+    On Error Resume Next
+    Dim http
+    Set http = CreateObject("MSXML2.ServerXMLHTTP.6.0")
+    http.setTimeouts 500, 500, 500, 500
+    http.open "GET", "http://127.0.0.1:5000/api/health", False
+    http.send
+    If Err.Number = 0 Then
+        IsAppAlreadyRunning = True
+    Else
+        IsAppAlreadyRunning = False
+    End If
+    Set http = Nothing
+    On Error GoTo 0
+End Function
 
-If InStr(sOutput, "LISTENING") > 0 Then
-    ' Déjà démarrée -> Ouvrir directement le navigateur
+' 1. Si l'application tourne deja, ouvrir directement le navigateur
+If IsAppAlreadyRunning() Then
     WshShell.Run "http://localhost:5000", 1, False
     WScript.Quit 0
 End If
 
-' 2. Démarrer le serveur en processus détaché 100% invisible
+' 2. S'assurer que le service MongoDB est demarre (100% silencieux)
+On Error Resume Next
+WshShell.Run "net start MongoDB", 0, False
+On Error GoTo 0
+
+' 3. Demarrer le serveur Node.js en processus detache 100% invisible (Style = 0, sans cmd.exe)
 If fso.FolderExists(sScriptDir & "app") Then
     ' Mode Release autonome (Cabinet_Dr_Salma_Tijini_Release)
-    WshShell.Run "powershell -WindowStyle Hidden -Command ""Start-Process node -ArgumentList 'server.js' -WorkingDirectory '" & sScriptDir & "app' -WindowStyle Hidden""", 0, True
-ElseIf fso.FolderExists(sScriptDir & "backend\dist") Then
-    ' Mode Racine du projet avec backend compilé
-    WshShell.Run "powershell -WindowStyle Hidden -Command ""Start-Process node -ArgumentList 'dist/server.js' -WorkingDirectory '" & sScriptDir & "backend' -WindowStyle Hidden""", 0, True
+    WshShell.CurrentDirectory = sScriptDir & "app"
+    WshShell.Run "node server.js", 0, False
+ElseIf fso.FileExists(sScriptDir & "backend\dist\server.js") Then
+    ' Mode Racine du projet avec backend compile
+    WshShell.CurrentDirectory = sScriptDir & "backend"
+    WshShell.Run "node dist/server.js", 0, False
 Else
-    ' Mode Développement avec ts-node-dev
-    WshShell.Run "powershell -WindowStyle Hidden -Command ""Start-Process npm -ArgumentList 'run dev' -WorkingDirectory '" & sScriptDir & "backend' -WindowStyle Hidden""", 0, True
+    ' Mode Developpement
+    WshShell.CurrentDirectory = sScriptDir & "backend"
+    WshShell.Run "npm run dev", 0, False
 End If
 
-' 3. Attendre 3 secondes que le serveur initialise MongoDB et Express
-WScript.Sleep 3000
+' 4. Attendre que le serveur soit pret (boucle intelligente de detection HTTP)
+Dim i
+For i = 1 To 15
+    WScript.Sleep 500
+    If IsAppAlreadyRunning() Then Exit For
+Next
 
-' 4. Ouvrir l'application dans le navigateur par défaut
+' 5. Ouvrir l'application dans le navigateur par defaut
 WshShell.Run "http://localhost:5000", 1, False

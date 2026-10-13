@@ -33,7 +33,7 @@ import { useToast } from '../context/ToastContext';
 import { Appointment, Patient } from '../types';
 import { SearchablePatientSelect } from '../components/SearchablePatientSelect';
 import { CustomDatePicker } from '../components/CustomDatePicker';
-import { formatDate, formatTime } from '../utils/dateUtils';
+import { formatDate, formatTime, formatDateLong } from '../utils/dateUtils';
 import { useLiveSync } from '../context/LiveSyncContext';
 
 const MONTH_NAMES_FR = [
@@ -55,6 +55,8 @@ const WEEK_DAYS_SHORT_FR = ['LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM', 'DIM'];
 const WEEK_DAYS_FULL_FR = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
 
 const TIME_SLOTS = [
+  '07:30',
+  '08:00',
   '08:30',
   '09:00',
   '09:30',
@@ -78,6 +80,7 @@ const TIME_SLOTS = [
   '18:30',
   '19:00',
   '19:30',
+  '20:00',
 ];
 
 interface WaitingPatient {
@@ -179,12 +182,15 @@ export const Appointments: React.FC = () => {
       .catch((err) => console.error('Error fetching patients:', err));
   };
 
-  // Helper to get Monday of any week
+  // Helper to get Monday of any week at 00:00:00
   const getMonday = (d: Date) => {
     const dt = new Date(d);
+    dt.setHours(0, 0, 0, 0);
     const day = dt.getDay();
     const diff = dt.getDate() - day + (day === 0 ? -6 : 1);
-    return new Date(dt.setDate(diff));
+    const mon = new Date(dt);
+    mon.setDate(diff);
+    return mon;
   };
 
   // 7 Days of the active week
@@ -208,6 +214,18 @@ export const Appointments: React.FC = () => {
       `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
     return `${formatD(start)} - ${formatD(end)}`;
   }, [activeWeekDays]);
+
+  // Responsive header label depending on current view mode
+  const dateRangeHeader = useMemo(() => {
+    if (viewMode === 'day') {
+      const dayIdx = currentDate.getDay() === 0 ? 6 : currentDate.getDay() - 1;
+      return `${WEEK_DAYS_FULL_FR[dayIdx]} ${formatDate(currentDate)}`;
+    }
+    if (viewMode === 'month') {
+      return `${MONTH_NAMES_FR[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
+    }
+    return weekRangeString;
+  }, [viewMode, currentDate, weekRangeString]);
 
   // Navigation handlers
   const handlePrev = () => {
@@ -238,12 +256,15 @@ export const Appointments: React.FC = () => {
     setCurrentDate(new Date());
   };
 
-  const getApptDateKey = (dateTimeStr: string) => {
-    if (!dateTimeStr) return '';
-    if (dateTimeStr.includes('T')) return dateTimeStr.split('T')[0];
-    const d = new Date(dateTimeStr);
+  // Robust date key extractor avoiding timezone drift
+  const getApptDateKey = (dateTimeInput: string | Date | undefined | null) => {
+    if (!dateTimeInput) return '';
+    const d = typeof dateTimeInput === 'string' ? new Date(dateTimeInput) : dateTimeInput;
     if (isNaN(d.getTime())) return '';
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
   };
 
   const filteredAppts = useMemo(() => {
@@ -369,9 +390,11 @@ export const Appointments: React.FC = () => {
     }
 
     setSubmitting(true);
+    const apptDateObj = new Date(dateTime);
+    const normalizedDateTime = !isNaN(apptDateObj.getTime()) ? apptDateObj.toISOString() : dateTime;
     const payload = {
       patientId: selectedPatientId,
-      dateTime,
+      dateTime: normalizedDateTime,
       duration: parseInt(duration, 10),
       chair,
       notes,
@@ -530,12 +553,32 @@ export const Appointments: React.FC = () => {
   };
 
   // Helper to test if a slot has an appointment starting
-  const getApptsForSlot = (dateObj: Date, timeSlotStr: string) => {
-    const dateKey = getApptDateKey(dateObj.toISOString());
+  const getApptsForSlot = (dateObj: Date, timeSlotStr: string, slotIdx: number) => {
+    const dateKey = getApptDateKey(dateObj);
     const dayAppts = appointmentsByDate.get(dateKey) || [];
+
+    const [slotH, slotM] = timeSlotStr.split(':').map(Number);
+    const slotStartMin = slotH * 60 + slotM;
+    const nextSlot = TIME_SLOTS[slotIdx + 1];
+    const slotEndMin = nextSlot
+      ? Number(nextSlot.split(':')[0]) * 60 + Number(nextSlot.split(':')[1])
+      : slotStartMin + 30;
+
     return dayAppts.filter((appt) => {
-      const apptTime = formatTime(appt.dateTime);
-      return apptTime.startsWith(timeSlotStr);
+      const d = new Date(appt.dateTime);
+      if (isNaN(d.getTime())) return false;
+      const apptMin = d.getHours() * 60 + d.getMinutes();
+
+      // Catch early morning appointments before first slot (e.g. before 07:30)
+      if (slotIdx === 0 && apptMin < slotStartMin) {
+        return true;
+      }
+      // Catch late evening appointments after last slot (e.g. after 20:00)
+      if (slotIdx === TIME_SLOTS.length - 1 && apptMin >= slotEndMin) {
+        return true;
+      }
+
+      return apptMin >= slotStartMin && apptMin < slotEndMin;
     });
   };
 
@@ -595,7 +638,7 @@ export const Appointments: React.FC = () => {
 
             <div className="h-8 px-3 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-950 flex items-center gap-2 text-xs font-mono font-bold text-slate-700 dark:text-slate-200 shadow-2xs">
               <CalendarIcon className="w-3.5 h-3.5 text-slate-400" />
-              <span>{weekRangeString}</span>
+              <span>{dateRangeHeader}</span>
             </div>
           </div>
 
@@ -664,7 +707,7 @@ export const Appointments: React.FC = () => {
                   {/* 7 Days Columns */}
                   {activeWeekDays.map((dayObj, idx) => {
                     const isToday = dayObj.toDateString() === new Date().toDateString();
-                    const dayKey = getApptDateKey(dayObj.toISOString());
+                    const dayKey = getApptDateKey(dayObj);
                     const dayApptCount = (appointmentsByDate.get(dayKey) || []).length;
                     const shortName = WEEK_DAYS_SHORT_FR[idx];
                     const dayNum = dayObj.getDate();
@@ -679,7 +722,7 @@ export const Appointments: React.FC = () => {
                       >
                         <span className="text-xs uppercase font-extrabold tracking-tight">
                           {shortName}. {dayNum}{' '}
-                          <span className="text-[11px] font-normal text-slate-500 dark:text-slate-400">
+                          <span className={`text-[11px] ${dayApptCount > 0 ? 'text-emerald-500 font-extrabold' : 'text-slate-500 dark:text-slate-400 font-normal'}`}>
                             ({dayApptCount})
                           </span>
                         </span>
@@ -688,9 +731,9 @@ export const Appointments: React.FC = () => {
                   })}
                 </div>
 
-                {/* 2. Grid Body: Time Slots (08:30 -> 19:30) */}
+                {/* 2. Grid Body: Time Slots */}
                 <div className="relative flex flex-col">
-                  {TIME_SLOTS.map((timeStr) => (
+                  {TIME_SLOTS.map((timeStr, slotIdx) => (
                     <div key={timeStr} className="grid grid-cols-8 border-b border-slate-100 dark:border-white/5 min-h-[50px]">
                       
                       {/* Left Time Label */}
@@ -700,12 +743,12 @@ export const Appointments: React.FC = () => {
 
                       {/* 7 Day Slot Cells */}
                       {activeWeekDays.map((dayObj) => {
-                        const cellAppts = getApptsForSlot(dayObj, timeStr);
+                        const cellAppts = getApptsForSlot(dayObj, timeStr, slotIdx);
                         const isToday = dayObj.toDateString() === new Date().toDateString();
 
                         return (
                           <div
-                            key={`${dayObj.toISOString()}-${timeStr}`}
+                            key={`${getApptDateKey(dayObj)}-${timeStr}`}
                             onClick={() => handleOpenCreateModal(dayObj, timeStr)}
                             className={`border-r border-slate-100 dark:border-white/5 last:border-r-0 p-1 transition-all group relative min-h-[50px] flex flex-col gap-1 ${
                               isToday ? 'bg-blue-50/15 dark:bg-blue-950/10' : 'hover:bg-slate-50/80 dark:hover:bg-slate-800/40'
@@ -747,27 +790,195 @@ export const Appointments: React.FC = () => {
             </div>
           )}
 
-          {/* Fallback View: Monthly Grid (Canva Style) */}
-          {viewMode === 'month' && (
-            <div className="p-4">
-              <div className="grid grid-cols-7 border-b border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-950 text-center font-bold text-xs py-2">
-                {WEEK_DAYS_FULL_FR.map((d) => (
-                  <div key={d}>{d}</div>
-                ))}
+          {/* Day View: Detailed Daily Agenda Timeline */}
+          {viewMode === 'day' && (
+            <div className="flex flex-col overflow-hidden">
+              <div className="p-4 bg-slate-50/80 dark:bg-slate-950/60 border-b border-slate-200 dark:border-white/10 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-extrabold text-slate-900 dark:text-white capitalize">
+                    {formatDateLong(currentDate)}
+                  </h3>
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-xxs font-extrabold font-mono">
+                    {(appointmentsByDate.get(getApptDateKey(currentDate)) || []).length} RDV(s)
+                  </span>
+                </div>
+                <button
+                  onClick={() => handleOpenCreateModal(currentDate)}
+                  className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Planifier pour ce jour</span>
+                </button>
               </div>
-              <div className="grid grid-cols-7 gap-1 mt-2">
-                {Array.from({ length: 35 }).map((_, i) => {
-                  const dayNum = i + 1;
+
+              <div className="divide-y divide-slate-100 dark:divide-white/5 overflow-y-auto max-h-[640px] no-scrollbar">
+                {TIME_SLOTS.map((timeStr, slotIdx) => {
+                  const slotAppts = getApptsForSlot(currentDate, timeStr, slotIdx);
                   return (
                     <div
-                      key={i}
-                      onClick={() => handleOpenCreateModal()}
-                      className="min-h-[90px] p-2 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/60 dark:border-white/5 hover:border-emerald-500 cursor-pointer"
+                      key={timeStr}
+                      className="flex items-start gap-3 p-3 hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors group"
                     >
-                      <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{dayNum <= 31 ? dayNum : ''}</span>
+                      <div className="w-16 shrink-0 font-mono text-xs font-bold text-slate-400 dark:text-slate-500 pt-1 text-center">
+                        {timeStr}
+                      </div>
+
+                      <div className="flex-1 min-h-[44px] flex flex-col gap-2">
+                        {slotAppts.length === 0 ? (
+                          <div
+                            onClick={() => handleOpenCreateModal(currentDate, timeStr)}
+                            className="h-9 rounded-xl border border-dashed border-slate-200 dark:border-white/10 group-hover:border-emerald-400 dark:group-hover:border-emerald-500/40 flex items-center justify-center text-xxs font-semibold text-slate-400 opacity-0 group-hover:opacity-100 transition-all cursor-pointer hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20"
+                          >
+                            <Plus className="w-3.5 h-3.5 text-emerald-600 mr-1" />
+                            <span>Ajouter un RDV à {timeStr}</span>
+                          </div>
+                        ) : (
+                          slotAppts.map((appt) => {
+                            const patObj = appt.patientId && typeof appt.patientId === 'object' ? (appt.patientId as Patient) : null;
+                            const colorStyle = getDentistoCardColor(appt);
+                            return (
+                              <div
+                                key={appt._id}
+                                onClick={() => setSelectedApptDetail(appt)}
+                                className={`p-3 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 cursor-pointer shadow-sm transition-all hover:scale-[1.01] ${colorStyle}`}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center font-extrabold text-sm shrink-0">
+                                    {patObj?.name?.slice(0, 2).toUpperCase() || 'PA'}
+                                  </div>
+                                  <div>
+                                    <div className="font-extrabold text-sm flex items-center gap-2">
+                                      <span>{patObj?.name || 'Patient'}</span>
+                                      <span className="text-xxs px-2 py-0.5 rounded-full bg-black/20 font-mono">
+                                        {formatTime(appt.dateTime)} ({appt.duration} min)
+                                      </span>
+                                    </div>
+                                    <div className="text-xs opacity-90 mt-0.5 flex items-center gap-2">
+                                      <span>{appt.notes || 'Consultation & Soins'}</span>
+                                      {patObj?.phone && <span>• 📞 {patObj.phone}</span>}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 self-end sm:self-center">
+                                  <span className="px-2.5 py-1 rounded-full text-xxs font-extrabold uppercase bg-black/25">
+                                    {appt.status}
+                                  </span>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleOpenEditModal(appt);
+                                    }}
+                                    className="p-1.5 rounded-lg bg-white/20 hover:bg-white/30 transition-colors"
+                                    title="Modifier"
+                                  >
+                                    <Edit className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
                     </div>
                   );
                 })}
+              </div>
+            </div>
+          )}
+
+          {/* Interactive Month View Calendar Grid */}
+          {viewMode === 'month' && (
+            <div className="p-4 flex flex-col gap-3">
+              <div className="grid grid-cols-7 border-b border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-950 text-center font-bold text-xs py-2 rounded-xl">
+                {WEEK_DAYS_FULL_FR.map((d) => (
+                  <div key={d} className="uppercase tracking-wider text-xxs text-slate-500">
+                    {d}
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-7 gap-2">
+                {(() => {
+                  const year = currentDate.getFullYear();
+                  const month = currentDate.getMonth();
+                  const firstDayIdx = new Date(year, month, 1).getDay();
+                  const startOffset = firstDayIdx === 0 ? 6 : firstDayIdx - 1;
+                  const totalDays = new Date(year, month + 1, 0).getDate();
+                  const prevMonthTotalDays = new Date(year, month, 0).getDate();
+
+                  const cells = [];
+                  for (let p = 0; p < startOffset; p++) {
+                    const prevDay = prevMonthTotalDays - startOffset + p + 1;
+                    cells.push(
+                      <div
+                        key={`prev-${p}`}
+                        className="min-h-[96px] p-2 bg-slate-50/40 dark:bg-slate-950/20 rounded-xl border border-slate-100 dark:border-white/5 opacity-40"
+                      >
+                        <span className="text-xs text-slate-400 font-mono">{prevDay}</span>
+                      </div>
+                    );
+                  }
+
+                  for (let d = 1; d <= totalDays; d++) {
+                    const dateObj = new Date(year, month, d);
+                    const dateKey = getApptDateKey(dateObj);
+                    const dayAppts = appointmentsByDate.get(dateKey) || [];
+                    const isToday = dateObj.toDateString() === new Date().toDateString();
+
+                    cells.push(
+                      <div
+                        key={`day-${d}`}
+                        onClick={() => handleOpenCreateModal(dateObj)}
+                        className={`min-h-[96px] p-2 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
+                          isToday
+                            ? 'bg-blue-50/50 dark:bg-blue-950/30 border-blue-400 dark:border-blue-500/50 shadow-xs'
+                            : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-white/10 hover:border-emerald-400 hover:shadow-xs'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span
+                            className={`text-xs font-mono font-bold ${
+                              isToday ? 'text-blue-600 dark:text-blue-400' : 'text-slate-800 dark:text-slate-200'
+                            }`}
+                          >
+                            {d}
+                          </span>
+                          {dayAppts.length > 0 && (
+                            <span className="px-1.5 py-0.2 rounded-full bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[9px] font-extrabold font-mono">
+                              {dayAppts.length}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex flex-col gap-1 mt-1 overflow-hidden">
+                          {dayAppts.slice(0, 2).map((appt) => {
+                            const patObj = appt.patientId && typeof appt.patientId === 'object' ? (appt.patientId as Patient) : null;
+                            return (
+                              <div
+                                key={appt._id}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedApptDetail(appt);
+                                }}
+                                className="px-1.5 py-0.5 rounded text-[9.5px] truncate font-medium bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 hover:scale-[1.02] transition-transform"
+                              >
+                                {formatTime(appt.dateTime)} {patObj?.name || 'Patient'}
+                              </div>
+                            );
+                          })}
+                          {dayAppts.length > 2 && (
+                            <span className="text-[8.5px] text-slate-400 font-bold pl-1">
+                              +{dayAppts.length - 2} autre(s)
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return cells;
+                })()}
               </div>
             </div>
           )}

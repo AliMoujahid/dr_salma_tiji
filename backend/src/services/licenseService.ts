@@ -48,11 +48,12 @@ class LicenseService {
 
     try {
       if (process.platform === 'win32') {
-        // 1. Try Windows Registry MachineGuid
+        // 1. Try Windows Registry MachineGuid (silently)
         try {
           const regOutput = execSync('reg query "HKLM\\SOFTWARE\\Microsoft\\Cryptography" /v MachineGuid', {
             encoding: 'utf8',
             stdio: ['pipe', 'pipe', 'ignore'],
+            windowsHide: true,
           });
           const match = regOutput.match(/MachineGuid\s+REG_SZ\s+([a-zA-Z0-9-]+)/i);
           if (match && match[1]) {
@@ -62,11 +63,12 @@ class LicenseService {
           // Ignore registry error and fallback
         }
 
-        // 2. Try Computer System Product UUID
+        // 2. Try Computer System Product UUID (silently)
         try {
-          const wmicOutput = execSync('powershell -Command "(Get-CimInstance -Class Win32_ComputerSystemProduct).UUID"', {
+          const wmicOutput = execSync('powershell -NoProfile -NonInteractive -WindowStyle Hidden -Command "(Get-CimInstance -Class Win32_ComputerSystemProduct).UUID"', {
             encoding: 'utf8',
             stdio: ['pipe', 'pipe', 'ignore'],
+            windowsHide: true,
           });
           if (wmicOutput && wmicOutput.trim().length > 5) {
             rawIdentifier += '-' + wmicOutput.trim();

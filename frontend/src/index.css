@@ -427,11 +427,11 @@ html {
 .tooth-mobile { fill: #14b8a6; fill-opacity: 0.2; stroke: #14b8a6; }
 .tooth-wisdom { fill: #6366f1; fill-opacity: 0.15; stroke: #6366f1; }
 
-/* Custom print media queries matching facture.html A4 layout precisely */
+/* Custom print media queries matching facture.html & NanoPix A4 layout precisely */
 @media print {
   @page {
     size: A4 portrait;
-    margin: 8mm 10mm !important;
+    margin: 0 !important;
   }
 
   html, body {
@@ -440,11 +440,19 @@ html {
     background: white !important;
     color: black !important;
     height: auto !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
   .no-print,
   aside,
-  header {
+  header,
+  nav,
+  [role="alert"],
+  [class*="toast"],
+  [class*="Toast"],
+  .fixed,
+  button:not(.print-include) {
     display: none !important;
   }
   

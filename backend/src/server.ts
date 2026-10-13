@@ -36,6 +36,8 @@ import licenseRoutes from './routes/license';
 import auditLogRoutes from './routes/auditLogs';
 import dentalActsRoutes, { ensureDefaultActs } from './routes/dentalActs';
 import liveSyncRoutes from './routes/liveSync';
+import nanopixRoutes from './routes/nanopix';
+import { nanopixBridgeService } from './services/nanopixBridgeService';
 import { reminderScheduler } from './services/reminderScheduler';
 import { backupScheduler } from './services/backupScheduler';
 import { licenseService } from './services/licenseService';
@@ -221,16 +223,18 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/audit-logs', auditLogRoutes);
 app.use('/api/dental-acts', dentalActsRoutes);
 app.use('/api/events', liveSyncRoutes);
+app.use('/api/nanopix', nanopixRoutes);
 
 import { whatsappService } from './services/whatsappService';
 
-// Start Automated Reminder Scheduler, Backup Cron Engines & WhatsApp Web Service
+// Start Automated Reminder Scheduler, Backup Cron Engines, WhatsApp & NanoPix Bridge Service
 reminderScheduler.initScheduler();
 backupScheduler.initScheduler();
 whatsappService.initClient();
+nanopixBridgeService.initService();
 
 // Base route status check
-app.get('/health', (req, res) => {
+app.get(['/health', '/api/health'], (req, res) => {
   const licenseStatus = licenseService.verifyLicense();
   res.json({
     status: 'healthy',
