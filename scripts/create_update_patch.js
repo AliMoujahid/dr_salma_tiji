@@ -108,3 +108,13 @@ pause
 fs.writeFileSync(path.join(PATCH_DIR, 'Appliquer_Mise_A_Jour.bat'), batScript, 'utf8');
 
 console.log('✅ Patch créé avec succès dans : ' + PATCH_DIR);
+
+// Also sync to USB pack
+const USB_PATCH_DIR = path.join(ROOT_DIR, 'PACK_INSTALLATION_CLE_USB', '4_MISE_A_JOUR_RAPIDE_CORRECTIF_PDF');
+if (fs.existsSync(path.dirname(USB_PATCH_DIR))) {
+  if (fs.existsSync(USB_PATCH_DIR)) {
+    fs.rmSync(USB_PATCH_DIR, { recursive: true, force: true });
+  }
+  copyRecursive(PATCH_DIR, USB_PATCH_DIR);
+  console.log('✅ Patch USB synchronisé dans : ' + USB_PATCH_DIR);
+}

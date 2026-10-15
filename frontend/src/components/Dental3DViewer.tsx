@@ -13,26 +13,49 @@ import {
   FileText,
   Activity,
   Layers,
-  Zap,
   Sparkles,
-  Info,
   Sliders,
+  Box,
   CheckCircle2,
 } from 'lucide-react';
-import { ToothHistory, ToothStatusType, ToothMetadata, XRayMeasurement } from '../types';
+import { ToothHistory, ToothStatusType, ToothMetadata } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { XRayViewerModal } from './XRayViewerModal';
 import { API_URL } from '../config/api';
 import { formatDate } from '../utils/dateUtils';
-
 import { TreatmentAnimationModal } from './TreatmentAnimationModal';
-import { matchesTooth, mapActToToothStatus, getToothLabel } from '../utils/dentalUtils';
+import { matchesTooth, mapActToToothStatus } from '../utils/dentalUtils';
+
+// Modular Dental 3D Sub-components
+import { ToothSurface, SURFACE_OPTIONS } from '../utils/surfaceUtils';
+import { detectToothSurface } from '../utils/surfaceUtils';
+import {
+  STATUS_PBR_PRESETS,
+  createEnamelMaterial,
+  createSurfaceRestorationMaterial,
+  createGingivaMaterial,
+  createRootMaterial,
+  createGuttaPerchaMaterial,
+  createTitaniumImplantMaterial,
+} from './dental3d/dentalMaterials';
+import {
+  buildRealisticAnatomicalCrown,
+  buildLocalizedSurfaceGeometry,
+  buildAnatomicalRootGeometries,
+  buildAnatomicalImplantGeometry,
+  buildScallopedGingivaGeometry,
+} from './dental3d/dentalGeometries';
+import { useDentalArchGLTF } from './dental3d/useDentalArchGLTF';
 
 // --- ANATOMICAL METADATA DICTIONARY FOR ALL 32 ADULT & 20 CHILD TEETH ---
 const getToothMetadata = (fdiNumber: number): ToothMetadata => {
   const isUpper = (fdiNumber >= 11 && fdiNumber <= 28) || (fdiNumber >= 51 && fdiNumber <= 65);
-  const isRight = (fdiNumber >= 11 && fdiNumber <= 18) || (fdiNumber >= 41 && fdiNumber <= 48) || (fdiNumber >= 51 && fdiNumber <= 55) || (fdiNumber >= 81 && fdiNumber <= 85);
+  const isRight =
+    (fdiNumber >= 11 && fdiNumber <= 18) ||
+    (fdiNumber >= 41 && fdiNumber <= 48) ||
+    (fdiNumber >= 51 && fdiNumber <= 55) ||
+    (fdiNumber >= 81 && fdiNumber <= 85);
   const isChild = fdiNumber >= 51;
 
   let type: 'Incisor' | 'Canine' | 'Premolar' | 'Molar' = 'Incisor';
@@ -54,16 +77,33 @@ const getToothMetadata = (fdiNumber: number): ToothMetadata => {
   } else if (digit === 4 || digit === 5) {
     type = isChild ? 'Molar' : 'Premolar';
     rootCount = isUpper ? 2 : 1;
-    nameFr = isChild ? (digit === 4 ? '1ère Molaire de Lait' : '2ème Molaire de Lait') : (digit === 4 ? '1ère Prémolaire' : '2ème Prémolaire');
-    nameEn = isChild ? (digit === 4 ? 'First Primary Molar' : 'Second Primary Molar') : (digit === 4 ? 'First Premolar' : 'Second Premolar');
+    nameFr = isChild
+      ? digit === 4
+        ? '1ère Molaire de Lait'
+        : '2ème Molaire de Lait'
+      : digit === 4
+      ? '1ère Prémolaire'
+      : '2ème Prémolaire';
+    nameEn = isChild
+      ? digit === 4
+        ? 'First Primary Molar'
+        : 'Second Primary Molar'
+      : digit === 4
+      ? 'First Premolar'
+      : 'Second Premolar';
   } else {
     type = 'Molar';
     rootCount = isUpper ? 3 : 2;
-    nameFr = digit === 6 ? '1ère Molaire (Dent de 6 ans)' : digit === 7 ? '2ème Molaire (Dent de 12 ans)' : '3ème Molaire (Dent de Sagesse)';
+    nameFr =
+      digit === 6
+        ? '1ère Molaire (Dent de 6 ans)'
+        : digit === 7
+        ? '2ème Molaire (Dent de 12 ans)'
+        : '3ème Molaire (Dent de Sagesse)';
     nameEn = digit === 6 ? 'First Molar' : digit === 7 ? 'Second Molar' : 'Third Molar (Wisdom)';
   }
 
-  // Universal Number mapping approximation
+  // Universal Number mapping
   let universalNumber: string | number = fdiNumber;
   if (!isChild) {
     if (fdiNumber >= 11 && fdiNumber <= 18) universalNumber = 9 - (fdiNumber - 10);
@@ -72,10 +112,26 @@ const getToothMetadata = (fdiNumber: number): ToothMetadata => {
     else if (fdiNumber >= 41 && fdiNumber <= 48) universalNumber = 33 - (fdiNumber - 40);
   } else {
     const primaryLetters: Record<number, string> = {
-      55: 'A', 54: 'B', 53: 'C', 52: 'D', 51: 'E',
-      61: 'F', 62: 'G', 63: 'H', 64: 'I', 65: 'J',
-      71: 'O', 72: 'N', 73: 'M', 74: 'L', 75: 'K',
-      81: 'P', 82: 'Q', 83: 'R', 84: 'S', 85: 'T',
+      55: 'A',
+      54: 'B',
+      53: 'C',
+      52: 'D',
+      51: 'E',
+      61: 'F',
+      62: 'G',
+      63: 'H',
+      64: 'I',
+      65: 'J',
+      71: 'O',
+      72: 'N',
+      73: 'M',
+      74: 'L',
+      75: 'K',
+      81: 'P',
+      82: 'Q',
+      83: 'R',
+      84: 'S',
+      85: 'T',
     };
     universalNumber = primaryLetters[fdiNumber] || fdiNumber;
   }
@@ -96,331 +152,82 @@ const getToothMetadata = (fdiNumber: number): ToothMetadata => {
   };
 };
 
-// --- STATUS OPTIONS & VISUAL SHADER COLORS ---
-const STATUS_CONFIGS: Record<
-  string,
-  { label: string; color: string; hex: string; metalness?: number; roughness?: number; opacity?: number }
-> = {
-  Healthy: { label: 'Sain', color: 'bg-emerald-500', hex: '#f8fafc', roughness: 0.25 },
-  Missing: { label: 'Absente', color: 'bg-slate-600', hex: '#64748b', opacity: 0.15 },
-  Extracted: { label: 'Extraite', color: 'bg-rose-500', hex: '#ef4444', opacity: 0.05 },
-  Implant: { label: 'Implant Titane', color: 'bg-blue-500', hex: '#94a3b8', metalness: 0.9, roughness: 0.15 },
-  Bridge: { label: 'Pont (Bridge)', color: 'bg-violet-500', hex: '#a78bfa', metalness: 0.4 },
-  'Temporary Crown': { label: 'Couronne Provisoire', color: 'bg-amber-600', hex: '#d97706' },
-  'Permanent Crown': { label: 'Couronne Céramique/Or', color: 'bg-amber-400', hex: '#f59e0b', metalness: 0.75 },
-  Crown: { label: 'Couronne', color: 'bg-amber-500', hex: '#fbbf24', metalness: 0.6 },
-  'Root Canal': { label: 'Dévitalisée (Endo)', color: 'bg-pink-500', hex: '#ec4899' },
-  'Composite Filling': { label: 'Obturation Resine', color: 'bg-cyan-400', hex: '#38bdf8' },
-  'Amalgam Filling': { label: 'Obturation Amalgame', color: 'bg-slate-400', hex: '#475569', metalness: 0.8 },
-  Filling: { label: 'Obturation', color: 'bg-cyan-500', hex: '#06b6d4' },
-  'Fracture': { label: 'Fracture Dentaire', color: 'bg-red-600', hex: '#dc2626' },
-  'Caries': { label: 'Carie Profonde', color: 'bg-amber-900', hex: '#78350f', roughness: 0.8 },
-  'Mobile Grade I': { label: 'Mobilité I', color: 'bg-teal-500', hex: '#14b8a6' },
-  'Mobile Grade II': { label: 'Mobilité II', color: 'bg-teal-600', hex: '#0d9488' },
-  'Mobile Grade III': { label: 'Mobilité III', color: 'bg-teal-700', hex: '#0f766e' },
-  'Wisdom Tooth': { label: 'Dent de Sagesse', color: 'bg-indigo-500', hex: '#6366f1' },
-};
-
-// --- HIGH-PRECISION ANATOMICAL CROWN & ROOT PROCEDURAL 3D SCULPTOR ---
-// (0,0,0) is placed exactly at the cervical line (gumline)
-const buildAnatomicalCrown = (
-  type: 'Incisor' | 'Canine' | 'Premolar' | 'Molar', 
-  isUpper: boolean, 
-  fdiNumber: number
-) => {
-  const isCentralIncisor = fdiNumber === 11 || fdiNumber === 21 || fdiNumber === 51 || fdiNumber === 61;
-  const isLateralIncisor = fdiNumber === 12 || fdiNumber === 22 || fdiNumber === 52 || fdiNumber === 62;
-  const isLowerIncisor = (fdiNumber >= 31 && fdiNumber <= 42) || (fdiNumber >= 71 && fdiNumber <= 82);
-
-  if (type === 'Incisor') {
-    // 1. Realistic Human Incisor Crown (matching Typodont photo 2!)
-    // Upper central incisors are large spade-shaped teeth; lower incisors are slender chisels
-    let width = 0.50;
-    let height = 0.72;
-    let depth = 0.34;
-
-    if (isUpper) {
-      width = isCentralIncisor ? 0.64 : (isLateralIncisor ? 0.54 : 0.48);
-      height = isCentralIncisor ? 0.80 : 0.74;
-      depth = 0.36;
-    } else {
-      width = isLowerIncisor ? 0.50 : 0.54;
-      height = 0.70;
-      depth = 0.30;
-    }
-
-    const baseGeo = new THREE.BoxGeometry(width, height, depth, 20, 20, 20);
-    baseGeo.translate(0, isUpper ? -height / 2 : height / 2, 0);
-
-    const pos = baseGeo.attributes.position;
-    for (let i = 0; i < pos.count; i++) {
-      let x = pos.getX(i);
-      let y = pos.getY(i);
-      let z = pos.getZ(i);
-      const t = isUpper ? -y / height : y / height; // 0 (cervix/gumline) to 1 (incisal edge)
-
-      // Cervical neck taper (creates distinct cervical embrasures)
-      const neck = 0.68 + 0.32 * Math.sin(t * Math.PI * 0.5);
-      x *= neck;
-
-      // Incisal embrasure rounding (creates distinct mesial/distal separation lines between teeth 11 & 21)
-      if (t > 0.68) {
-        const edgeDist = Math.abs(x) / (width * 0.5);
-        if (edgeDist > 0.50) {
-          const embrasureTaper = 1.0 - 0.22 * Math.pow((edgeDist - 0.50) / 0.50, 1.8);
-          x *= embrasureTaper;
-        }
-      }
-
-      // Incisal thinning towards incisal edge
-      const depthFactor = 1.0 - 0.58 * Math.pow(t, 1.2);
-      z *= depthFactor;
-
-      // Labial curvature (3D smooth convex front face) & Lingual fossa (concave back)
-      if (z > 0) {
-        // Smooth curved front labial face
-        z += 0.05 * Math.sin(t * Math.PI) * Math.cos((x / (width * 0.5)) * (Math.PI / 2.2));
-      } else {
-        // Lingual cingulum near cervix + lingual fossa concavity
-        if (t < 0.28) {
-          z -= 0.04 * Math.cos(t * Math.PI * 2); // cingulum bulge
-        } else {
-          z += 0.05 * Math.sin((t - 0.28) * Math.PI * 1.3); // lingual fossa
-        }
-      }
-
-      // Rounded incisal edge corners (mesial slightly sharper, distal rounded)
-      if (t > 0.82) {
-        const cornerFactor = Math.abs(x) / (width * 0.5);
-        if (cornerFactor > 0.65) {
-          const drop = 0.05 * Math.pow((cornerFactor - 0.65) / 0.35, 2.2);
-          y += isUpper ? drop : -drop;
-        }
-      }
-
-      pos.setXYZ(i, x, y, z);
-    }
-    baseGeo.computeVertexNormals();
-    return baseGeo;
-
-  } else if (type === 'Canine') {
-    // 2. Realistic Canine Crown (pointed sharp cusp tip, central labial ridge & robust shoulders)
-    const width = isUpper ? 0.66 : 0.60;
-    const height = isUpper ? 0.84 : 0.78;
-    const depth = 0.44;
-
-    const baseGeo = new THREE.CylinderGeometry(width * 0.5, width * 0.35, height, 28, 20);
-    baseGeo.translate(0, isUpper ? -height / 2 : height / 2, 0);
-
-    const pos = baseGeo.attributes.position;
-    for (let i = 0; i < pos.count; i++) {
-      let x = pos.getX(i);
-      let y = pos.getY(i);
-      let z = pos.getZ(i);
-      const t = isUpper ? -y / height : y / height;
-
-      // Diamond-ish cross section (flatten labiolingually)
-      z *= 0.78;
-
-      // Prominent Labial Ridge (central vertical ridge on front)
-      if (z > 0) {
-        const cFactor = Math.max(0, 1 - Math.abs(x) / (width * 0.4));
-        z += 0.06 * cFactor * Math.sin(t * Math.PI);
-      }
-
-      // Pointed Cusp Tip at Apex with mesial/distal slopes
-      if (t > 0.68) {
-        const tipFactor = (1 - t) / 0.32;
-        x *= (0.2 + 0.8 * tipFactor);
-        z *= (0.2 + 0.8 * tipFactor);
-        if (t > 0.94) y += isUpper ? -0.04 : 0.04;
-      }
-
-      // Cervical constriction at gumline
-      if (t < 0.25) {
-        const neck = 0.72 + 0.28 * (t / 0.25);
-        x *= neck;
-        z *= neck;
-      }
-
-      pos.setXYZ(i, x, y, z);
-    }
-    baseGeo.computeVertexNormals();
-    return baseGeo;
-
-  } else if (type === 'Premolar') {
-    // 3. Bicuspid Premolar Crown (2 distinct cusps)
-    const width = 0.58;
-    const height = 0.64;
-    const depth = 0.58;
-    const baseGeo = new THREE.BoxGeometry(width, height, depth, 20, 20, 20);
-    baseGeo.translate(0, isUpper ? -height / 2 : height / 2, 0);
-
-    const pos = baseGeo.attributes.position;
-    for (let i = 0; i < pos.count; i++) {
-      let x = pos.getX(i);
-      let y = pos.getY(i);
-      let z = pos.getZ(i);
-      const t = isUpper ? -y / height : y / height;
-
-      const r = Math.sqrt((x / (width * 0.5)) ** 2 + (z / (depth * 0.5)) ** 2);
-      if (r > 1) {
-        x /= r;
-        z /= r;
-      }
-
-      const neck = 0.70 + 0.30 * Math.sin(t * Math.PI * 0.5);
-      x *= neck;
-      z *= neck;
-
-      // 2 Cusps on occlusal surface
-      if (t > 0.58) {
-        const oFactor = (t - 0.58) / 0.42;
-        if (z > 0.06) {
-          const d = Math.sqrt(x * x + (z - 0.15) ** 2);
-          const lift = 0.09 * oFactor * Math.max(0, 1 - d / 0.22);
-          y += isUpper ? -lift : lift;
-        } else if (z < -0.06) {
-          const d = Math.sqrt(x * x + (z + 0.15) ** 2);
-          const lift = 0.07 * oFactor * Math.max(0, 1 - d / 0.22);
-          y += isUpper ? -lift : lift;
-        }
-        if (Math.abs(z) < 0.08) {
-          const dip = 0.06 * oFactor * (1 - Math.abs(z) / 0.08);
-          y += isUpper ? dip : -dip;
-        }
-      }
-
-      pos.setXYZ(i, x, y, z);
-    }
-    baseGeo.computeVertexNormals();
-    return baseGeo;
-
-  } else {
-    // 4. Quadricuspid Molar Crown
-    const width = 0.74;
-    const height = 0.62;
-    const depth = 0.76;
-    const baseGeo = new THREE.BoxGeometry(width, height, depth, 24, 24, 24);
-    baseGeo.translate(0, isUpper ? -height / 2 : height / 2, 0);
-
-    const pos = baseGeo.attributes.position;
-    for (let i = 0; i < pos.count; i++) {
-      let x = pos.getX(i);
-      let y = pos.getY(i);
-      let z = pos.getZ(i);
-      const t = isUpper ? -y / height : y / height;
-
-      // Rounded rectangular molar contour
-      const maxR = 0.88;
-      const cornerR = Math.pow(Math.abs(x / (width * 0.5)), 3) + Math.pow(Math.abs(z / (depth * 0.5)), 3);
-      if (cornerR > maxR) {
-        const scale = Math.pow(maxR / cornerR, 0.25);
-        x *= scale;
-        z *= scale;
-      }
-
-      if (t < 0.35) {
-        const neck = 0.72 + 0.28 * (t / 0.35);
-        x *= neck;
-        z *= neck;
-      } else if (t < 0.6) {
-        const bulge = 1.0 + 0.04 * Math.sin((t - 0.35) / 0.25 * Math.PI);
-        x *= bulge;
-        z *= bulge;
-      }
-
-      // 4 Cusps & Fossa
-      if (t > 0.55) {
-        const oFactor = Math.pow((t - 0.55) / 0.45, 1.2);
-        const cusps = [
-          { cx: -0.20, cz:  0.20, h: 0.11 }, // Mesio-Buccal
-          { cx:  0.20, cz:  0.20, h: 0.10 }, // Disto-Buccal
-          { cx: -0.20, cz: -0.20, h: 0.09 }, // Mesio-Lingual
-          { cx:  0.20, cz: -0.20, h: 0.08 }, // Disto-Lingual
-        ];
-
-        let cuspLift = 0;
-        for (const c of cusps) {
-          const d = Math.sqrt((x - c.cx) ** 2 + (z - c.cz) ** 2);
-          if (d < 0.24) {
-            cuspLift += c.h * Math.cos((d / 0.24) * (Math.PI / 2));
-          }
-        }
-        y += isUpper ? -cuspLift * oFactor : cuspLift * oFactor;
-
-        // Central fossa dip
-        const centerDist = Math.sqrt(x * x + z * z);
-        if (centerDist < 0.22) {
-          const dip = 0.08 * oFactor * Math.cos((centerDist / 0.22) * (Math.PI / 2));
-          y += isUpper ? dip : -dip;
-        }
-
-        // Grooves
-        if (Math.abs(x) < 0.05 || Math.abs(z) < 0.05) {
-          const groove = 0.035 * oFactor;
-          y += isUpper ? groove : -groove;
-        }
-      }
-
-      pos.setXYZ(i, x, y, z);
-    }
-    baseGeo.computeVertexNormals();
-    return baseGeo;
-  }
-};
-
-const buildAnatomicalRoot = (isUpper: boolean) => {
-  const height = 0.95;
-  const geo = new THREE.CylinderGeometry(0.18, 0.04, height, 16);
-  geo.translate(0, isUpper ? height / 2 : -height / 2, 0);
-
-  const pos = geo.attributes.position;
-  for (let i = 0; i < pos.count; i++) {
-    let y = pos.getY(i);
-    let x = pos.getX(i);
-    const t = isUpper ? y / height : -y / height;
-    if (t > 0.5) {
-      x -= 0.08 * Math.pow((t - 0.5) / 0.5, 2);
-    }
-    pos.setX(i, x);
-  }
-  geo.computeVertexNormals();
-  return geo;
-};
-
-// --- PHOTOREALISTIC HUMAN 3D TOOTH MESH COMPONENT ---
+// --- PHOTOREALISTIC HUMAN 3D TOOTH COMPONENT (PBR + SURFACE AWARE) ---
 const ToothMesh3D: React.FC<{
   fdiNumber: number;
   position: [number, number, number];
   rotation: [number, number, number];
-  status?: string;
+  status?: ToothStatusType;
+  surface?: ToothSurface;
   isSelected?: boolean;
   showLabels?: boolean;
+  showRoots?: boolean;
+  customGeometry?: THREE.BufferGeometry;
   onClick?: () => void;
-}> = ({ fdiNumber, position, rotation, status = 'Healthy', isSelected, showLabels = true, onClick }) => {
+}> = ({
+  fdiNumber,
+  position,
+  rotation,
+  status = 'Healthy',
+  surface = 'Global',
+  isSelected = false,
+  showLabels = true,
+  showRoots = false,
+  customGeometry,
+  onClick,
+}) => {
   const meshRef = useRef<THREE.Group>(null);
   const meta = useMemo(() => getToothMetadata(fdiNumber), [fdiNumber]);
-  const statusCfg = STATUS_CONFIGS[status] || STATUS_CONFIGS.Healthy;
   const isUpper = meta.jaw === 'Maxillary';
-
-  // Anatomical 3D organic crown & root geometry generators
-  const { crownGeo, rootGeo, implantGeo } = useMemo(() => {
-    const cGeo = buildAnatomicalCrown(meta.type, isUpper, fdiNumber);
-    const rGeo = buildAnatomicalRoot(isUpper);
-
-    // Titanium implant screw
-    const impGeo = new THREE.CylinderGeometry(0.19, 0.13, 0.98, 16);
-    impGeo.translate(0, isUpper ? 0.49 : -0.49, 0);
-
-    return { crownGeo: cGeo, rootGeo: rGeo, implantGeo: impGeo };
-  }, [meta, fdiNumber, isUpper]);
-
   const isMissingOrExtracted = status === 'Missing' || status === 'Extracted';
   const isImplant = status === 'Implant';
+  const hasEndo = status === 'Root Canal';
 
-  // Realistic natural enamel color
-  const enamelColor = status === 'Healthy' ? '#fffdf2' : statusCfg.hex;
+  // Geometry generator with anatomical fidelity
+  const { crownGeo, rootData, implantGeo, surfaceOverlayGeo } = useMemo(() => {
+    // If external GLTF provided geometry for this tooth, use it; otherwise generate high-precision procedural mesh
+    const cGeo = customGeometry || buildRealisticAnatomicalCrown(meta.type, isUpper, fdiNumber);
+    const rData = buildAnatomicalRootGeometries(isUpper, meta.rootCount, hasEndo);
+    const impGeo = buildAnatomicalImplantGeometry(isUpper);
+
+    // Localized surface restoration overlay
+    const isLocalizedStatus =
+      status === 'Caries' ||
+      status === 'Composite Filling' ||
+      status === 'Filling' ||
+      status === 'Amalgam Filling';
+
+    const sGeo =
+      isLocalizedStatus && surface !== 'Global'
+        ? buildLocalizedSurfaceGeometry(meta.type, isUpper, surface)
+        : null;
+
+    return {
+      crownGeo: cGeo,
+      rootData: rData,
+      implantGeo: impGeo,
+      surfaceOverlayGeo: sGeo,
+    };
+  }, [meta, fdiNumber, isUpper, status, surface, hasEndo, customGeometry]);
+
+  // Materials Isolation
+  const enamelMat = useMemo(
+    () => createEnamelMaterial(isSelected, status, surface === 'Global'),
+    [isSelected, status, surface]
+  );
+
+  const surfaceMat = useMemo(
+    () => createSurfaceRestorationMaterial(status, surface),
+    [status, surface]
+  );
+
+  const rootMat = useMemo(
+    () => createRootMaterial(hasEndo, showRoots),
+    [hasEndo, showRoots]
+  );
+
+  const guttaMat = useMemo(() => createGuttaPerchaMaterial(), []);
+  const implantMat = useMemo(() => createTitaniumImplantMaterial(), []);
 
   return (
     <group
@@ -432,100 +239,102 @@ const ToothMesh3D: React.FC<{
         if (onClick) onClick();
       }}
     >
-      {/* Photorealistic Porcelain Enamel Crown Mesh */}
+      {/* 1. Main Anatomical Crown Mesh */}
       {!isMissingOrExtracted && (
-        <mesh geometry={crownGeo} castShadow receiveShadow>
-          <meshPhysicalMaterial
-            color={isSelected ? '#2563eb' : enamelColor}
-            roughness={isSelected ? 0.15 : (statusCfg.roughness ?? 0.14)}
-            metalness={isSelected ? 0.1 : (statusCfg.metalness ?? 0.02)}
-            clearcoat={status === 'Healthy' ? 0.95 : 0.4}
-            clearcoatRoughness={0.06}
-            reflectivity={0.9}
-            transmission={0.02}
-            ior={1.62}
-            transparent={Boolean(statusCfg.opacity)}
-            opacity={statusCfg.opacity ?? 1.0}
-          />
-        </mesh>
+        <mesh geometry={crownGeo} material={enamelMat} castShadow receiveShadow />
       )}
 
-      {/* Ghost holographic outline for Extracted teeth */}
+      {/* 2. Localized Surface Restoration Overlay (Caries, Composite, Amalgam) */}
+      {!isMissingOrExtracted && surfaceOverlayGeo && (
+        <mesh geometry={surfaceOverlayGeo} material={surfaceMat} castShadow receiveShadow />
+      )}
+
+      {/* 3. Ghost Holographic Outline for Extracted Teeth */}
       {status === 'Extracted' && (
         <group>
           <mesh geometry={crownGeo}>
-            <meshStandardMaterial
-              color="#f43f5e"
-              transparent
-              opacity={0.22}
-              roughness={0.6}
-            />
+            <meshStandardMaterial color="#f43f5e" transparent opacity={0.22} roughness={0.6} />
           </mesh>
           <mesh geometry={crownGeo}>
-            <meshBasicMaterial
-              color="#ef4444"
-              wireframe={true}
-              transparent
-              opacity={0.35}
-            />
+            <meshBasicMaterial color="#ef4444" wireframe={true} transparent opacity={0.4} />
           </mesh>
         </group>
       )}
 
-      {/* Ghost grey outline for Missing teeth */}
+      {/* 4. Ghost Grey Outline for Missing Teeth */}
       {status === 'Missing' && (
         <mesh geometry={crownGeo}>
-          <meshBasicMaterial
-            color="#64748b"
-            wireframe={true}
-            transparent
-            opacity={0.25}
-          />
+          <meshBasicMaterial color="#64748b" wireframe={true} transparent opacity={0.25} />
         </mesh>
       )}
 
-      {/* Anatomical Root Mesh(es) */}
-      {!isMissingOrExtracted && !isImplant && (
-        <group>
+      {/* 5. Anatomical Roots with Apical Curvature & Endodontic Canals */}
+      {!isMissingOrExtracted && !isImplant && (showRoots || meta.rootCount > 0) && (
+        <group visible={showRoots}>
           {meta.rootCount === 1 && (
-            <mesh geometry={rootGeo} castShadow>
-              <meshStandardMaterial color="#fcf6ea" roughness={0.35} />
-            </mesh>
+            <group>
+              <mesh geometry={rootData.rootGeo} material={rootMat} castShadow />
+              {hasEndo && rootData.canalGeo && (
+                <mesh geometry={rootData.canalGeo} material={guttaMat} />
+              )}
+            </group>
           )}
+
           {meta.rootCount === 2 && (
-            <>
-              <mesh position={[-0.12, 0, 0]} rotation={[0, 0, isUpper ? -0.12 : 0.12]} geometry={rootGeo} castShadow>
-                <meshStandardMaterial color="#fcf6ea" roughness={0.35} />
-              </mesh>
-              <mesh position={[0.12, 0, 0]} rotation={[0, 0, isUpper ? 0.12 : -0.12]} geometry={rootGeo} castShadow>
-                <meshStandardMaterial color="#fcf6ea" roughness={0.35} />
-              </mesh>
-            </>
+            <group>
+              {/* Mesial Root */}
+              <group position={[-0.13, 0, 0]} rotation={[0, 0, isUpper ? -0.12 : 0.12]}>
+                <mesh geometry={rootData.rootGeo} material={rootMat} castShadow />
+                {hasEndo && rootData.canalGeo && (
+                  <mesh geometry={rootData.canalGeo} material={guttaMat} />
+                )}
+              </group>
+              {/* Distal Root */}
+              <group position={[0.13, 0, 0]} rotation={[0, 0, isUpper ? 0.12 : -0.12]}>
+                <mesh geometry={rootData.rootGeo} material={rootMat} castShadow />
+                {hasEndo && rootData.canalGeo && (
+                  <mesh geometry={rootData.canalGeo} material={guttaMat} />
+                )}
+              </group>
+            </group>
           )}
+
           {meta.rootCount >= 3 && (
-            <>
-              <mesh position={[-0.12, 0, -0.06]} rotation={[0, -0.1, isUpper ? -0.12 : 0.12]} geometry={rootGeo} castShadow>
-                <meshStandardMaterial color="#fcf6ea" roughness={0.35} />
-              </mesh>
-              <mesh position={[0.12, 0, -0.06]} rotation={[0, 0.1, isUpper ? 0.12 : -0.12]} geometry={rootGeo} castShadow>
-                <meshStandardMaterial color="#fcf6ea" roughness={0.35} />
-              </mesh>
-              <mesh position={[0, 0, 0.10]} rotation={[0, 0.2, 0]} geometry={rootGeo} castShadow>
-                <meshStandardMaterial color="#fcf6ea" roughness={0.35} />
-              </mesh>
-            </>
+            <group>
+              {/* Mesio-Buccal Root */}
+              <group position={[-0.13, 0, 0.08]} rotation={[0.08, -0.08, isUpper ? -0.12 : 0.12]}>
+                <mesh geometry={rootData.rootGeo} material={rootMat} castShadow />
+                {hasEndo && rootData.canalGeo && (
+                  <mesh geometry={rootData.canalGeo} material={guttaMat} />
+                )}
+              </group>
+              {/* Disto-Buccal Root */}
+              <group position={[0.13, 0, 0.08]} rotation={[0.08, 0.08, isUpper ? 0.12 : -0.12]}>
+                <mesh geometry={rootData.rootGeo} material={rootMat} castShadow />
+                {hasEndo && rootData.canalGeo && (
+                  <mesh geometry={rootData.canalGeo} material={guttaMat} />
+                )}
+              </group>
+              {/* Palatal Divergent Root (Longest) */}
+              <group position={[0, 0, -0.14]} rotation={[-0.14, 0, 0]}>
+                <mesh geometry={rootData.rootGeo} material={rootMat} castShadow />
+                {hasEndo && rootData.canalGeo && (
+                  <mesh geometry={rootData.canalGeo} material={guttaMat} />
+                )}
+              </group>
+            </group>
           )}
         </group>
       )}
 
-      {/* Titanium Implant Screw */}
+      {/* 6. Medical Grade 5 Titanium Implant Fixture */}
       {isImplant && (
-        <mesh geometry={implantGeo} castShadow>
-          <meshStandardMaterial color="#94a3b8" metalness={0.92} roughness={0.15} />
-        </mesh>
+        <group>
+          <mesh geometry={implantGeo} material={implantMat} castShadow />
+        </group>
       )}
 
-      {/* Floating FDI Badge */}
+      {/* 7. Floating FDI Badge with Micro-interaction */}
       {showLabels && (
         <Html position={[0, isUpper ? 0.95 : -0.95, 0]} center distanceFactor={12}>
           <button
@@ -533,25 +342,30 @@ const ToothMesh3D: React.FC<{
               e.stopPropagation();
               if (onClick) onClick();
             }}
-            className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono font-bold transition-all shadow-lg cursor-pointer backdrop-blur-md ${
+            className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono font-bold transition-all shadow-lg cursor-pointer backdrop-blur-md select-none ${
               isSelected
-                ? 'bg-blue-600 text-white ring-2 ring-blue-400 scale-110'
+                ? 'bg-blue-600 text-white ring-2 ring-blue-400 scale-110 shadow-blue-500/50'
                 : status === 'Extracted'
                 ? 'bg-rose-600 text-white border border-rose-400 ring-2 ring-rose-500/50 shadow-rose-950 font-black scale-105'
                 : status === 'Missing'
                 ? 'bg-slate-700 text-slate-300 border border-slate-500 line-through'
                 : status === 'Implant'
                 ? 'bg-blue-600 text-white border border-blue-400'
-                : status === 'Crown'
+                : status === 'Crown' || status === 'Permanent Crown'
                 ? 'bg-amber-500 text-slate-900 border border-amber-300 font-black'
                 : status === 'Root Canal'
                 ? 'bg-pink-600 text-white border border-pink-400'
+                : status === 'Caries'
+                ? 'bg-amber-900 text-amber-200 border border-amber-700'
                 : status === 'Filling' || status === 'Composite Filling'
                 ? 'bg-cyan-600 text-white border border-cyan-400'
+                : status === 'Amalgam Filling'
+                ? 'bg-slate-500 text-white border border-slate-400'
                 : 'bg-slate-900/85 text-slate-200 border border-white/10 hover:bg-blue-500 hover:text-white'
             }`}
           >
-            {fdiNumber}{status === 'Extracted' ? ' ✕' : ''}
+            {fdiNumber}
+            {status === 'Extracted' ? ' ✕' : ''}
           </button>
         </Html>
       )}
@@ -559,67 +373,24 @@ const ToothMesh3D: React.FC<{
   );
 };
 
-// --- PHOTOREALISTIC GINGIVA (GUM) ARCH MESHES ---
-const MaxillaryGingivaMesh: React.FC<{ showRoots: boolean }> = ({ showRoots }) => {
-  const archGeo = useMemo(() => {
-    // Alveolar Arch Ridge (Upper Gum Tube)
-    const curvePoints: THREE.Vector3[] = [];
-    const count = 32;
-    for (let i = 0; i <= count; i++) {
-      const t = i / count;
-      const angle = (t * 0.84 - 0.42) * Math.PI;
-      const rx = 2.95 * Math.sin(angle);
-      const rz = 2.45 * Math.cos(angle) - 1.1;
-      curvePoints.push(new THREE.Vector3(rx, 0.86, rz));
-    }
-    const curve = new THREE.CatmullRomCurve3(curvePoints);
-    return new THREE.TubeGeometry(curve, 64, 0.32, 20, false);
-  }, []);
-
-  return (
-    <mesh geometry={archGeo} receiveShadow castShadow>
-      <meshPhysicalMaterial
-        color="#d86577"
-        roughness={0.28}
-        clearcoat={0.5}
-        clearcoatRoughness={0.12}
-        transparent={showRoots}
-        opacity={showRoots ? 0.35 : 0.98}
-      />
-    </mesh>
-  );
+// --- SCALLOPED GINGIVA ARCH MESHES ---
+const MaxillaryGingivaMesh: React.FC<{ showRoots: boolean; customGeo?: THREE.BufferGeometry | null }> = ({
+  showRoots,
+  customGeo,
+}) => {
+  const archGeo = useMemo(() => customGeo || buildScallopedGingivaGeometry(true), [customGeo]);
+  const material = useMemo(() => createGingivaMaterial(showRoots), [showRoots]);
+  return <mesh geometry={archGeo} material={material} receiveShadow castShadow />;
 };
 
-const MandibularGingivaMesh: React.FC<{ showRoots: boolean }> = ({ showRoots }) => {
-  const archGeo = useMemo(() => {
-    const curvePoints: THREE.Vector3[] = [];
-    const count = 32;
-    for (let i = 0; i <= count; i++) {
-      const t = i / count;
-      const angle = (t * 0.84 - 0.42) * Math.PI;
-      const rx = 2.95 * Math.sin(angle);
-      const rz = 2.45 * Math.cos(angle) - 1.1;
-      curvePoints.push(new THREE.Vector3(rx, -0.86, rz));
-    }
-    const curve = new THREE.CatmullRomCurve3(curvePoints);
-    return new THREE.TubeGeometry(curve, 64, 0.32, 20, false);
-  }, []);
-
-  return (
-    <mesh geometry={archGeo} receiveShadow castShadow>
-      <meshPhysicalMaterial
-        color="#d86577"
-        roughness={0.28}
-        clearcoat={0.5}
-        clearcoatRoughness={0.12}
-        transparent={showRoots}
-        opacity={showRoots ? 0.35 : 0.98}
-      />
-    </mesh>
-  );
+const MandibularGingivaMesh: React.FC<{ showRoots: boolean; customGeo?: THREE.BufferGeometry | null }> = ({
+  showRoots,
+  customGeo,
+}) => {
+  const archGeo = useMemo(() => customGeo || buildScallopedGingivaGeometry(false), [customGeo]);
+  const material = useMemo(() => createGingivaMaterial(showRoots), [showRoots]);
+  return <mesh geometry={archGeo} material={material} receiveShadow castShadow />;
 };
-
-
 
 // --- MAIN 3D DENTAL CHART COMPONENT ---
 interface Dental3DViewerProps {
@@ -628,7 +399,11 @@ interface Dental3DViewerProps {
   onUpdateCarnet?: () => void;
 }
 
-export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId, carnetActs = [], onUpdateCarnet }) => {
+export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({
+  patientId,
+  carnetActs = [],
+  onUpdateCarnet,
+}) => {
   const { token } = useAuth();
   const { toast, confirm } = useToast();
   const [odontogram, setOdontogram] = useState<any[]>([]);
@@ -641,25 +416,114 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId, carne
   const [autoRotate, setAutoRotate] = useState<boolean>(false);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [showRoots, setShowRoots] = useState<boolean>(false);
+  const [showLabels, setShowLabels] = useState<boolean>(true);
 
-  // Mouth Open / Close Articulator state (0 = closed occlusion, 1 = wide open occlusal view)
+  // Mandible TMJ Opening (0 = closed occlusion, 1 = wide open)
   const [mouthOpening, setMouthOpening] = useState<number>(0.35);
 
-  // Form states for adding intervention
+  // Form states for clinical intervention
   const [newStatus, setNewStatus] = useState<ToothStatusType>('Healthy');
+  const [selectedSurface, setSelectedSurface] = useState<ToothSurface>('Global');
   const [procedureName, setProcedureName] = useState('');
   const [newNotes, setNewNotes] = useState('');
   const [newCost, setNewCost] = useState('');
   const [syncWithCarnet, setSyncWithCarnet] = useState<boolean>(true);
   const [submitting, setSubmitting] = useState(false);
 
-  // Modal overlays state
+  // Modal overlays
   const [xrayModalUrl, setXrayModalUrl] = useState<string | null>(null);
   const [treatmentAnimType, setTreatmentAnimType] = useState<string | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Arch teeth arrays
+  // Clinic Dental Acts catalogue with official tariffs
+  const [dentalActs, setDentalActs] = useState<any[]>([]);
+
+  React.useEffect(() => {
+    fetch(`${API_URL}/dental-acts`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) setDentalActs(data);
+      })
+      .catch((err) => console.error('Error fetching dental acts:', err));
+  }, [token]);
+
+  // Intelligent price resolver (matches clinic nomenclature or official Moroccan tariffs)
+  const resolveDefaultPrice = (
+    status: ToothStatusType,
+    procName: string = '',
+    toothNum?: number | null
+  ): number => {
+    const isWisdom = toothNum ? toothNum % 10 === 8 : false;
+    const searchTerms = [procName, status].filter(Boolean).map((s) => s.toLowerCase());
+
+    // 1. Check in official clinic catalog
+    if (dentalActs.length > 0) {
+      if (isWisdom && searchTerms.some((s) => s.includes('extrac') || s.includes('exo') || s === 'extraite')) {
+        const wisdomAct = dentalActs.find((a) => a.name.toLowerCase().includes('sagesse'));
+        if (wisdomAct?.defaultPrice) return wisdomAct.defaultPrice;
+      }
+
+      for (const term of searchTerms) {
+        if (!term || term === 'healthy' || term === 'sain' || term === 'missing' || term === 'absente') continue;
+
+        const exactMatch = dentalActs.find((a) => a.name.toLowerCase() === term);
+        if (exactMatch?.defaultPrice) return exactMatch.defaultPrice;
+
+        const partialMatch = dentalActs.find((a) => {
+          const aName = a.name.toLowerCase();
+          if (term.includes('extrac') || term === 'extraite') return aName.includes('extraction');
+          if (term.includes('couronne') || term.includes('crown')) return aName.includes('couronne');
+          if (term.includes('implant')) return aName.includes('implant');
+          if (term.includes('endo') || term.includes('dévitalis') || term.includes('root canal')) return aName.includes('endo');
+          if (
+            term.includes('carie') ||
+            term.includes('composite') ||
+            term.includes('filling') ||
+            term.includes('obturation')
+          ) {
+            return aName.includes('carie') || aName.includes('reconstitution');
+          }
+          if (term.includes('détartrage')) return aName.includes('détartrage');
+          if (term.includes('bridge') || term.includes('pont')) return aName.includes('bridge');
+          return aName.includes(term);
+        });
+        if (partialMatch?.defaultPrice) return partialMatch.defaultPrice;
+      }
+    }
+
+    // 2. Moroccan clinic standard tariffs fallback
+    const combined = `${procName} ${status}`.toLowerCase();
+    if (combined.includes('sagesse')) return 1000;
+    if (combined.includes('extrac') || combined.includes('exo') || status === 'Extracted') return 500;
+    if (combined.includes('couronne zircone') || status === 'Permanent Crown') return 2500;
+    if (combined.includes('couronne') || status === 'Crown') return 1500;
+    if (combined.includes('couronne provisoire') || status === 'Temporary Crown') return 500;
+    if (combined.includes('implant') || status === 'Implant') return 6000;
+    if (combined.includes('bridge') || status === 'Bridge') return 3500;
+    if (combined.includes('endo') || status === 'Root Canal') return 600;
+    if (
+      combined.includes('composite') ||
+      combined.includes('carie') ||
+      status === 'Filling' ||
+      status === 'Composite Filling' ||
+      status === 'Caries'
+    )
+      return 300;
+    if (combined.includes('amalgame') || status === 'Amalgam Filling') return 400;
+    if (combined.includes('détartrage')) return 400;
+    if (combined.includes('blanchiment')) return 2500;
+
+    return 0;
+  };
+
+  // Load external GLTF model if present in /models/ with seamless procedural fallback
+  const { hasGLTF, toothGeometries, maxillaryGingivaGeo, mandibularGingivaGeo } =
+    useDentalArchGLTF(archMode);
+
+  // Arch tooth arrays (FDI standard)
   const adultUpper = [18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26, 27, 28];
   const adultLower = [48, 47, 46, 45, 44, 43, 42, 41, 31, 32, 33, 34, 35, 36, 37, 38];
   const childUpper = [55, 54, 53, 52, 51, 61, 62, 63, 64, 65];
@@ -684,23 +548,41 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId, carne
   // Dynamically resolve tooth clinical state merging Odontogram and Carnet Treatments
   const getToothState = (fdiNumber: number) => {
     const matchingActs = (carnetActs || []).filter((a) => matchesTooth(a.tooth, fdiNumber));
-    const record = odontogram.find((t) => t.toothNumber === fdiNumber || (fdiNumber === 11 && t.toothNumber === 1));
+    const record = odontogram.find(
+      (t) => t.toothNumber === fdiNumber || (fdiNumber === 11 && t.toothNumber === 1)
+    );
 
     let resolvedStatus: ToothStatusType = (record?.status as ToothStatusType) || 'Healthy';
+    let resolvedSurface: ToothSurface = 'Global';
+
+    if (record?.procedureName || record?.notes) {
+      resolvedSurface = detectToothSurface(record.procedureName, record.notes);
+    }
 
     if (matchingActs.length > 0) {
       const sortedActs = [...matchingActs].sort(
         (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
       );
       const latestAct = sortedActs[0];
-      const actStatus = mapActToToothStatus(latestAct.description || latestAct.actName || '', latestAct.category || '');
+      const actStatus = mapActToToothStatus(
+        latestAct.description || latestAct.actName || '',
+        latestAct.category || ''
+      );
       if (actStatus !== 'Healthy') {
         resolvedStatus = actStatus;
+        const actSurface = detectToothSurface(
+          latestAct.description || latestAct.actName,
+          latestAct.notes
+        );
+        if (actSurface !== 'Global') {
+          resolvedSurface = actSurface;
+        }
       }
     }
 
     return {
       status: resolvedStatus,
+      surface: resolvedSurface,
       matchingActs,
       record,
     };
@@ -710,9 +592,27 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId, carne
     setSelectedTooth(toothNum);
     const toothState = getToothState(toothNum);
     setNewStatus(toothState.status);
-    setProcedureName(toothState.status === 'Extracted' ? 'Extraction (Exo)' : '');
+    setSelectedSurface(toothState.surface);
+    const isWisdom = toothNum % 10 === 8;
+    const defaultProc =
+      toothState.status === 'Extracted'
+        ? isWisdom
+          ? 'Extraction dent de sagesse'
+          : 'Extraction (Exo)'
+        : toothState.status === 'Crown'
+        ? 'Couronne céramique'
+        : toothState.status === 'Implant'
+        ? 'Implant Titane'
+        : toothState.status === 'Root Canal'
+        ? 'Endodontie (Endo)'
+        : toothState.status === 'Filling' || toothState.status === 'Composite Filling'
+        ? 'Composite résine'
+        : '';
+    setProcedureName(defaultProc);
     setNewNotes('');
-    setNewCost('');
+
+    const autoPrice = resolveDefaultPrice(toothState.status, defaultProc, toothNum);
+    setNewCost(autoPrice > 0 ? autoPrice.toString() : '');
 
     fetch(`${API_URL}/teeth/patient/${patientId}/tooth/${toothNum}`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -727,6 +627,23 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId, carne
     if (!selectedTooth) return;
 
     setSubmitting(true);
+
+    // Format procedure with surface if localized
+    let finalProcedureName = procedureName.trim();
+    if (selectedSurface !== 'Global' && !finalProcedureName.includes(`(${selectedSurface})`)) {
+      const surfaceTag = `(${selectedSurface})`;
+      finalProcedureName = finalProcedureName
+        ? `${finalProcedureName} ${surfaceTag}`
+        : `${newStatus} ${surfaceTag}`;
+    }
+
+    // Auto-resolve price if empty or 0 for clinical procedures (NEVER allow 0 DH unintentionally!)
+    let enteredCost = parseFloat(newCost);
+    if ((isNaN(enteredCost) || enteredCost <= 0) && newStatus !== 'Healthy' && newStatus !== 'Missing') {
+      enteredCost = resolveDefaultPrice(newStatus, finalProcedureName, selectedTooth);
+    }
+    const finalCost = isNaN(enteredCost) ? 0 : enteredCost;
+
     fetch(`${API_URL}/teeth`, {
       method: 'POST',
       headers: {
@@ -736,10 +653,10 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId, carne
       body: JSON.stringify({
         patientId,
         toothNumber: selectedTooth,
-        procedureName: procedureName.trim() || undefined,
+        procedureName: finalProcedureName || undefined,
         status: newStatus,
         notes: newNotes,
-        cost: parseFloat(newCost) || 0,
+        cost: finalCost,
         addToCarnet: syncWithCarnet,
       }),
     })
@@ -753,19 +670,23 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId, carne
         if (syncWithCarnet && onUpdateCarnet) {
           onUpdateCarnet();
         }
-        toast.success('Acte enregistré', `L'acte sur la dent #${selectedTooth} a été mis à jour.`);
+        toast.success(
+          'Acte enregistré',
+          `L'acte sur la dent #${selectedTooth} (${selectedSurface}) a été enregistré (${finalCost} DH).`
+        );
       })
       .catch((err) => {
         console.error('Error logging 3D tooth status:', err);
-        toast.error('Erreur', 'Impossible d\'enregistrer l\'acte.');
+        toast.error('Erreur', "Impossible d'enregistrer l'acte.");
       })
       .finally(() => setSubmitting(false));
   };
 
+
   const handleDeleteHistory = async (id: string) => {
     const confirmed = await confirm({
       title: 'Supprimer cette intervention 3D ?',
-      message: 'Cette intervention dentaire sera retirée de l\'historique 3D du patient.',
+      message: "Cette intervention dentaire sera retirée de l'historique 3D du patient.",
       variant: 'danger',
       confirmText: 'Supprimer',
       cancelText: 'Annuler',
@@ -779,19 +700,20 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId, carne
       .then(() => {
         setToothHistoryList(toothHistoryList.filter((item) => item._id !== id));
         fetchOdontogram();
-        toast.success('Intervention supprimée', 'L\'acte a été retiré de la vue 3D.');
+        toast.success('Intervention supprimée', "L'acte a été retiré de la vue 3D.");
       })
       .catch((err) => {
         console.error('Error deleting record:', err);
-        toast.error('Erreur', 'Impossible de supprimer l\'intervention.');
+        toast.error('Erreur', "Impossible de supprimer l'intervention.");
       });
   };
 
-  const [showLabels, setShowLabels] = useState<boolean>(true);
-
-  // Compute 3D parabolic arch coordinates for teeth
+  // Parabolic arch positioning in 3D space
   const toothPositions = useMemo(() => {
-    const positions: Record<number, { pos: [number, number, number]; rot: [number, number, number] }> = {};
+    const positions: Record<
+      number,
+      { pos: [number, number, number]; rot: [number, number, number] }
+    > = {};
 
     const calcArch = (teeth: number[], isUpper: boolean) => {
       const count = teeth.length;
@@ -805,7 +727,6 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId, carne
         const y = isUpper ? 0.70 : -0.70;
         const rotY = -angle;
 
-        // Crowns face labially towards front
         positions[num] = { pos: [x, y, z], rot: [0, rotY, 0] };
       });
     };
@@ -834,7 +755,7 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId, carne
 
   const selectedMeta = selectedTooth ? getToothMetadata(selectedTooth) : null;
 
-  // Maxillary & Mandibular teeth partition
+  // Upper & Lower teeth partitions
   const upperTeeth = useMemo(() => {
     return Object.entries(toothPositions).filter(([numStr]) => {
       const num = Number(numStr);
@@ -849,9 +770,6 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId, carne
     });
   }, [toothPositions]);
 
-  // Mandible TMJ Kinematic Articulator Opening Rotation
-  const maxYOffset = mouthOpening * 0.30;
-
   return (
     <div
       ref={containerRef}
@@ -860,14 +778,11 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId, carne
       }`}
     >
       {/* 3D WebGL Canvas Area */}
-      <div className="flex-1 relative flex flex-col justify-between p-4">
-        
+      <div className="flex-1 relative flex flex-col justify-between p-4 min-w-0">
         {/* Top Control Bar */}
         <div className="flex items-center justify-between gap-3 z-10 bg-slate-900/90 backdrop-blur-md p-2.5 rounded-2xl border border-white/10 shadow-lg overflow-x-auto no-scrollbar">
-          
           {/* Left: View & Arch Filters */}
           <div className="flex items-center gap-2 shrink-0">
-            
             {/* Arch Mode (Adult vs Child) */}
             <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-white/10">
               <button
@@ -916,15 +831,19 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId, carne
               </button>
             </div>
 
+            {/* Renderer Indicator Badge */}
+            <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-950 border border-white/10 text-xxs font-mono text-slate-300">
+              <Box className="w-3.5 h-3.5 text-blue-400" />
+              <span>{hasGLTF ? 'Modèle GLTF Studio' : 'Anatomique HD PBR'}</span>
+            </div>
           </div>
 
-          {/* Right: Mouth Articulator & Action Buttons */}
+          {/* Right: TMJ Jaw Articulator & Action Buttons */}
           <div className="flex items-center gap-2 shrink-0">
-            
             {/* Interactive TMJ Jaw Opening Slider */}
             <div className="flex items-center gap-2.5 bg-slate-950 px-3.5 py-1.5 rounded-xl border border-white/10 shadow-inner">
               <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5 select-none whitespace-nowrap">
-                💀 <span>Articulateur Mâchoire :</span>
+                <span>Articulateur :</span>
               </span>
               <input
                 type="range"
@@ -933,27 +852,36 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId, carne
                 step="0.02"
                 value={mouthOpening}
                 onChange={(e) => setMouthOpening(parseFloat(e.target.value))}
-                className="w-24 md:w-32 h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500 hover:accent-blue-400"
+                className="w-20 sm:w-28 h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500 hover:accent-blue-400"
                 title="Pivoter la mandibule pour ouvrir/fermer la bouche"
               />
               <button
-                onClick={() => setMouthOpening(mouthOpening > 0.1 ? 0 : 0.80)}
+                onClick={() => setMouthOpening(mouthOpening > 0.1 ? 0 : 0.8)}
                 className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shadow-xs ${
-                  mouthOpening > 0.1
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-emerald-600 text-white'
+                  mouthOpening > 0.1 ? 'bg-blue-600 text-white' : 'bg-emerald-600 text-white'
                 }`}
               >
-                {mouthOpening > 0.1 ? 'Fermer (Occlusion)' : 'Ouvrir Mâchoire'}
+                {mouthOpening > 0.1 ? 'Occlusion' : 'Ouvrir'}
               </button>
             </div>
 
-            {/* Action Icons */}
+            {/* Action Toggles */}
             <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setShowRoots(!showRoots)}
+                title="Afficher/Masquer Racines & Canaux"
+                className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                  showRoots
+                    ? 'bg-indigo-600 text-white border-indigo-500 shadow-xs'
+                    : 'bg-slate-950 text-slate-300 border-white/10 hover:text-white hover:bg-slate-900'
+                }`}
+              >
+                Racines
+              </button>
               <button
                 onClick={() => setShowLabels(!showLabels)}
                 title="Afficher/Masquer Numéros FDI"
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
                   showLabels
                     ? 'bg-blue-600 text-white border-blue-500 shadow-xs'
                     : 'bg-slate-950 text-slate-300 border-white/10 hover:text-white hover:bg-slate-900'
@@ -980,33 +908,51 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId, carne
                 {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
               </button>
             </div>
-
           </div>
-
         </div>
 
-        {/* Three.js R3F Scene Canvas */}
-        <Canvas camera={{ position: [0, 0.4, 8.5], fov: 42 }} className="w-full h-full">
+        {/* Three.js R3F Scene Canvas with Real Shadows & Clinical Operatory Lighting */}
+        <Canvas
+          shadows
+          camera={{ position: [0, 0.4, 8.5], fov: 40 }}
+          className="w-full h-full"
+          gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.1 }}
+        >
           {/* Clinical Dental Studio Lighting */}
-          <ambientLight intensity={1.2} />
-          <directionalLight position={[6, 12, 10]} intensity={2.2} castShadow />
-          <directionalLight position={[-6, 10, 8]} intensity={1.5} />
+          <ambientLight intensity={1.1} />
+
+          {/* Key Scialytic Lamp (casts realistic soft shadows) */}
+          <directionalLight
+            position={[5, 10, 8]}
+            intensity={2.2}
+            castShadow
+            shadow-mapSize-width={1024}
+            shadow-mapSize-height={1024}
+            shadow-bias={-0.0001}
+          />
+
+          {/* Fill Light (Softens contrast) */}
+          <directionalLight position={[-6, 8, 6]} intensity={1.4} />
+
+          {/* Oral Cavity Uplight */}
           <pointLight position={[0, -2, 5]} intensity={0.9} />
-          <spotLight position={[0, 8, 4]} intensity={1.8} angle={0.6} penumbra={0.6} />
+
+          {/* Focused Dental Arch Spot */}
+          <spotLight position={[0, 7, 5]} intensity={1.6} angle={0.55} penumbra={0.6} />
 
           <OrbitControls
             enablePan={true}
             enableZoom={true}
             autoRotate={autoRotate}
-            autoRotateSpeed={1.5}
-            maxPolarAngle={Math.PI / 1.35}
-            minPolarAngle={Math.PI / 4.5}
+            autoRotateSpeed={1.2}
+            maxPolarAngle={Math.PI / 1.3}
+            minPolarAngle={Math.PI / 4.8}
           />
 
           {/* MAXILLARY (UPPER JAW & TEETH) GROUP */}
           {(jawFilter === 'All' || jawFilter === 'Maxillary') && (
             <group position={[0, 0, 0]}>
-              <MaxillaryGingivaMesh showRoots={showRoots} />
+              <MaxillaryGingivaMesh showRoots={showRoots} customGeo={maxillaryGingivaGeo} />
               {upperTeeth.map(([numStr, { pos, rot }]) => {
                 const num = Number(numStr);
                 const toothState = getToothState(num);
@@ -1017,8 +963,11 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId, carne
                     position={pos}
                     rotation={rot}
                     status={toothState.status}
+                    surface={toothState.surface}
                     isSelected={selectedTooth === num}
                     showLabels={showLabels}
+                    showRoots={showRoots}
+                    customGeometry={toothGeometries[num]}
                     onClick={() => handleSelectTooth(num)}
                   />
                 );
@@ -1028,9 +977,9 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId, carne
 
           {/* MANDIBULAR (LOWER JAW & TEETH) GROUP - PIVOTING REALISTICALLY AROUND TMJ CONDYLES */}
           {(jawFilter === 'All' || jawFilter === 'Mandibular') && (
-            <group position={[0, 0.40, -3.2]} rotation={[mouthOpening * 0.45, 0, 0]}>
-              <group position={[0, -0.40, 3.2]}>
-                <MandibularGingivaMesh showRoots={showRoots} />
+            <group position={[0, 0.4, -3.2]} rotation={[mouthOpening * 0.45, 0, 0]}>
+              <group position={[0, -0.4, 3.2]}>
+                <MandibularGingivaMesh showRoots={showRoots} customGeo={mandibularGingivaGeo} />
                 {lowerTeeth.map(([numStr, { pos, rot }]) => {
                   const num = Number(numStr);
                   const toothState = getToothState(num);
@@ -1041,8 +990,11 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId, carne
                       position={pos}
                       rotation={rot}
                       status={toothState.status}
+                      surface={toothState.surface}
                       isSelected={selectedTooth === num}
                       showLabels={showLabels}
+                      showRoots={showRoots}
+                      customGeometry={toothGeometries[num]}
                       onClick={() => handleSelectTooth(num)}
                     />
                   );
@@ -1055,23 +1007,25 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId, carne
         {/* Legend Toolbar Footer */}
         <div className="z-10 bg-slate-900/85 backdrop-blur-md p-3 rounded-2xl border border-white/10 flex items-center justify-between overflow-x-auto no-scrollbar gap-4">
           <div className="flex items-center gap-3">
-            <span className="text-xxs uppercase tracking-wider font-bold text-slate-400">Légende:</span>
-            {Object.entries(STATUS_CONFIGS).slice(0, 8).map(([key, cfg]) => (
-              <div key={key} className="flex items-center gap-1.5 shrink-0">
-                <span className={`w-3 h-3 rounded-full ${cfg.color}`} />
-                <span className="text-xxs text-slate-300 font-semibold">{cfg.label}</span>
-              </div>
-            ))}
+            <span className="text-xxs uppercase tracking-wider font-bold text-slate-400">
+              Légende Clinique :
+            </span>
+            {Object.entries(STATUS_PBR_PRESETS)
+              .slice(0, 9)
+              .map(([key, cfg]) => (
+                <div key={key} className="flex items-center gap-1.5 shrink-0">
+                  <span className={`w-3 h-3 rounded-full ${cfg.badgeColor}`} />
+                  <span className="text-xxs text-slate-300 font-semibold">{cfg.label}</span>
+                </div>
+              ))}
           </div>
         </div>
-
       </div>
 
-      {/* Right Side Panel - Interactive Tooth Details & History */}
+      {/* Right Side Panel - Interactive Tooth Details, Surface Selector & History */}
       <div className="w-full md:w-96 border-t md:border-t-0 md:border-l border-white/10 bg-slate-950 p-6 flex flex-col justify-between overflow-y-auto no-scrollbar">
         {selectedTooth && selectedMeta ? (
           <div className="flex flex-col gap-5">
-            
             {/* Header Tooth Title */}
             <div className="flex justify-between items-start border-b border-white/10 pb-4">
               <div>
@@ -1080,7 +1034,8 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId, carne
                     FDI {selectedMeta.fdiNumber} / Univ {selectedMeta.universalNumber}
                   </span>
                   <span className="text-xxs font-bold text-indigo-400 uppercase tracking-wider">
-                    {selectedMeta.type} ({selectedMeta.rootCount} Racine{selectedMeta.rootCount > 1 ? 's' : ''})
+                    {selectedMeta.type} ({selectedMeta.rootCount} Racine
+                    {selectedMeta.rootCount > 1 ? 's' : ''})
                   </span>
                 </div>
                 <h3 className="text-base font-bold text-white mt-1.5">{selectedMeta.nameFr}</h3>
@@ -1124,7 +1079,12 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId, carne
                       : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
                   }`}
                 >
-                  {STATUS_CONFIGS[getToothState(selectedTooth).status]?.label || 'Sain'}
+                  {STATUS_PBR_PRESETS[getToothState(selectedTooth).status]?.label || 'Sain'}
+                  {getToothState(selectedTooth).surface !== 'Global' && (
+                    <span className="ml-1 opacity-80">
+                      ({getToothState(selectedTooth).surface})
+                    </span>
+                  )}
                 </span>
               </div>
 
@@ -1163,26 +1123,50 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId, carne
               )}
             </div>
 
-            {/* Log New Intervention Form */}
-            <form onSubmit={handleAddIntervention} className="flex flex-col gap-3 border-t border-white/10 pt-4">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Poser un Acte Clinique</h4>
-              
+            {/* Log New Intervention Form with Surface Selection */}
+            <form
+              onSubmit={handleAddIntervention}
+              className="flex flex-col gap-3 border-t border-white/10 pt-4"
+            >
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                Poser un Acte Clinique
+              </h4>
+
+              {/* Status Selector */}
               <div>
-                <label className="block text-xxs font-semibold text-slate-400 mb-1">Condition / État 3D</label>
+                <label className="block text-xxs font-semibold text-slate-400 mb-1">
+                  Condition / État 3D
+                </label>
                 <select
                   value={newStatus}
                   onChange={(e) => {
                     const val = e.target.value as ToothStatusType;
                     setNewStatus(val);
-                    if (val === 'Extracted') setProcedureName('Extraction (Exo)');
-                    else if (val === 'Crown') setProcedureName('Couronne');
-                    else if (val === 'Implant') setProcedureName('Implant');
-                    else if (val === 'Root Canal') setProcedureName('Endodontie');
-                    else if (val === 'Filling') setProcedureName('Composite');
+                    const isWisdom = selectedTooth ? selectedTooth % 10 === 8 : false;
+                    let defProc = '';
+                    if (val === 'Extracted') defProc = isWisdom ? 'Extraction dent de sagesse' : 'Extraction (Exo)';
+                    else if (val === 'Crown') defProc = 'Couronne céramique';
+                    else if (val === 'Permanent Crown') defProc = 'Couronne zircone';
+                    else if (val === 'Temporary Crown') defProc = 'Couronne provisoire';
+                    else if (val === 'Implant') defProc = 'Implant Titane';
+                    else if (val === 'Root Canal') defProc = 'Endodontie (Endo)';
+                    else if (val === 'Filling') defProc = 'Composite résine';
+                    else if (val === 'Composite Filling') defProc = 'Composite résine';
+                    else if (val === 'Amalgam Filling') defProc = 'Amalgame Métallique';
+                    else if (val === 'Caries') defProc = 'Traitement Carie';
+                    else if (val === 'Bridge') defProc = 'Pont (Bridge)';
+
+                    if (defProc) setProcedureName(defProc);
+                    const autoPrice = resolveDefaultPrice(val, defProc, selectedTooth);
+                    if (autoPrice > 0) {
+                      setNewCost(autoPrice.toString());
+                    } else if (val === 'Healthy' || val === 'Missing') {
+                      setNewCost('');
+                    }
                   }}
-                  className="w-full h-10 px-3 rounded-xl border border-white/10 bg-slate-900 text-xs text-white focus:outline-none focus:border-blue-500"
+                  className="w-full h-10 px-3 rounded-xl border border-white/10 bg-slate-900 text-xs text-white focus:outline-none focus:border-blue-500 cursor-pointer"
                 >
-                  {Object.entries(STATUS_CONFIGS).map(([val, cfg]) => (
+                  {Object.entries(STATUS_PBR_PRESETS).map(([val, cfg]) => (
                     <option key={val} value={val}>
                       {cfg.label}
                     </option>
@@ -1190,30 +1174,124 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId, carne
                 </select>
               </div>
 
+              {/* Quick Acts Pills from Clinic Catalog */}
+              {dentalActs.length > 0 && (
+                <div className="flex flex-col gap-1.5 p-2.5 rounded-xl bg-slate-900/90 border border-white/10">
+                  <div className="flex items-center justify-between text-xxs font-bold">
+                    <span className="text-blue-400 uppercase tracking-wider flex items-center gap-1">
+                      ⚡ Actes Fréquents :
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-normal">
+                      Tarif officiel auto-rempli
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto no-scrollbar pt-0.5">
+                    {dentalActs.slice(0, 8).map((act: any) => (
+                      <button
+                        key={act._id || act.name}
+                        type="button"
+                        onClick={() => {
+                          setProcedureName(act.name);
+                          setNewCost(act.defaultPrice.toString());
+                          const mapped = mapActToToothStatus(act.name, act.category);
+                          if (mapped && mapped !== 'Healthy') {
+                            setNewStatus(mapped);
+                          }
+                        }}
+                        className="px-2 py-0.5 rounded-lg bg-white/5 hover:bg-blue-600/30 border border-white/10 hover:border-blue-400 text-xxs text-slate-200 font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
+                      >
+                        <span className="truncate max-w-[120px]">{act.name}</span>
+                        <span className="font-mono text-emerald-400 font-bold shrink-0">
+                          {act.defaultPrice} DH
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Surface Selector (Phase Four Feature) */}
               <div>
-                <label className="block text-xxs font-semibold text-slate-400 mb-1">Désignation du Soin (Optionnel)</label>
+                <label className="block text-xxs font-semibold text-slate-400 mb-1">
+                  Face Dentaire Ciblée (Surface-Aware)
+                </label>
+                <select
+                  value={selectedSurface}
+                  onChange={(e) => setSelectedSurface(e.target.value as ToothSurface)}
+                  className="w-full h-10 px-3 rounded-xl border border-white/10 bg-slate-900 text-xs text-white focus:outline-none focus:border-blue-500 cursor-pointer"
+                >
+                  {SURFACE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Procedure Name */}
+              <div>
+                <label className="block text-xxs font-semibold text-slate-400 mb-1">
+                  Désignation du Soin (Optionnel)
+                </label>
                 <input
                   type="text"
                   placeholder="ex: Extraction (Exo), Couronne zircone..."
                   value={procedureName}
-                  onChange={(e) => setProcedureName(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setProcedureName(val);
+                    const autoPrice = resolveDefaultPrice(newStatus, val, selectedTooth);
+                    if (autoPrice > 0) {
+                      setNewCost(autoPrice.toString());
+                    }
+                  }}
                   className="w-full h-10 px-3 rounded-xl border border-white/10 bg-slate-900 text-xs text-white focus:outline-none focus:border-blue-500"
                 />
               </div>
 
+              {/* Cost in MAD / DH */}
               <div>
-                <label className="block text-xxs font-semibold text-slate-400 mb-1">Honoraires (DH)</label>
-                <input
-                  type="number"
-                  placeholder="0.00"
-                  value={newCost}
-                  onChange={(e) => setNewCost(e.target.value)}
-                  className="w-full h-10 px-3 rounded-xl text-xs glass-input"
-                />
+                <div className="flex justify-between items-center mb-1">
+                  <label className="text-xxs font-semibold text-slate-400">
+                    Honoraires (DH)
+                  </label>
+                  {resolveDefaultPrice(newStatus, procedureName, selectedTooth) > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const p = resolveDefaultPrice(newStatus, procedureName, selectedTooth);
+                        setNewCost(p.toString());
+                      }}
+                      className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 px-2 py-0.5 rounded-full border border-emerald-500/20 cursor-pointer transition-colors"
+                      title="Cliquer pour réappliquer le tarif catalogue"
+                    >
+                      Tarif officiel : {resolveDefaultPrice(newStatus, procedureName, selectedTooth)} DH
+                    </button>
+                  )}
+                </div>
+                <div className="relative">
+                  <input
+                    type="number"
+                    placeholder={
+                      resolveDefaultPrice(newStatus, procedureName, selectedTooth) > 0
+                        ? `${resolveDefaultPrice(newStatus, procedureName, selectedTooth)}`
+                        : '0.00'
+                    }
+                    value={newCost}
+                    onChange={(e) => setNewCost(e.target.value)}
+                    className="w-full h-10 pl-3 pr-10 rounded-xl text-xs glass-input font-mono font-bold text-emerald-400"
+                  />
+                  <span className="absolute right-3 top-2.5 text-xs font-bold text-slate-500 select-none">
+                    DH
+                  </span>
+                </div>
               </div>
 
+              {/* Clinical Notes */}
               <div>
-                <label className="block text-xxs font-semibold text-slate-400 mb-1">Notes Cliniques</label>
+                <label className="block text-xxs font-semibold text-slate-400 mb-1">
+                  Notes Cliniques
+                </label>
                 <textarea
                   rows={2}
                   placeholder="Observations et détails thérapeutiques..."
@@ -1223,6 +1301,7 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId, carne
                 />
               </div>
 
+              {/* Sync with Carnet Checkbox */}
               <label className="flex items-center gap-2 text-xxs font-semibold text-slate-300 cursor-pointer pt-1">
                 <input
                   type="checkbox"
@@ -1244,23 +1323,38 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId, carne
 
             {/* Historical Timeline */}
             <div className="flex flex-col gap-2.5 border-t border-white/10 pt-4">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Historique des Actes</h4>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                Historique des Actes
+              </h4>
               {toothHistoryList.length === 0 ? (
-                <p className="text-xxs text-slate-500 text-center py-4">Aucun acte enregistré pour cette dent.</p>
+                <p className="text-xxs text-slate-500 text-center py-4">
+                  Aucun acte enregistré pour cette dent.
+                </p>
               ) : (
                 <div className="flex flex-col gap-2 max-h-48 overflow-y-auto no-scrollbar">
                   {toothHistoryList.map((item) => (
-                    <div key={item._id} className="p-3 rounded-xl bg-white/5 border border-white/5 text-xs flex flex-col gap-1">
+                    <div
+                      key={item._id}
+                      className="p-3 rounded-xl bg-white/5 border border-white/5 text-xs flex flex-col gap-1"
+                    >
                       <div className="flex justify-between items-center">
                         <span className="text-xxs font-bold text-blue-400 font-mono">
                           {formatDate(item.date)}
                         </span>
-
                         <span className="font-bold text-slate-200">{item.status}</span>
                       </div>
-                      {item.notes && <p className="text-xxs text-slate-400 leading-snug">{item.notes}</p>}
+                      {item.procedureName && (
+                        <p className="text-xxs font-semibold text-indigo-300">
+                          {item.procedureName}
+                        </p>
+                      )}
+                      {item.notes && (
+                        <p className="text-xxs text-slate-400 leading-snug">{item.notes}</p>
+                      )}
                       <div className="flex justify-between items-center border-t border-white/5 pt-1 mt-1">
-                        <span className="text-xxs font-bold text-emerald-400">{item.cost.toFixed(2)} DH</span>
+                        <span className="text-xxs font-bold text-emerald-400">
+                          {item.cost.toFixed(2)} DH
+                        </span>
                         <button
                           onClick={() => handleDeleteHistory(item._id)}
                           className="text-slate-500 hover:text-rose-400 p-0.5 cursor-pointer"
@@ -1273,7 +1367,6 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId, carne
                 </div>
               )}
             </div>
-
           </div>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-center p-6 gap-3">
@@ -1282,7 +1375,8 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId, carne
             </div>
             <h4 className="text-sm font-bold text-white">Sélectionnez une Dent</h4>
             <p className="text-xs text-slate-400 leading-relaxed max-w-xs">
-              Cliquez sur une dent dans l'arcade 3D pour afficher sa fiche anatomique, son historique et poser un acte clinique.
+              Cliquez sur une dent dans l'arcade 3D pour afficher sa fiche anatomique, son
+              historique et poser un acte clinique avec ciblage par surface.
             </p>
           </div>
         )}

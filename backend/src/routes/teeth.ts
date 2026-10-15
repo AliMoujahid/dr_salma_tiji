@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import ToothHistory from '../models/ToothHistory';
 import Patient from '../models/Patient';
 import Treatment from '../models/Treatment';
+import DentalAct from '../models/DentalAct';
 import { protect, AuthRequest } from '../middleware/auth';
 import { recordAudit } from '../middleware/security';
 import { mapActToToothStatus, parseToothNumbers, matchesTooth } from '../utils/dentalUtils';
@@ -172,13 +173,52 @@ router.post('/', protect, async (req: AuthRequest, res: Response) => {
 
     const patient = await Patient.findById(patientId);
 
+    // Auto-resolve official tariff if cost is missing or 0 for clinical procedures
+    let finalCost = parseFloat(cost) || 0;
+    if (finalCost <= 0 && status !== 'Healthy' && status !== 'Missing') {
+      try {
+        const isWisdom = tNum % 10 === 8;
+        const queryTerm = procedureName ? procedureName.trim() : status;
+
+        if (isWisdom && (queryTerm.toLowerCase().includes('extrac') || queryTerm.toLowerCase().includes('exo') || status === 'Extracted')) {
+          const wisdomAct = await DentalAct.findOne({ isActive: true, name: { $regex: /sagesse/i } });
+          if (wisdomAct?.defaultPrice) finalCost = wisdomAct.defaultPrice;
+          else finalCost = 1000;
+        } else {
+          // Look for matching dental act in database catalog
+          const matchingAct = await DentalAct.findOne({
+            isActive: true,
+            name: { $regex: queryTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' },
+          });
+
+          if (matchingAct?.defaultPrice) {
+            finalCost = matchingAct.defaultPrice;
+          } else {
+            // Standard Moroccan dental tariffs fallback
+            const sLower = `${queryTerm} ${status}`.toLowerCase();
+            if (sLower.includes('extrac') || sLower.includes('exo') || status === 'Extracted') finalCost = 500;
+            else if (sLower.includes('zircone')) finalCost = 2500;
+            else if (sLower.includes('couronne') || status === 'Crown' || status === 'Permanent Crown') finalCost = 1500;
+            else if (sLower.includes('provisoire') || status === 'Temporary Crown') finalCost = 500;
+            else if (sLower.includes('implant') || status === 'Implant') finalCost = 6000;
+            else if (sLower.includes('bridge') || status === 'Bridge') finalCost = 3500;
+            else if (sLower.includes('endo') || status === 'Root Canal') finalCost = 600;
+            else if (sLower.includes('carie') || sLower.includes('composite') || status === 'Filling' || status === 'Composite Filling') finalCost = 300;
+            else if (sLower.includes('amalgame') || status === 'Amalgam Filling') finalCost = 400;
+          }
+        }
+      } catch (tariffErr) {
+        console.error('Error resolving default tariff:', tariffErr);
+      }
+    }
+
     const record = await ToothHistory.create({
       patientId,
       toothNumber: tNum,
       procedureName: procedureName ? procedureName.trim() : undefined,
       status,
       notes,
-      cost: parseFloat(cost) || 0,
+      cost: finalCost,
       invoiceId: isValidObjectId(invoiceId) ? invoiceId : undefined,
       date: date ? new Date(date) : new Date(),
       photosBefore: Array.isArray(photosBefore) ? photosBefore : [],
@@ -194,7 +234,7 @@ router.post('/', protect, async (req: AuthRequest, res: Response) => {
           date: date ? new Date(date) : new Date(),
           tooth: String(tNum),
           actName: procedureName ? procedureName.trim() : `Acte Clinique - Dent ${tNum} (${status})`,
-          cost: parseFloat(cost) || 0,
+          cost: finalCost,
           status: 'Terminé',
           notes: notes || '',
           createdBy: req.user?._id,

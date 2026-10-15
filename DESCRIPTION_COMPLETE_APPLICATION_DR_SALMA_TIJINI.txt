@@ -1,0 +1,543 @@
+====================================================================================================
+DOSSIER TECHNIQUE ET FONCTIONNEL COMPLET : APPLICATION CABINET DENTAIRE DR. SALMA TIJINI
+====================================================================================================
+Document généré le : 15 Octobre 2026
+Projet : Système d'Information & Gestion Médicale Intégrée pour Cabinet Dentaire
+Propriétaire / Docteure : Dr. Salma Tijini (Chirurgien-Dentiste)
+Emplacement du Projet : c:\Users\MOUJAHID-ELITEBOOK\Desktop\dr_salma_tiji\
+
+----------------------------------------------------------------------------------------------------
+SOMMAIRE
+----------------------------------------------------------------------------------------------------
+1. PRESENTATION GENERALE & OBJECTIFS DU LOGICIEL
+2. ARCHITECTURE TECHNIQUE & STACK TECHNOLOGIQUE
+3. SYSTEME DE LICENCE MATERIELLE & DEPLOIEMENT RESEAU LOCAL
+4. PLAN COMPLET DES ROUTES (BACKEND & FRONTEND)
+5. INVENTAIRE EXHAUSTIF DES PAGES, COMPOSANTS & BOUTONS D'INTERACTION
+   - 5.1. Authentification & Connexion (Login)
+   - 5.2. Barre Latérale (Sidebar) & En-tête (Header)
+   - 5.3. Tableau de Bord (Dashboard)
+   - 5.4. Gestion des Patients (Liste & Création)
+   - 5.5. Fiche Patient Approfondie (PatientProfile - Coeur du Système)
+     * Onglet 1 : Vue Générale & Fiche Médicale
+     * Onglet 2 : Schéma Dentaire Interactif (2D & 3D Three.js)
+     * Onglet 3 : Plan de Traitement & Soins
+     * Onglet 4 : Carnet Financier (Diftar) & Facturation
+     * Onglet 5 : Imagerie & Radiographies Intra-orales (NanoPix)
+     * Onglet 6 : Documents, Ordonnances & Certificats
+     * Onglet 7 : Historique des Rendez-vous
+   - 5.6. Agenda & Gestion des Rendez-vous (Appointments)
+   - 5.7. Salle d'Attente Virtuelle en Temps Réel (WaitingRoom)
+   - 5.8. Éditeur de Factures & Impression Normalisée (InvoiceEditor)
+   - 5.9. Studio Capteur Radiologique Intra-oral (NanoPixStudio)
+   - 5.10. Module de Communication & Rappels WhatsApp (NotificationManager)
+   - 5.11. Statistiques, Analyses & Comptabilité (Reports)
+   - 5.12. Paramètres Généraux du Cabinet (Settings)
+6. STRUCTURE DE LA BASE DE DONNEES (MODELES MONGOOSE)
+7. PROMPT DIRECT POUR L'INTELLIGENCE ARTIFICIELLE (BRAINSTORMING D'EVOLUTIONS)
+
+====================================================================================================
+1. PRESENTATION GENERALE & OBJECTIFS DU LOGICIEL
+====================================================================================================
+L'application "Cabinet Dentaire Dr. Salma Tijini" est un système ERP/Dossier Patient Informatisé (DPI) 
+médical complet, autonome, ultra-performant et conçu sur mesure pour la pratique de la médecine dentaire.
+
+Principaux objectifs :
+- Digitalisation à 100% du cabinet : Fin des fiches papier, dossiers d'antécédents perdus et calculs manuels.
+- Suivi clinique de pointe : Schéma dentaire 3D interactif visualisant l'arcade maxillaire et mandibulaire 
+  avec l'état précis de chaque dent et surface.
+- Pont matériel direct avec les capteurs radiologiques dentaires USB (NanoPix / capteurs CMOS).
+- Automatisation de la relation patient : Envoi de rappels de rendez-vous et consignes post-opératoires via WhatsApp Web.
+- Rigueur financière : Suivi du "Diftar" (carnet financier des soins et versements au centime près) et 
+  édition de factures conformes à la réglementation marocaine (ICE, IF, N° Ordre, arrêté de compte en lettres).
+- Fonctionnement 100% autonome et sécurisé : Données stockées localement sur le PC du cabinet (Offline-First), 
+  aucune dépendance au cloud, verrouillage anti-copie par empreinte matérielle, et sauvegardes quotidiennes automatiques.
+
+====================================================================================================
+2. ARCHITECTURE TECHNIQUE & STACK TECHNOLOGIQUE
+====================================================================================================
+A. FRONTEND :
+- Framework : React 19 + TypeScript + Vite.
+- Routage : React Router v7.
+- Stylisation : Tailwind CSS + CSS Variables personnalisées (Thème moderne Médical Sombre/Clair, Glassmorphism).
+- Graphismes 3D : Three.js + @react-three/fiber + @react-three/drei (Moteur 3D temps réel pour les dents et arcades).
+- Icônes : Lucide React.
+- Requêtage & Cache : TanStack React Query.
+- Impression & Rendu Documentaire : CSS @media print sur mesure + html2canvas + jsPDF.
+
+B. BACKEND :
+- Environnement : Node.js (v20+ / v22+) + Express + TypeScript.
+- Base de données : MongoDB Community Server (Mongoose ODM).
+- Sécurité : JWT (JSON Web Tokens), bcrypt pour le hachage des mots de passe, Middlewares de sanitisation et de rôles.
+- Automatisation WhatsApp : puppeteer-core + whatsapp-web.js (Pilotage Chromium sans API payante Meta).
+- Gestion des fichiers : Multer (stockage local partitionné par patient et catégorie).
+- Tâches de fond : Node-cron (Sauvegardes quotidiennes à 23h00, rappels automatiques à 09h00 et 17h00).
+
+C. INFRASTRUCTURE & RESEAU :
+- Gestionnaire de processus : PM2 en tâche de fond Windows invisible (démarrage automatique avec Windows).
+- Mode multi-postes (LAN) : Serveur accessible via l'adresse IP locale (ex: http://192.168.1.50:5000) 
+  depuis n'importe quel second PC (secrétariat/accueil) ou tablette sans rien installer sur les autres postes.
+
+====================================================================================================
+3. SYSTEME DE LICENCE MATERIELLE & DEPLOIEMENT RESEAU LOCAL
+====================================================================================================
+- Empreinte Matérielle (Machine ID) : Calculée à partir du processeur (CPU ID), carte mère (Motherboard UUID) 
+  et premier disque dur physique via des requêtes WMI Windows.
+- Clé de licence cryptographique : Algorithme HMAC-SHA256 utilisant un secret privé développeur.
+- Contrôle de validité : L'application vérifie la licence à chaque démarrage et toutes les heures. 
+  Si la licence est invalide ou absente, l'écran est bloqué par la modale "LicenseActivationModal".
+- Générateur Développeur : Script sécurisé dans `DEVELOPER_TOOLS/generate_license.js` pour émettre des clés d'activation.
+
+====================================================================================================
+4. PLAN COMPLET DES ROUTES (BACKEND & FRONTEND)
+====================================================================================================
+
+----------------------------------------------------------------------------------------------------
+A. ROUTES FRONTEND (REACT ROUTER) :
+----------------------------------------------------------------------------------------------------
+1.  /login               -> Écran d'authentification (Connexion Dr / Assistante).
+2.  /                    -> Tableau de bord (Dashboard principal : KPI, agenda du jour, salle d'attente).
+3.  /patients            -> Annuaire complet des patients avec recherche, filtres et tri.
+4.  /patients/:id        -> Fiche complète du patient (Historique, 3D, Soins, Diftar, Radios, Ordonnances).
+5.  /appointments        -> Agenda interactif des rendez-vous (Vues Jour, Semaine, Mois, Liste).
+6.  /waiting-room        -> File d'attente en direct (Salle d'attente du cabinet).
+7.  /invoices            -> Module de facturation (Création, sélection d'actes, aperçu, impression directe).
+8.  /payments            -> Redirection vers le carnet financier & facturation.
+9.  /reports             -> Statistiques cliniques et financières (Chiffre d'affaires, actes fréquents).
+10. /notifications       -> Centre de contrôle WhatsApp (Statut connexion, QR Code, modèles de messages).
+11. /nanopix             -> Studio de capture et traitement d'images radiologiques dentaires USB.
+12. /settings            -> Configuration du cabinet (Informations légales, logo, tarifs, sauvegardes, licence).
+
+----------------------------------------------------------------------------------------------------
+B. ROUTES BACKEND (EXPRESS API REST) :
+----------------------------------------------------------------------------------------------------
+* AUTHENTIFICATION (/api/auth) :
+  - POST   /api/auth/login              : Connexion utilisateur (Retourne Token JWT + Profil).
+  - GET    /api/auth/me                 : Récupération des informations de l'utilisateur connecté.
+  - PUT    /api/auth/profile            : Mise à jour du nom, email, téléphone.
+  - POST   /api/auth/avatar             : Téléchargement de la photo de profil (Multer).
+  - PUT    /api/auth/change-password    : Modification sécurisée du mot de passe.
+  - POST   /api/auth/register           : Création d'un compte (assistante/médecin supplémentaire).
+
+* PATIENTS (/api/patients) :
+  - GET    /api/patients                : Liste paginée, recherche par nom/CIN/téléphone, filtres mutuelle.
+  - POST   /api/patients                : Création d'un nouveau dossier patient.
+  - GET    /api/patients/:id            : Détails complets du patient et alertes médicales.
+  - PUT    /api/patients/:id            : Modification des coordonnées et antécédents médicaux.
+  - DELETE /api/patients/:id            : Suppression (ou archivage) d'un dossier patient.
+  - GET    /api/patients/:id/summary    : Résumé financier et clinique consolidé.
+
+* RENDEZ-VOUS (/api/appointments) :
+  - GET    /api/appointments            : Liste filtrée par plage de dates, statut ou fauteuil.
+  - POST   /api/appointments            : Prise de rendez-vous avec calcul de conflit horaire.
+  - GET    /api/appointments/:id        : Détails d'un rendez-vous spécifique.
+  - PUT    /api/appointments/:id        : Modification de l'horaire, durée ou praticien.
+  - PATCH  /api/appointments/:id/status : Changement rapide d'état (Confirmé, En cours, Terminé, Annulé).
+  - DELETE /api/appointments/:id        : Annulation et suppression d'un rendez-vous.
+
+* SOINS & PLAN DE TRAITEMENT (/api/treatments) :
+  - GET    /api/treatments/patient/:id  : Liste chronologique de tous les soins d'un patient.
+  - POST   /api/treatments              : Enregistrement d'un acte réalisé ou planifié avec tarif.
+  - PUT    /api/treatments/:id          : Modification d'un acte, de la dent associée ou de la note.
+  - DELETE /api/treatments/:id          : Suppression d'un soin enregistré.
+
+* SCHEMA DENTAIRE & DENTS (/api/teeth) :
+  - GET    /api/teeth/patient/:id       : Historique complet de l'état des 32/20 dents du patient.
+  - POST   /api/teeth/update            : Mise à jour de l'état d'une dent (Carie, Obturation, Couronne, Implant...).
+  - POST   /api/teeth/batch-update      : Mise à jour groupée après plan de traitement global.
+
+* CARNET FINANCIER & PAIEMENTS (/api/payments) :
+  - GET    /api/payments/patient/:id    : Liste de tous les versements reçus du patient.
+  - POST   /api/payments                : Enregistrement d'un versement (Espèces, Chèque, TPE, Virement).
+  - DELETE /api/payments/:id            : Annulation d'un encaissement erroné.
+  - GET    /api/payments/ledger/:id     : "Diftar" - Balance cumulative Débit/Crédit du patient.
+
+* FACTURATION (/api/invoices) :
+  - GET    /api/invoices                : Liste globale des factures du cabinet.
+  - GET    /api/invoices/patient/:id    : Factures d'un patient donné.
+  - POST   /api/invoices                : Génération d'une facture numérotée (ex: FAC-202610-0012).
+  - GET    /api/invoices/:id            : Détails d'une facture.
+  - PUT    /api/invoices/:id            : Rectification d'une facture (lignes, remises).
+  - DELETE /api/invoices/:id            : Suppression d'une facture.
+
+* NOMENCLATURE DES ACTES DENTAIRES (/api/dental-acts) :
+  - GET    /api/dental-acts             : Catalogue officiel des soins (Consultation, Détartrage, Endo, ODF, etc.).
+  - POST   /api/dental-acts             : Ajout d'un nouvel acte au catalogue avec prix par défaut.
+  - PUT    /api/dental-acts/:id         : Modification du tarif ou libellé d'un acte.
+  - DELETE /api/dental-acts/:id         : Retrait d'un acte de la liste active.
+
+* IMAGERIE & DOCUMENTS (/api/documents) :
+  - GET    /api/documents/patient/:id   : Liste des radios, ordonnances et pièces jointes du patient.
+  - POST   /api/documents/upload        : Envoi d'un fichier avec catégorisation (Radio, Ordonnance, Devis).
+  - GET    /api/documents/view/:id      : Consultation/Streaming sécurisé du fichier PDF ou image.
+  - GET    /api/documents/download/:id  : Téléchargement avec forçage du nom de fichier original.
+  - DELETE /api/documents/:id           : Suppression sécurisée du fichier sur le disque.
+
+* PONT RADIOLOGIQUE NANOPIX (/api/nanopix) :
+  - GET    /api/nanopix/status          : Vérification de l'état du capteur et du dossier de surveillance.
+  - GET    /api/nanopix/recent          : Détection automatique des clichés radiologiques récemment capturés.
+  - POST   /api/nanopix/assign          : Attribution immédiate d'une radiographie au dossier du patient actif.
+
+* WHATSAPP & NOTIFICATIONS (/api/notifications) :
+  - GET    /api/notifications/status    : État de connexion WhatsApp (DISCONNECTED, QR_READY, CONNECTED).
+  - GET    /api/notifications/qr        : Récupération du QR Code pour scan par téléphone.
+  - POST   /api/notifications/send      : Envoi manuel immédiat d'un message WhatsApp à un patient.
+  - GET    /api/notifications/templates : Liste des modèles pré-enregistrés de messages.
+  - PUT    /api/notifications/templates : Modification des templates et variables dynamiques.
+  - POST   /api/notifications/remind-all: Déclenchement manuel de la vague de rappels pour les RDV du lendemain.
+
+* CONFIGURATION DU CABINET (/api/clinic) :
+  - GET    /api/clinic/config           : Récupération des coordonnées du cabinet, logo et mentions légales.
+  - PUT    /api/clinic/config           : Mise à jour des informations de facturation, ICE, IF, Téléphones.
+  - POST   /api/clinic/logo             : Téléchargement et redimensionnement du logo officiel.
+  - POST   /api/clinic/stamp            : Téléchargement du cachet et de la signature officielle du médecin.
+
+* SAUVEGARDES & LOGICIEL (/api/backup & /api/license) :
+  - POST   /api/backup/now              : Lancement immédiat d'un snapshot complet (MongoDB + Uploads).
+  - GET    /api/backup/history          : Historique des sauvegardes disponibles sur le disque.
+  - POST   /api/backup/restore          : Restauration sécurisée de la base de données depuis une archive ZIP.
+  - GET    /api/license/status          : Empreinte Machine ID et validité de la licence actuelle.
+  - POST   /api/license/activate        : Saisie et validation cryptographique de la clé de licence.
+
+====================================================================================================
+5. INVENTAIRE EXHAUSTIF DES PAGES, COMPOSANTS & BOUTONS D'INTERACTION
+====================================================================================================
+
+----------------------------------------------------------------------------------------------------
+5.1. AUTHENTIFICATION & CONNEXION (Page: /login)
+----------------------------------------------------------------------------------------------------
+- Éléments affichés : Logo officiel du cabinet, titre du cabinet "Dr. Salma Tijini", formulaire sécurisé.
+- Champs de saisie : Nom d'utilisateur / Email, Mot de passe (avec bouton œil pour afficher/masquer).
+- Boutons :
+  * [Se Connecter] : Valide les identifiants, génère le token JWT, redirige vers le Dashboard.
+  * [Mot de passe oublié ?] : Ouvre une boîte de dialogue pour l'assistance administrateur.
+
+----------------------------------------------------------------------------------------------------
+5.2. BARRE LATERALE (Sidebar) & EN-TÊTE (Header)
+----------------------------------------------------------------------------------------------------
+A. SIDEBAR (Navigation Principale) :
+- Boutons de menu avec indicateur de page active :
+  * [Tableau de bord] -> /
+  * [Patients] -> /patients
+  * [Agenda & RDV] -> /appointments
+  * [Salle d'attente] -> /waiting-room
+  * [Facturation] -> /invoices
+  * [Capteur NanoPix] -> /nanopix
+  * [Rappels WhatsApp] -> /notifications
+  * [Rapports & Stats] -> /reports
+  * [Paramètres] -> /settings
+- Bouton [Réduire / Agrandir la barre latérale] : Bascule l'affichage en mode icônes compactes.
+
+B. HEADER (En-tête supérieur persistant) :
+- Éléments :
+  * [Bouton Hamburger] : Ouvre/ferme la barre latérale sur écran tactile/mobile.
+  * [Barre de Recherche Globale] : Recherche instantanée de patient par Nom, Prénom, Téléphone ou CIN avec autocomplétion.
+  * [Badge Statut WhatsApp] : Icône verte si connecté à WhatsApp Web, rouge si déconnecté (clic redirige vers /notifications).
+  * [Badge Synchronisation Temps Réel] : Indicateur vert confirmant la liaison WebSocket/Polling avec le serveur local.
+  * [Centre de Notifications (Cloche)] : Menu déroulant affichant les RDV imminents, alertes et rappels en attente.
+  * [Bouton Profil Utilisateur] : Photo/avatar, nom du docteur, lien vers paramètres, et bouton [Déconnexion].
+
+----------------------------------------------------------------------------------------------------
+5.3. TABLEAU DE BORD (Page: /)
+----------------------------------------------------------------------------------------------------
+- Cartes KPI en temps réel :
+  * Chiffre d'Affaires du Jour (en DH).
+  * Patients Traités Aujourd'hui (compteur).
+  * Rendez-vous Restants Aujourd'hui.
+  * Salle d'Attente (nombre de patients actuellement assis au cabinet).
+- Sections Principales :
+  * [Timeline des Rendez-vous du Jour] : Liste chronologique des patients prévus avec heure, acte et statut.
+  * [Boutons d'action rapide sur chaque RDV] :
+    - [✓ Terminer] : Passe le RDV à l'état terminé et propose de consigner les soins.
+    - [👁️ Ouvrir le Dossier] : Navigue directement vers la fiche du patient.
+    - [💬 WhatsApp] : Ouvre la modale pour envoyer un rappel direct.
+  * [Salle d'Attente Express] : Permet d'appeler directement le patient suivant au fauteuil.
+  * [Bouton "+ Nouveau Patient"] : Ouvre la modale de création d'un patient.
+  * [Bouton "+ Nouveau Rendez-vous"] : Ouvre la modale de planification d'un créneau.
+
+----------------------------------------------------------------------------------------------------
+5.4. GESTION DES PATIENTS (Page: /patients)
+----------------------------------------------------------------------------------------------------
+- Éléments de recherche et filtrage :
+  * Champ de recherche textuel (filtre en direct sur le Nom, Prénom, N° Dossier, Tél, CIN).
+  * Filtre par Mutuelle / Couverture Médicale (CNOPS, CNSS, Privée, Sans).
+  * Filtre par Statut Financier (Tous, En règle, Reste à payer / Impayés).
+  * Tri (Ordre alphabétique A-Z, Récents d'abord, Solde débiteur).
+- Boutons d'Action :
+  * [➕ Nouveau Patient] : Ouvre la modale complète de création de fiche.
+  * [📥 Exporter la Liste (Excel/CSV)] : Télécharge l'annuaire au format tableur.
+- Tableau des Patients (Lignes interactives) :
+  * Colonnes : Photo/Avatar, Nom & Prénom, Téléphone, Âge/Sexe, Dernière Visite, Solde Financier (badge vert/rouge), Actions.
+  * Boutons par ligne :
+    - [Dossier Médical] : Ouvre la fiche approfondie /patients/:id.
+    - [Prendre RDV] : Ouvre la modale d'agenda pré-remplie avec ce patient.
+    - [Supprimer/Archiver] : Demande confirmation avant retrait.
+
+----------------------------------------------------------------------------------------------------
+5.5. FICHE PATIENT APPROFONDIE (Page: /patients/:id - LE COEUR DU SYSTEME)
+----------------------------------------------------------------------------------------------------
+A. EN-TÊTE FIXE DU PATIENT :
+- Identité complète : Nom, Prénom, N° Dossier unique, Âge, Date de naissance, Sexe, Groupe Sanguin.
+- Contact : Téléphone (avec bouton clic direct pour appel ou WhatsApp), Ville, Adresse, CIN.
+- Badges d'Alertes Médicales (clignotants en rouge si risque) : Diabète, Hypertension, Cardiopathie, Allergie Pénicilline, Grossesse, Hémophilie, etc.
+- Badge Financier Global : "Solde : 0,00 DH" (Vert) ou "Reste Dû : 2 500,00 DH" (Rouge vif).
+- Boutons d'En-tête :
+  * [✏️ Modifier la Fiche] : Modification des données administratives et médicales.
+  * [📅 Prendre un Rendez-vous] : Planification rapide.
+  * [💬 Envoyer un WhatsApp] : Message personnalisé instantané.
+  * [📄 Imprimer le Dossier Patient] : Impression propre A4 du dossier médical.
+
+B. LES 7 ONGLETS DU DOSSIER PATIENT :
+
+* ONGLET 1 : VUE GENERALE & FICHE MEDICALE
+  - Historique des visites récentes.
+  - Résumé des antécédents médicaux et chirurgicaux.
+  - Notes confidentielles du praticien.
+  - Bloc "Activité Récente" avec boutons d'action rapide sur le dernier rendez-vous :
+    * [✓ Terminer] : Valide la séance du jour.
+    * [+ Consigner un Soin] : Bascule automatiquement vers l'onglet Soins pour ajouter l'acte réalisé.
+    * [💬 Rappel WhatsApp] : Envoi des recommandations post-séance.
+    * [Annuler la séance] : Marque l'absence ou le désistement.
+
+* ONGLET 2 : SCHEMA DENTAIRE INTERACTIF (2D & 3D Three.js)
+  - Sélecteur de Dentition : [Dentition Adulte (32 Dents)] / [Dentition Enfant / Décidue (20 Dents)].
+  - Schéma Dentaire 2D SVG vectoriel : Représentation plane avec numérotation internationale FDI (11 à 48).
+  - Visionneuse 3D Interactive (Three.js WebGL) :
+    * Modèle 3D complet de la mâchoire avec dents individualisées.
+    * Contrôles caméra : Rotation à 360°, Zoom à la molette, Déplacement panoramique (Pan).
+    * Sélection par clic sur une dent 3D : Met en surbrillance la dent et affiche son historique.
+    * Sélecteur de Face Dentaire : Vestibulaire, Linguale/Palatine, Mésiale, Distale, Occlusale.
+    * Boutons d'attribution d'état de la dent :
+      - [Saine] (Blanc nacré)
+      - [Carie] (Rouge)
+      - [Obturation / Composite] (Bleu)
+      - [Dévitalisée / Traitement de canal] (Violet)
+      - [Couronne / Prothèse conjointe] (Doré / Jaune)
+      - [Manquante / Extraite] (Gris foncé barré)
+      - [Implant Dentaire] (Vert émeraude)
+      - [Bridge] (Marqué avec piliers reliés)
+    * Bouton [Enregistrer le Schéma Dentaire] : Sauvegarde la disposition dans la base de données.
+
+* ONGLET 3 : PLAN DE TRAITEMENT & SOINS (Treatments)
+  - Liste de tous les soins passés, en cours et à venir.
+  - Tableau : Date, N° de Dent, Libellé de l'Acte (ex: "Traitement canalaire molaire"), Praticien, Statut (Prévu / Réalisé), Prix unitaire, Actions.
+  - Boutons :
+    * [➕ Ajouter un Soin] : Modale de sélection d'acte avec recherche intelligente, choix de la dent, montant personnalisable et notes cliniques.
+    * [Modifier le Soin] : Rectification des détails.
+    * [Supprimer] : Retrait de l'acte.
+    * [Facturer les Soins Sélectionnés] : Transfère directement les actes cochés vers le module de facturation.
+
+* ONGLET 4 : CARNET FINANCIER (DIFTAR) & FACTURATION
+  - Résumé des Totaux :
+    * Total Général des Soins Réalisés (DH).
+    * Total des Paiements Reçus / Versés (DH).
+    * Solde Global (Reste à payer par le patient).
+  - Tableau chronologique du "Diftar" :
+    * Chaque ligne détaille soit un Débit (Soin effectué), soit un Crédit (Paiement versé avec mode : Espèces, Chèque, TPE).
+    * Affichage en temps réel du solde après chaque transaction.
+  - Section Factures :
+    * Liste des factures émises pour ce patient.
+    * Boutons d'Action par facture :
+      - [👁️ Aperçu Direct] : Ouvre la modale d'affichage immédiat du PDF/Aperçu de la facture sans changer de page.
+      - [🖨️ Imprimer] : Lance la boîte de dialogue d'impression Windows avec mise en page optimisée A4.
+      - [✏️ Modifier] : Ouvre la facture dans l'éditeur.
+  - Boutons de l'onglet :
+    * [➕ Encaisser un Règlement] : Modale pour saisir un versement (Montant, Mode de règlement, N° de chèque, Date).
+    * [➕ Créer une Nouvelle Facture] : Choix des soins à inclure et génération instantanée.
+    * [🖨️ Imprimer le Carnet Financier (Diftar)] : Sortie papier officielle de l'état de compte du patient avec en-tête du cabinet.
+
+* ONGLET 5 : IMAGERIE & RADIOGRAPHIES INTRA-ORALES (NanoPix)
+  - Grille des clichés radiographiques du patient (Rétro-alvéolaires, Bitewing, Panoramiques, Photos avant/après).
+  - Boutons :
+    * [📥 Importer une Radio (Fichier)] : Sélectionne un fichier JPEG, PNG ou DICOM depuis le PC.
+    * [⚡ Synchroniser avec NanoPix] : Détecte automatiquement la dernière radio prise par le capteur USB.
+  - Bouton sur chaque cliché :
+    * [🔍 Visualiser en Haute Définition] : Ouvre la modale `XRayViewerModal` dotée d'outils d'imagerie médicale :
+      - Zoom avant / arrière / réinitialisation.
+      - Inversion des couleurs (Mode Négatif radiologique).
+      - Réglage de la luminosité et du contraste.
+      - Rotation à 90°.
+      - Téléchargement du fichier brut.
+
+* ONGLET 6 : DOCUMENTS, ORDONNANCES & CERTIFICATS
+  - Liste des ordonnances générées et certificats médicaux.
+  - Boutons :
+    * [➕ Rédiger une Ordonnance] : Générateur d'ordonnance avec sélection de médicaments types, posologie, durée, et impression directe avec logo et cachet.
+    * [➕ Certificat Médical / Devis] : Modèles pré-remplis de certificats d'aptitude ou devis prothétique.
+    * [📎 Joindre un Document Externe] : Import de bilans sanguins, courriers d'orthodontistes, scanners extérieurs.
+
+* ONGLET 7 : HISTORIQUE DES RENDEZ-VOUS DU PATIENT
+  - Liste de tous les rendez-vous passés (Honorés, Manqués, Annulés) et prochains rendez-vous fixés.
+  - Bouton [Prendre un nouveau RDV].
+
+----------------------------------------------------------------------------------------------------
+5.6. AGENDA & GESTION DES RENDEZ-VOUS (Page: /appointments)
+----------------------------------------------------------------------------------------------------
+- Vues du calendrier :
+  * [Vue Quotidienne (Jour)] : Découpage horaire par créneaux de 15, 30 ou 60 minutes.
+  * [Vue Hebdomadaire (Semaine)] : Aperçu des 6 jours ouvrables du cabinet.
+  * [Vue Mensuelle (Mois)] : Vision globale du planning.
+  * [Vue Liste / Agenda] : Liste chronologique continue.
+- Filtres :
+  * Par praticien / fauteuil.
+  * Par statut de rendez-vous (Tous, Confirmés, En attente, Au fauteuil, Terminé, Annulé).
+- Bouton [➕ Nouveau Rendez-vous] :
+  * Modale de création avec recherche de patient, sélection du soin prévu, choix de l'horaire et durée, et case à cocher pour "Envoyer confirmation WhatsApp automatique".
+- Interactions directes sur les cases de RDV :
+  * Déplacement en glisser-déposer (Drag & Drop) pour replanifier un créneau.
+  * Clic droit / Clic gauche pour ouvrir le menu contextuel :
+    - [Modifier]
+    - [Marquer comme : Patient Arrivé (Salle d'attente)]
+    - [Marquer comme : Terminé]
+    - [Envoyer un Rappel WhatsApp]
+    - [Annuler le RDV]
+
+----------------------------------------------------------------------------------------------------
+5.7. SALLE D'ATTENTE VIRTUELLE EN TEMPS REEL (Page: /waiting-room)
+----------------------------------------------------------------------------------------------------
+- Éléments affichés :
+  * Liste des patients physiquement présents dans la salle d'attente.
+  * Heure d'arrivée de chaque patient et chronomètre de temps d'attente (ex: "Attente : 18 min").
+  * Motif de consultation ou acte prévu.
+- Boutons d'Action :
+  * [➕ Faire Entrer un Patient] : Ajoute un patient arrivant à la file d'attente.
+  * [🔔 Appeler au Fauteuil] : Notifie le praticien, bascule le statut du patient en "En Consultation / Au Fauteuil".
+  * [✓ Terminer la Consultation] : Libère le fauteuil et enregistre l'heure de sortie.
+
+----------------------------------------------------------------------------------------------------
+5.8. ÉDITEUR DE FACTURES & IMPRESSION NORMALISEE (Page: /invoices)
+----------------------------------------------------------------------------------------------------
+- Éléments :
+  * Sélection du patient via champ de recherche intelligent.
+  * Tableau dynamique des actes à facturer (Description, Quantité, Prix unitaire, Total).
+  * Bouton [+ Ajouter une ligne d'acte] ou [+ Importer les soins non facturés du dossier].
+  * Sélecteur de Mode de Paiement : Espèces, Chèque, Carte Bancaire (TPE), Virement.
+  * Calcul automatique du Total Facture et conversion automatique de la somme en toutes lettres en français (ex: "Arrêtée la présente facture à la somme de : Deux Mille Cinq Cents Dirhams").
+- Boutons d'Action :
+  * [💾 Enregistrer la Facture] : Sauvegarde dans MongoDB avec attribution d'un numéro de séquence unique.
+  * [👁️ Aperçu de la Facture] : Affiche la facture dans son gabarit exact avant impression.
+  * [🖨️ Imprimer la Facture] : Lance l'impression immédiate.
+    - Conception sans fioritures inutiles : Affiche uniquement les soins facturés, le mode de paiement et le montant total exact.
+    - Numérotation conditionnelle des pages : Masque la mention "Page 1/1" si la facture tient sur une seule page; l'affiche uniquement si la facture s'étend sur plusieurs pages.
+
+----------------------------------------------------------------------------------------------------
+5.9. STUDIO CAPTEUR RADIOLOGIQUE INTRA-ORAL (Page: /nanopix)
+----------------------------------------------------------------------------------------------------
+- Interface dédiée au travail radiologique au fauteuil :
+  * Détection en temps réel du capteur USB connecté au PC.
+  * Espace de surveillance : Dossier de dépôt automatique des images du capteur.
+  * Galerie des derniers clichés non assignés.
+- Outils de retouche radiologique intégrés :
+  * Curseur de Luminosité (-100% à +100%).
+  * Curseur de Contraste (Amélioration du contraste pour détection des caries interproximales).
+  * Bouton [Inverser Négatif / Positif].
+  * Bouton [Filtre Netteté / Sharpness].
+  * Outil de Règle Millimétrique : Mesure de longueur des canaux radiculaires (Endodontie).
+- Bouton [Affecter au Patient Actif] : Rapproche le cliché sélectionné avec la dent concernée dans le dossier du patient.
+
+----------------------------------------------------------------------------------------------------
+5.10. MODULE DE COMMUNICATION & RAPPELS WHATSAPP (Page: /notifications)
+----------------------------------------------------------------------------------------------------
+- Tableau de bord de la passerelle WhatsApp Web :
+  * Indicateur d'état du service (Déconnecté / En attente de scan / Connecté).
+  * Affichage interactif du QR Code généré par Puppeteer/Chromium pour synchroniser le smartphone du cabinet.
+  * Bouton [🔄 Recharger le QR Code] / [Déconnecter la Session].
+- Gestionnaire des Modèles de Messages (Templates) :
+  * Modèle 1 : Rappel de Rendez-vous (Automatique 24h avant).
+  * Modèle 2 : Message de Bienvenue & Première Consultation.
+  * Modèle 3 : Voeux d'Anniversaire personnalisés.
+  * Modèle 4 : Consignes et Suivi Post-Opératoire (après chirurgie ou extraction).
+  * Modèle 5 : Relance de Règlement / Solde restant dû.
+- Variables utilisables dans les textes : `{patientName}`, `{date}`, `{time}`, `{doctorName}`, `{cabinetPhone}`.
+- Boutons :
+  * [💾 Sauvegarder les Modèles] : Enregistre les textes par défaut.
+  * [🚀 Envoyer les Rappels du Jour Maintenant] : Lance immédiatement la file d'attente d'envoi pour tous les patients du lendemain.
+  * [Journal des Envois] : Historique de tous les messages envoyés avec horodatage et statut de réception.
+
+----------------------------------------------------------------------------------------------------
+5.11. STATISTIQUES, ANALYSES & COMPTABILITE (Page: /reports)
+----------------------------------------------------------------------------------------------------
+- Graphiques et indicateurs analytiques :
+  * Évolution du Chiffre d'Affaires : Courbe journalière, mensuelle et annuelle.
+  * Répartition des Règlements par Mode : Diagramme circulaire (Espèces vs Chèques vs Carte Bancaire).
+  * Top 10 des Actes les plus Réalisés (ex: Détartrages, Soins composites, Prothèses, Extractions).
+  * Montant Total des Créances / Impayés en attente de recouvrement.
+  * Pyramide des Âges et Démographie des Patients.
+- Boutons :
+  * Sélecteur de Période : [Aujourd'hui] / [Cette Semaine] / [Ce Mois] / [Cette Année] / [Personnalisée].
+  * [📥 Exporter le Bilan Comptable (PDF/Excel)] : Génère un rapport financier prêt pour le comptable.
+
+----------------------------------------------------------------------------------------------------
+5.12. PARAMETRES GENERAUX DU CABINET (Page: /settings)
+----------------------------------------------------------------------------------------------------
+- Sous-sections paramétrables :
+  1. Informations du Cabinet :
+     - Nom commercial en Français et en Arabe (عيادة طب الأسنان د. سلمى التجيني).
+     - Nom du Médecin, Titres et Spécialités.
+     - Numéro d'Ordre National des Médecins Dentistes.
+     - Identifiants fiscaux : ICE, IF, Patente.
+     - Adresse physique, Téléphone fixe, Téléphone portable, Email.
+  2. Identité Visuelle & Entête d'Impression :
+     - Bouton [Uploader le Logo officiel du Cabinet].
+     - Bouton [Uploader le Cachet et la Signature du Médecin].
+     - Prévisualisation de l'en-tête et pied de page d'impression.
+  3. Nomenclature & Tarification des Soins :
+     - Table des actes disponibles avec codes et prix conseillés.
+     - Boutons [+ Ajouter un Acte], [Modifier Tarif], [Activer/Désactiver].
+  4. Gestion des Utilisateurs & Droits :
+     - Liste des comptes d'accès (Docteur / Assistante / Réception).
+     - Attribution des privilèges (ex: restriction d'accès aux bilans financiers pour l'assistante).
+  5. Sauvegarde des Données & Maintenance :
+     - Bouton [💾 Créer une Sauvegarde Immédiate] : Génère un ZIP complet de la base MongoDB et des radios.
+     - Bouton [📥 Restaurer depuis une Sauvegarde] : Réinjecte les données en cas de changement de PC.
+     - Emplacement de la sauvegarde automatique (disque local ou clé USB connectée).
+  6. Statut de Licence du Logiciel :
+     - Affichage de l'empreinte matérielle unique (Machine ID).
+     - Statut d'activation, date limite de validité et type de licence (Illimitée / Annuelle).
+     - Champ de saisie pour une nouvelle clé de renouvellement.
+
+====================================================================================================
+6. STRUCTURE DE LA BASE DE DONNEES (MODELES MONGOOSE)
+====================================================================================================
+1.  User                  : Comptes utilisateurs, rôles (admin, doctor, assistant), hash mot de passe, avatar.
+2.  Patient               : État civil, CIN, téléphone, date de naissance, groupe sanguin, antécédents, mutuelle.
+3.  Appointment           : Date, heure début, heure fin, patientId, motif, statut, notes, rappel WhatsApp envoyé.
+4.  Treatment             : Acte réalisé/prévu, patientId, dentNum, prix, statut (planned, completed), date.
+5.  ToothHistory          : Historique clinique par dent (11-48, 51-85), état global, faces atteintes, observations.
+6.  Invoice               : Numéro de facture, patientId, liste des items, montant HT, TVA, Total TTC, mode paiement.
+7.  Payment               : Versement financier, patientId, montant, mode (espèces, chèque, TPE), date, référence.
+8.  DentalAct             : Catalogue officiel des soins du cabinet, code, catégorie, libellé, tarif de base.
+9.  Document              : Pièce jointe patient, chemin de fichier, catégorie (radio, ordonnance, analyse, devis).
+10. NotificationLog       : Trace de chaque message WhatsApp envoyé, patientId, contenu, statut de distribution.
+11. NotificationSettings  : Configuration des horaires d'envoi et modèles de messages WhatsApp.
+12. ClinicConfig          : Données d'identité du cabinet, logoUrl, stampUrl, ICE, IF, adresse, téléphones.
+13. AuditLog              : Piste d'audit légale (qui a créé, modifié ou supprimé une donnée médicale avec horodatage).
+14. FollowUpReminder      : Rappels périodiques de contrôle ou de détartrage (ex: rappel automatique à 6 mois).
+15. MessageTemplate       : Modèles personnalisables de messages texte.
+16. WhatsAppReceivedMedia : Médias et photos reçus des patients par WhatsApp (radios envoyées à distance).
+
+====================================================================================================
+7. PROMPT DIRECT POUR L'INTELLIGENCE ARTIFICIELLE (BRAINSTORMING D'EVOLUTIONS)
+====================================================================================================
+COPIEZ-COLLEZ LE TEXTE CI-DESSOUS DIRECTEMENT DANS L'IA DE VOTRE CHOIX POUR OBTENIR SES PROPOSITIONS :
+
+"""
+Bonjour ! Voici le descriptif technique et fonctionnel complet d'une application de gestion médicale 
+et clinique pour un Cabinet Dentaire moderne (Dr. Salma Tijini), fonctionnant en MERN Stack (Node.js, 
+Express, TypeScript, MongoDB, React 19, Tailwind CSS, Three.js 3D, capteurs radiologiques et WhatsApp).
+
+Prends connaissance de l'ensemble des modules, des routes, des boutons et des fonctionnalités décrits ci-dessus.
+
+En tant qu'expert en ingénierie logicielle médicale (HealthTech) et en ergonomie clinique dentaire :
+1. Quelles sont les fonctionnalités à HAUTE VALEUR AJOUTÉE qui manquent actuellement à ce logiciel et qui 
+   feraient passer le cabinet dans une autre dimension technologique et de rentabilité ?
+   (Exemples de pistes : IA de détection automatique des caries/lésions osseuses sur les radios NanoPix, 
+   Dictée vocale au fauteuil pour remplir le schéma dentaire sans toucher le clavier, Module de gestion 
+   des stocks de consommables et alertes de péremption, Gestion des commandes aux laboratoires de prothèse, 
+   Portail patient mobile ou QR Code de prise de RDV, Traçabilité de la stérilisation des instruments...).
+2. Propose un plan de priorisation (Phase 1 : Rapide & Très utile / Phase 2 : Différenciateur fort / Phase 3 : Futuriste).
+3. Donne pour chaque idée proposée l'impact direct sur le quotidien de la Docteure et de l'Assistante.
+"""
+====================================================================================================
+FIN DU DOCUMENT
+====================================================================================================
