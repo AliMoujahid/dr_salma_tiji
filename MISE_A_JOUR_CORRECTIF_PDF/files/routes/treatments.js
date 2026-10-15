@@ -12,6 +12,7 @@ const Invoice_1 = __importDefault(require("../models/Invoice"));
 const ToothHistory_1 = __importDefault(require("../models/ToothHistory"));
 const auth_1 = require("../middleware/auth");
 const security_1 = require("../middleware/security");
+const dentalUtils_1 = require("../utils/dentalUtils");
 const router = (0, express_1.Router)();
 const isValidObjectId = (id) => {
     return typeof id === 'string' && mongoose_1.default.Types.ObjectId.isValid(id);
@@ -143,18 +144,23 @@ router.post('/', auth_1.protect, async (req, res) => {
             createdBy: req.user?._id,
         });
         // Also link with ToothHistory if a tooth number is specified
-        if (tooth && !isNaN(parseInt(tooth, 10))) {
+        const toothNumbers = (0, dentalUtils_1.parseToothNumbers)(tooth);
+        const determinedStatus = (0, dentalUtils_1.mapActToToothStatus)(actName, category);
+        for (const tNum of toothNumbers) {
             try {
                 await ToothHistory_1.default.create({
                     patientId,
-                    toothNumber: parseInt(tooth, 10),
+                    toothNumber: tNum,
                     procedureName: actName.trim(),
-                    status: 'Filling',
+                    status: determinedStatus === 'Healthy' ? 'Filling' : determinedStatus,
+                    notes: notes || '',
                     cost: newTreatment.cost,
                     date: newTreatment.date,
                 });
             }
-            catch { }
+            catch (err) {
+                console.error('Error linking treatment to ToothHistory:', err);
+            }
         }
         await (0, security_1.recordAudit)({
             userId: req.user?._id,
@@ -215,6 +221,20 @@ router.delete('/:id', auth_1.protect, async (req, res) => {
         if (!treatment) {
             res.status(404).json({ message: 'Soin introuvable.' });
             return;
+        }
+        // Also remove any linked ToothHistory for this act & tooth
+        if (treatment.tooth) {
+            const toothNumbers = (0, dentalUtils_1.parseToothNumbers)(treatment.tooth);
+            for (const tNum of toothNumbers) {
+                try {
+                    await ToothHistory_1.default.deleteMany({
+                        patientId: treatment.patientId,
+                        toothNumber: tNum,
+                        procedureName: treatment.actName,
+                    });
+                }
+                catch { }
+            }
         }
         await treatment.deleteOne();
         res.json({ message: 'Soin supprimé du carnet avec succès.' });
