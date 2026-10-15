@@ -32,6 +32,8 @@ export const securityHeaders = (req: Request, res: Response, next: NextFunction)
     "default-src 'self'; " +
     "img-src 'self' data: blob: http: https:; " +
     "media-src 'self' data: blob:; " +
+    "frame-src 'self' data: blob:; " +
+    "object-src 'self' data: blob:; " +
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
     "font-src 'self' https://fonts.gstatic.com data:; " +
     "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +

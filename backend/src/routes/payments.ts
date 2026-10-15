@@ -32,31 +32,35 @@ router.post('/', protect, async (req: AuthRequest, res: Response) => {
   try {
     const { invoiceId, patientId, amount, paymentMethod, notes, date } = req.body;
 
-    if (!invoiceId || !patientId || amount === undefined || amount <= 0 || !paymentMethod) {
-      res.status(400).json({ message: 'Champs requis manquants ou montant invalide.' });
-      return;
-    }
-
-    const invoice = await Invoice.findById(invoiceId);
-    if (!invoice) {
-      res.status(404).json({ message: 'Facture introuvable.' });
+    if (!patientId || amount === undefined || amount <= 0 || !paymentMethod) {
+      res.status(400).json({ message: 'Patient, montant valide et mode de règlement sont requis.' });
       return;
     }
 
     const payVal = parseFloat(amount);
-    const newPaidAmount = invoice.paidAmount + payVal;
+    let updatedInvoice = null;
 
-    // Determine payment status
-    let paymentStatus: 'Paid' | 'Partially Paid' | 'Unpaid' = 'Partially Paid';
-    if (newPaidAmount >= invoice.netAmount) {
-      paymentStatus = 'Paid';
-    } else if (newPaidAmount <= 0) {
-      paymentStatus = 'Unpaid';
+    if (invoiceId) {
+      const invoice = await Invoice.findById(invoiceId);
+      if (invoice) {
+        const newPaidAmount = invoice.paidAmount + payVal;
+        let paymentStatus: 'Paid' | 'Partially Paid' | 'Unpaid' = 'Partially Paid';
+        if (newPaidAmount >= invoice.netAmount) {
+          paymentStatus = 'Paid';
+        } else if (newPaidAmount <= 0) {
+          paymentStatus = 'Unpaid';
+        }
+
+        invoice.paidAmount = Math.min(newPaidAmount, invoice.netAmount);
+        invoice.paymentStatus = paymentStatus;
+        await invoice.save();
+        updatedInvoice = invoice;
+      }
     }
 
     // Save payment transaction
     const transaction = await PaymentTransaction.create({
-      invoiceId,
+      invoiceId: invoiceId || undefined,
       patientId,
       amount: payVal,
       paymentMethod,
@@ -64,14 +68,9 @@ router.post('/', protect, async (req: AuthRequest, res: Response) => {
       date: date ? new Date(date) : new Date(),
     });
 
-    // Update parent invoice
-    invoice.paidAmount = Math.min(newPaidAmount, invoice.netAmount);
-    invoice.paymentStatus = paymentStatus;
-    await invoice.save();
-
     res.status(201).json({
       transaction,
-      invoice,
+      invoice: updatedInvoice,
     });
   } catch (error: any) {
     res.status(500).json({ message: 'Erreur lors de la journalisation du paiement.', error: error.message });

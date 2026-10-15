@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { DentalChart } from '../components/DentalChart';
@@ -31,9 +31,26 @@ import {
   Film,
   MessageSquare,
   Radio,
+  ExternalLink,
+  Printer,
+  CheckSquare,
+  Square,
+  Receipt,
+  Wallet,
+  X,
+  Check,
+  ZoomIn,
+  ZoomOut,
+  Maximize2,
+  Edit,
 } from 'lucide-react';
-import { Patient, Invoice, PaymentTransaction, Appointment, Document } from '../types';
+import { Patient, Invoice, PaymentTransaction, Appointment, Document, DentalAct, ClinicConfig } from '../types';
 import { formatDate, formatDateTime, formatBirthDateWithAge, formatRelativeDateTime } from '../utils/dateUtils';
+import { PatientLedgerPrintLayout } from '../components/PatientLedgerPrintLayout';
+import { InvoicePrintLayout } from '../components/InvoicePrintLayout';
+import { SearchableActSelect } from '../components/SearchableActSelect';
+import { DENTAL_CATEGORIES } from '../components/DentalActsManager';
+import { parseToothNumbers, getToothLabel } from '../utils/dentalUtils';
 
 
 export const PatientProfile: React.FC = () => {
@@ -41,11 +58,24 @@ export const PatientProfile: React.FC = () => {
   const { token } = useAuth();
   const { toast, confirm } = useToast();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [patient, setPatient] = useState<Patient | null>(null);
-  const [activeTab, setActiveTab] = useState('Overview');
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    return (location.state as any)?.activeTab || 'Overview';
+  });
   const [chartMode, setChartMode] = useState<'3D' | '2D'>('3D');
   const [loading, setLoading] = useState(true);
+
+  // Restore tab and checked items if coming back from InvoiceEditor
+  useEffect(() => {
+    if ((location.state as any)?.activeTab) {
+      setActiveTab((location.state as any).activeTab);
+    }
+    if ((location.state as any)?.selectedActIds && Array.isArray((location.state as any).selectedActIds)) {
+      setSelectedActsForInvoice((location.state as any).selectedActIds);
+    }
+  }, [location.state]);
 
   // Sub-data states
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -56,6 +86,110 @@ export const PatientProfile: React.FC = () => {
   const [uploadCategory, setUploadCategory] = useState<'Photos' | 'XRays' | 'Documents' | 'Videos' | 'Audio'>('Documents');
   const [uploading, setUploading] = useState(false);
   const [previewFile, setPreviewFile] = useState<Document | null>(null);
+
+  // Carnet Financier (Diftar du Patient) & Treatments state
+  const [ledgerData, setLedgerData] = useState<{
+    summary: { totalActsAmount: number; totalPaidAmount: number; remainingBalance: number; unbilledCount: number };
+    acts: any[];
+    payments: any[];
+    unbilledActs: any[];
+  } | null>(null);
+  const [selectedActsForInvoice, setSelectedActsForInvoice] = useState<string[]>([]);
+  const [dentalActs, setDentalActs] = useState<DentalAct[]>([]);
+  const [clinicConfig, setClinicConfig] = useState<ClinicConfig | null>(null);
+
+  // Add Treatment Modal state
+  const [showCarnetPreview, setShowCarnetPreview] = useState(false);
+  const [carnetPreviewScale, setCarnetPreviewScale] = useState<number>(0.70);
+  const [previewInvoiceData, setPreviewInvoiceData] = useState<Invoice | null>(null);
+  const [invoicePreviewScale, setInvoicePreviewScale] = useState<number>(0.72);
+  const [showAddActModal, setShowAddActModal] = useState(false);
+  const [selectedActId, setSelectedActId] = useState('');
+  const [actDate, setActDate] = useState(new Date().toISOString().split('T')[0]);
+  const [actTooth, setActTooth] = useState('');
+  const [actName, setActName] = useState('');
+  const [actCost, setActCost] = useState('');
+  const [actNotes, setActNotes] = useState('');
+
+  const handleOpenAddActModal = () => {
+    setSelectedActId('');
+    setActDate(new Date().toISOString().split('T')[0]);
+    setActTooth('');
+    setActName('');
+    setActCost('');
+    setActNotes('');
+    setShowAddActModal(true);
+  };
+
+  // Quick Create Dental Act Modal state
+  const [showQuickCreateActModal, setShowQuickCreateActModal] = useState(false);
+  const [newActFormName, setNewActFormName] = useState('');
+  const [newActFormCategory, setNewActFormCategory] = useState(DENTAL_CATEGORIES[0]);
+  const [newActFormPrice, setNewActFormPrice] = useState<string>('');
+  const [newActFormDescription, setNewActFormDescription] = useState('');
+  const [savingNewAct, setSavingNewAct] = useState(false);
+
+  const handleOpenQuickCreateAct = (prefillName = '') => {
+    setNewActFormName(prefillName);
+    setNewActFormCategory(DENTAL_CATEGORIES[0]);
+    setNewActFormPrice('');
+    setNewActFormDescription('');
+    setShowQuickCreateActModal(true);
+  };
+
+  const handleQuickCreateAct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newActFormName.trim() || !newActFormPrice) {
+      toast.error('Veuillez renseigner le nom et le tarif par défaut');
+      return;
+    }
+
+    setSavingNewAct(true);
+    try {
+      const res = await fetch(`${API_URL}/dental-acts`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: newActFormName.trim(),
+          category: newActFormCategory,
+          defaultPrice: Number(newActFormPrice),
+          description: newActFormDescription.trim(),
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Erreur lors de l'enregistrement de l'acte");
+      }
+
+      const createdAct: DentalAct = await res.json();
+      setDentalActs((prev) => [...prev, createdAct]);
+
+      // Automatically select the newly created act in the "Consigner un Soin" modal
+      setSelectedActId(createdAct._id);
+      setActName(createdAct.name);
+      setActCost(String(createdAct.defaultPrice || 0));
+
+      setShowQuickCreateActModal(false);
+      toast.success(`Acte "${createdAct.name}" ajouté avec succès au catalogue et sélectionné !`);
+    } catch (error: any) {
+      console.error('Error creating dental act:', error);
+      toast.error(error.message || "Impossible d'ajouter l'acte au catalogue");
+    } finally {
+      setSavingNewAct(false);
+    }
+  };
+
+  // Payment Modal state
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [logPaymentDate, setLogPaymentDate] = useState(new Date().toISOString().split('T')[0]);
+  const [logPaymentAmount, setLogPaymentAmount] = useState('');
+  const [logPaymentMethod, setLogPaymentMethod] = useState<'espèces' | 'chèque' | 'carte' | 'virement' | 'traites'>('espèces');
+  const [logPaymentInvoiceId, setLogPaymentInvoiceId] = useState<string>('');
+  const [logPaymentNotes, setLogPaymentNotes] = useState('');
 
   // CSV & Text Preview States
   const [csvPreviewData, setCsvPreviewData] = useState<{ headers: string[]; rows: string[][] } | null>(null);
@@ -122,12 +256,6 @@ export const PatientProfile: React.FC = () => {
     return { headers, rows };
   };
 
-  // Log Payment state
-  const [logPaymentInvoiceId, setLogPaymentInvoiceId] = useState('');
-  const [logPaymentAmount, setLogPaymentAmount] = useState('');
-  const [logPaymentMethod, setLogPaymentMethod] = useState<'espèces' | 'chèque' | 'carte' | 'virement' | 'traites'>('espèces');
-  const [logPaymentNotes, setLogPaymentNotes] = useState('');
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   const getDocUrl = (pathStr: string) => {
     if (!pathStr) return '';
@@ -157,28 +285,277 @@ export const PatientProfile: React.FC = () => {
       setPatient(patData);
 
       // Fetch Sub-resources concurrently
-      const [invRes, payRes, appRes, docRes] = await Promise.all([
+      const [invRes, payRes, appRes, docRes, ledgerRes, actsRes, cfgRes] = await Promise.all([
         fetch(`${API_URL}/invoices?patientId=${id}`, { headers }),
         fetch(`${API_URL}/payments/patient/${id}`, { headers }),
         fetch(`${API_URL}/appointments?start=${new Date(Date.now() - 31536000000).toISOString()}&end=${new Date(Date.now() + 31536000000).toISOString()}`, { headers }),
         fetch(`${API_URL}/documents/patient/${id}`, { headers }),
+        fetch(`${API_URL}/treatments/patient/${id}/ledger`, { headers }),
+        fetch(`${API_URL}/dental-acts`, { headers }),
+        fetch(`${API_URL}/clinic/config`, { headers }),
       ]);
 
       const invData = await invRes.json();
       const payData = await payRes.json();
       const appData = await appRes.json();
       const docData = await docRes.json();
+      const ledgerResData = await ledgerRes.json();
+      const actsData = await actsRes.json();
+      const cfgData = await cfgRes.json();
 
       setInvoices(invData.invoices || []);
       setPayments(payData || []);
-      // Filter appointments belonging to this patient
       setAppointments(appData.filter((a: any) => (a.patientId?._id || a.patientId) === id));
       setDocuments(docData || []);
+      setLedgerData(ledgerResData || null);
+      if (Array.isArray(actsData)) setDentalActs(actsData);
+      setClinicConfig(cfgData || null);
     } catch (err) {
       console.error('Error fetching patient records:', err);
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchLedger = async () => {
+    if (!id) return;
+    try {
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await fetch(`${API_URL}/treatments/patient/${id}/ledger`, { headers });
+      const data = await res.json();
+      setLedgerData(data);
+    } catch (err) {
+      console.error('Error fetching ledger:', err);
+    }
+  };
+
+  const handleOpenPaymentModal = (invoiceId?: string) => {
+    if (invoiceId) {
+      setLogPaymentInvoiceId(invoiceId);
+      const inv = invoices.find((i) => i._id === invoiceId);
+      if (inv) {
+        setLogPaymentAmount(String(Math.max(0, inv.netAmount - (inv.paidAmount || 0))));
+      } else {
+        setLogPaymentAmount('');
+      }
+    } else {
+      setLogPaymentInvoiceId('');
+      if (ledgerData?.summary?.remainingBalance) {
+        setLogPaymentAmount(String(ledgerData.summary.remainingBalance));
+      } else {
+        setLogPaymentAmount('');
+      }
+    }
+    setLogPaymentDate(new Date().toISOString().split('T')[0]);
+    setLogPaymentNotes('');
+    setShowPaymentModal(true);
+  };
+
+  const handleLogPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const amt = parseFloat(logPaymentAmount);
+    if (!amt || amt <= 0 || !id) {
+      toast.warning('Montant invalide', 'Veuillez saisir un montant supérieur à 0.');
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_URL}/payments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          patientId: id,
+          invoiceId: logPaymentInvoiceId || undefined,
+          amount: amt,
+          paymentMethod: logPaymentMethod,
+          notes: logPaymentNotes,
+          date: logPaymentDate,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || 'Erreur lors de l\'enregistrement du versement.');
+      }
+
+      toast.success('Paiement enregistré', `Règlement de ${amt.toFixed(2)} DH consigné avec succès.`);
+      setShowPaymentModal(false);
+      setLogPaymentAmount('');
+      setLogPaymentNotes('');
+      setLogPaymentInvoiceId('');
+      fetchLedger();
+      fetchPatientProfile();
+    } catch (err: any) {
+      toast.error('Erreur', err.message || 'Impossible d\'enregistrer le versement.');
+    }
+  };
+
+  const handleAddTreatment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!actName.trim() || !id) {
+      toast.warning('Champs requis', 'Veuillez renseigner le nom de l\'acte / soin.');
+      return;
+    }
+
+    try {
+      const parsedTeeth = parseToothNumbers(actTooth);
+      const normalizedTooth = parsedTeeth.length === 1 ? String(parsedTeeth[0]) : actTooth.trim();
+
+      const res = await fetch(`${API_URL}/treatments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          patientId: id,
+          date: actDate,
+          tooth: normalizedTooth,
+          actName: actName.trim(),
+          cost: parseFloat(actCost) || 0,
+          notes: actNotes,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || 'Erreur lors de l\'enregistrement du soin.');
+      }
+
+      toast.success('Soin consigné', `L'acte "${actName}" a été ajouté au carnet.`);
+      setShowAddActModal(false);
+      setSelectedActId('');
+      setActTooth('');
+      setActName('');
+      setActCost('');
+      setActNotes('');
+      fetchLedger();
+    } catch (err: any) {
+      toast.error('Erreur', err.message || 'Impossible d\'enregistrer le soin.');
+    }
+  };
+
+  const handleDeleteTreatment = async (treatmentId: string) => {
+    const ok = await confirm({
+      title: 'Supprimer ce soin ?',
+      message: 'Ce soin sera retiré définitivement du carnet du patient.',
+      confirmText: 'Supprimer',
+      variant: 'danger',
+    });
+    if (!ok) return;
+
+    try {
+      const res = await fetch(`${API_URL}/treatments/${treatmentId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Erreur suppression soin');
+      toast.success('Soin retiré', 'Le soin a été supprimé du carnet.');
+      fetchLedger();
+    } catch (err: any) {
+      toast.error('Erreur', err.message || 'Impossible de supprimer ce soin.');
+    }
+  };
+
+  const handleDeletePayment = async (paymentId: string) => {
+    const ok = await confirm({
+      title: 'Annuler ce versement ?',
+      message: 'Ce versement sera annulé et le solde du patient sera recalculé.',
+      confirmText: 'Annuler le versement',
+      variant: 'danger',
+    });
+    if (!ok) return;
+
+    try {
+      const res = await fetch(`${API_URL}/payments/${paymentId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Erreur annulation paiement');
+      toast.success('Versement annulé', 'Le paiement a été retiré et le solde recalculé.');
+      fetchLedger();
+      fetchPatientProfile();
+    } catch (err: any) {
+      toast.error('Erreur', err.message || 'Impossible d\'annuler ce versement.');
+    }
+  };
+
+  const handleToggleActSelect = (actId: string) => {
+    if (selectedActsForInvoice.includes(actId)) {
+      setSelectedActsForInvoice(selectedActsForInvoice.filter((i) => i !== actId));
+    } else {
+      setSelectedActsForInvoice([...selectedActsForInvoice, actId]);
+    }
+  };
+
+  const handleSelectAllUnbilled = () => {
+    if (!ledgerData) return;
+    const unbilledIds = ledgerData.acts.filter((a) => !a.invoiceId).map((a) => a._id);
+    if (selectedActsForInvoice.length === unbilledIds.length) {
+      setSelectedActsForInvoice([]);
+    } else {
+      setSelectedActsForInvoice(unbilledIds);
+    }
+  };
+
+  const handleInvoiceSelectedActs = () => {
+    const fullPatientName = patient ? `${patient.name}${patient.prenom ? ' ' + patient.prenom : ''}` : '';
+    if (!ledgerData || selectedActsForInvoice.length === 0) {
+      navigate('/invoices', { state: { patientId: patient?._id, patientName: fullPatientName } });
+      return;
+    }
+    const chosenActs = ledgerData.acts.filter((a) => selectedActsForInvoice.includes(a._id));
+    navigate('/invoices', {
+      state: {
+        patientId: patient?._id,
+        patientName: fullPatientName,
+        prefilledItems: chosenActs,
+      },
+    });
+  };
+
+  const handleUpdateApptStatus = async (apptId: string, newStatus: string) => {
+    try {
+      const res = await fetch(`${API_URL}/appointments/${apptId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (!res.ok) throw new Error('Erreur lors de la mise à jour du rendez-vous');
+
+      const statusLabel =
+        newStatus === 'Completed'
+          ? 'Terminé'
+          : newStatus === 'Cancelled'
+          ? 'Annulé'
+          : newStatus === 'No Show'
+          ? 'Absent'
+          : 'Planifié';
+
+      toast.success('Rendez-vous actualisé', `Le rendez-vous a été marqué comme "${statusLabel}".`);
+
+      setAppointments((prev) =>
+        prev.map((a) => (a._id === apptId ? { ...a, status: newStatus as any } : a))
+      );
+    } catch (err: any) {
+      console.error(err);
+      toast.error('Erreur', err.message || 'Impossible de mettre à jour le statut du rendez-vous');
+    }
+  };
+
+  const handleSendApptWhatsApp = (appt: Appointment) => {
+    const phone = patient?.phone;
+    if (!phone) {
+      toast.warning('Numéro introuvable', 'Le patient ne possède pas de numéro de téléphone valide.');
+      return;
+    }
+    const dateStr = new Date(appt.dateTime).toLocaleDateString('fr-FR');
+    const timeStr = new Date(appt.dateTime).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    const patName = `${patient.name} ${patient.prenom || ''}`.trim();
+    const message = encodeURIComponent(
+      `Bonjour ${patName},\nNous vous rappelons votre rendez-vous au Cabinet Dentaire Dr. Salma Tijini le ${dateStr} à ${timeStr}.\nEn cas d'empêchement, merci de nous prévenir au plus vite.`
+    );
+    window.open(`https://wa.me/${phone.replace(/[^0-9]/g, '')}?text=${message}`, '_blank');
   };
 
   const isVideoFile = (fileName: string, fileType?: string) =>
@@ -302,47 +679,6 @@ export const PatientProfile: React.FC = () => {
     }
   };
 
-  const handleLogPayment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!logPaymentInvoiceId || !logPaymentAmount || !id) return;
-
-    try {
-      const res = await fetch(`${API_URL}/payments`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          invoiceId: logPaymentInvoiceId,
-          patientId: id,
-          amount: parseFloat(logPaymentAmount),
-          paymentMethod: logPaymentMethod,
-          notes: logPaymentNotes,
-        }),
-      });
-
-      if (!res.ok) throw new Error('Failed to record payment');
-      
-      setShowPaymentModal(false);
-      setLogPaymentAmount('');
-      setLogPaymentNotes('');
-      fetchPatientProfile(); // reload data
-    } catch (err) {
-      console.error('Error recording payment:', err);
-    }
-  };
-
-  const handleOpenPaymentModal = (invoiceId: string) => {
-    setLogPaymentInvoiceId(invoiceId);
-    const invoice = invoices.find((i) => i._id === invoiceId);
-    if (invoice) {
-      const outstanding = Math.max(0, invoice.netAmount - invoice.paidAmount);
-      setLogPaymentAmount(outstanding.toString());
-    }
-    setShowPaymentModal(true);
-  };
-
   if (loading || !patient) {
     return (
       <div className="flex-1 p-8 flex items-center justify-center">
@@ -353,42 +689,62 @@ export const PatientProfile: React.FC = () => {
 
   const tabs = [
     { name: 'Overview', label: 'Vue d\'ensemble', icon: History },
+    { name: 'Ledger', label: 'Carnet Financier (Diftar)', icon: CreditCard },
     { name: 'Chart', label: 'Odontogramme', icon: Bookmark },
     { name: 'Medical', label: 'Dossier Médical', icon: User },
     { name: 'Invoices', label: 'Factures', icon: FileText },
-    { name: 'Payments', label: 'Paiements', icon: CreditCard },
     { name: 'Appointments', label: 'Rendez-vous', icon: Calendar },
     { name: 'Files', label: 'Documents & Radios', icon: ImageIcon },
   ];
 
   return (
-
-    <div className="flex-1 p-6 md:p-8 flex flex-col gap-6 overflow-y-auto no-scrollbar max-h-[calc(100vh-80px)] select-none">
-      
-      {/* Back button */}
-      <div className="flex items-center shrink-0">
-        <button
-          onClick={() => navigate('/patients')}
-          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 dark:bg-white/5 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 transition-all text-xs font-semibold cursor-pointer shadow-xs"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Retour aux Patients</span>
-        </button>
+    <div className="flex-1 p-6 md:p-8 flex flex-col gap-6 overflow-y-auto no-scrollbar max-h-[calc(100vh-80px)] select-none print:block print:p-0 print:max-h-none print:overflow-visible">
+      {/* Offscreen Print Component (Rendered strictly when printing) */}
+      <div className="hidden print:block">
+        {previewInvoiceData && clinicConfig ? (
+          <InvoicePrintLayout
+            invoice={previewInvoiceData}
+            config={clinicConfig}
+          />
+        ) : patient && (
+          <PatientLedgerPrintLayout
+            patient={patient}
+            config={clinicConfig}
+            acts={ledgerData?.acts || []}
+            payments={ledgerData?.payments || []}
+            summary={ledgerData?.summary || { totalActsAmount: 0, totalPaidAmount: 0, remainingBalance: 0 }}
+          />
+        )}
       </div>
+
+      {/* Screen Views (Hidden during printing) */}
+      <div className="print:hidden flex flex-col gap-6">
+        {/* Back button */}
+        <div className="flex items-center shrink-0">
+          <button
+            onClick={() => navigate('/patients')}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 dark:bg-white/5 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 transition-all text-xs font-semibold cursor-pointer shadow-xs"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Retour aux Patients</span>
+          </button>
+        </div>
 
       {/* Patient Header Banner */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 p-6 rounded-2xl shadow-sm shrink-0">
         <div className="flex items-center gap-5">
           <div className="w-16 h-16 rounded-2xl overflow-hidden border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-slate-800 shrink-0 shadow-xs">
             <img
-              src={patient.profilePictureUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${patient.name}`}
-              alt={patient.name}
+              src={patient.profilePictureUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(patient.name + ' ' + (patient.prenom || ''))}`}
+              alt={`${patient.name} ${patient.prenom || ''}`}
               className="w-full h-full object-cover"
             />
           </div>
           <div>
             <div className="flex items-center gap-3">
-              <h2 className="text-xl md:text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">{patient.name}</h2>
+              <h2 className="text-xl md:text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                <span className="uppercase">{patient.name}</span>{patient.prenom ? ` ${patient.prenom}` : ''}
+              </h2>
               <span className={`px-2.5 py-0.5 rounded-full text-xxs font-extrabold border ${
                 patient.isArchived
                   ? 'bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/20 text-rose-600 dark:text-rose-400'
@@ -410,7 +766,7 @@ export const PatientProfile: React.FC = () => {
 
         <div className="flex gap-2">
           <button
-            onClick={() => navigate('/invoices', { state: { patientId: patient._id, patientName: patient.name } })}
+            onClick={() => navigate('/invoices', { state: { patientId: patient._id, patientName: `${patient.name}${patient.prenom ? ' ' + patient.prenom : ''}` } })}
             className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs cursor-pointer shadow-md shadow-blue-600/20 transition-all"
           >
             <Plus className="w-4 h-4" />
@@ -472,25 +828,149 @@ export const PatientProfile: React.FC = () => {
 
               {/* Patient timeline logs */}
               <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 shadow-sm flex flex-col gap-4">
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">Activité Récente</h3>
-                <div className="flex flex-col gap-4">
-                  {appointments.slice(0, 3).map((appt) => (
-                    <div key={appt._id} className="flex gap-4 items-start border-l-2 border-blue-500 pl-4 py-1">
-                      <div className="flex-1">
-                        <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 font-mono">
-                          {formatDateTime(appt.dateTime)}
-                        </span>
+                <div className="flex justify-between items-center">
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">Activité Récente</h3>
+                  <button
+                    onClick={() => setActiveTab('Appointments')}
+                    className="text-xs text-blue-600 dark:text-blue-400 font-semibold hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>Tous les RDV</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
 
-                        <h4 className="text-xs font-bold text-slate-900 dark:text-white mt-0.5">Rendez-vous planifié</h4>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 leading-normal">{appt.notes || 'Consultation de contrôle'}</p>
+                <div className="flex flex-col gap-3">
+                  {appointments.slice(0, 4).map((appt) => {
+                    const isCompleted = appt.status === 'Completed';
+                    const isCancelled = appt.status === 'Cancelled' || appt.status === 'No Show';
+                    const isScheduled = appt.status === 'Scheduled';
+
+                    return (
+                      <div
+                        key={appt._id}
+                        className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl border transition-all ${
+                          isCompleted
+                            ? 'bg-emerald-50/40 dark:bg-emerald-950/10 border-emerald-200/60 dark:border-emerald-500/20'
+                            : isCancelled
+                            ? 'bg-rose-50/40 dark:bg-rose-950/10 border-rose-200/60 dark:border-rose-500/20 opacity-80'
+                            : 'bg-slate-50 dark:bg-white/5 border-slate-200/70 dark:border-white/5 hover:border-blue-500/40'
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div
+                            className={`p-2 rounded-xl mt-0.5 shrink-0 ${
+                              isCompleted
+                                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400'
+                                : isCancelled
+                                ? 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-400'
+                                : 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400'
+                            }`}
+                          >
+                            <Calendar className="w-4 h-4" />
+                          </div>
+
+                          <div className="flex flex-col">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold text-slate-900 dark:text-white font-mono">
+                                {formatDateTime(appt.dateTime)}
+                              </span>
+                              <span className="text-xxs text-slate-400">({appt.duration || 30} min)</span>
+                            </div>
+                            <p className="text-xs text-slate-600 dark:text-slate-300 font-medium mt-0.5">
+                              {appt.notes || 'Consultation de contrôle'}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Direct Action Buttons & Status Badge */}
+                        <div className="flex items-center gap-2 self-end sm:self-center shrink-0 flex-wrap">
+                          {isScheduled && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateApptStatus(appt._id, 'Completed')}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition-all shadow-xs cursor-pointer"
+                                title="Marquer ce rendez-vous comme Terminé"
+                              >
+                                <Check className="w-3.5 h-3.5 stroke-[3]" />
+                                <span>Terminer</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleSendApptWhatsApp(appt)}
+                                className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-600/10 dark:hover:bg-emerald-600/20 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20 transition-all cursor-pointer"
+                                title="Envoyer un rappel par WhatsApp"
+                              >
+                                <MessageSquare className="w-3.5 h-3.5" />
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateApptStatus(appt._id, 'Cancelled')}
+                                className="p-1.5 rounded-lg bg-slate-100 hover:bg-rose-50 dark:bg-white/5 dark:hover:bg-rose-950/30 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 border border-slate-200 dark:border-white/5 transition-all cursor-pointer"
+                                title="Annuler le rendez-vous"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+
+                              <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400 border border-blue-200 dark:border-blue-500/20">
+                                Planifié
+                              </span>
+                            </>
+                          )}
+
+                          {isCompleted && (
+                            <>
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20">
+                                <Check className="w-3 h-3 stroke-[3]" />
+                                <span>Terminé</span>
+                              </span>
+
+                              <button
+                                type="button"
+                                onClick={handleOpenAddActModal}
+                                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 dark:bg-blue-600/10 dark:hover:bg-blue-600/20 text-blue-600 dark:text-blue-400 text-xs font-bold transition-all cursor-pointer border border-blue-200 dark:border-blue-500/20"
+                                title="Consigner le soin effectué au carnet du patient"
+                              >
+                                <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                                <span>Consigner un Soin</span>
+                              </button>
+                            </>
+                          )}
+
+                          {isCancelled && (
+                            <>
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20">
+                                <span>{appt.status === 'No Show' ? 'Absent' : 'Annulé'}</span>
+                              </span>
+
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateApptStatus(appt._id, 'Scheduled')}
+                                className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-600 dark:text-slate-300 text-xs font-semibold transition-all cursor-pointer border border-slate-200 dark:border-white/10"
+                                title="Repasser en Planifié"
+                              >
+                                Rétablir
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </div>
-                      <span className="text-xxs font-extrabold uppercase px-2 py-0.5 rounded-full bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 text-slate-700 dark:text-slate-400">
-                        {appt.status}
-                      </span>
-                    </div>
-                  ))}
+                    );
+                  })}
+
                   {appointments.length === 0 && (
-                    <p className="text-xs text-slate-400 text-center py-6">Aucune activité récente disponible.</p>
+                    <div className="py-8 text-center flex flex-col items-center justify-center gap-2 text-slate-400">
+                      <Calendar className="w-8 h-8 opacity-40" />
+                      <p className="text-xs">Aucune activité récente disponible.</p>
+                      <button
+                        onClick={() => navigate('/appointments', { state: { patientId: patient._id, patientName: `${patient.name} ${patient.prenom || ''}` } })}
+                        className="mt-1 px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 dark:bg-blue-600/10 dark:text-blue-400 text-xs font-bold transition-all cursor-pointer"
+                      >
+                        + Planifier un RDV
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
@@ -570,10 +1050,17 @@ export const PatientProfile: React.FC = () => {
             {/* Display Selected Chart Mode */}
             {id && (
               chartMode === '3D' ? (
-                <Dental3DViewer patientId={id} />
+                <Dental3DViewer
+                  patientId={id}
+                  carnetActs={ledgerData?.acts || []}
+                  onUpdateCarnet={fetchLedger}
+                />
               ) : (
                 <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 shadow-sm">
-                  <DentalChart patientId={id} />
+                  <DentalChart
+                    patientId={id}
+                    carnetActs={ledgerData?.acts || []}
+                  />
                 </div>
               )
             )}
@@ -630,20 +1117,29 @@ export const PatientProfile: React.FC = () => {
             ) : (
               <div className="flex flex-col gap-3">
                 {invoices.map((inv) => (
-                  <div key={inv._id} className="flex justify-between items-center p-4 bg-slate-50 hover:bg-slate-100/80 dark:bg-white/5 dark:hover:bg-white/10 border border-slate-200/60 dark:border-white/5 rounded-xl transition-all select-none">
+                  <div
+                    key={inv._id}
+                    onClick={() => setPreviewInvoiceData(inv)}
+                    className="flex justify-between items-center p-4 bg-slate-50 hover:bg-slate-100/90 dark:bg-white/5 dark:hover:bg-white/10 border border-slate-200/60 dark:border-white/5 rounded-xl transition-all select-none cursor-pointer group"
+                  >
                     <div className="flex items-center gap-4">
-                      <div className="p-2.5 bg-blue-50 text-blue-600 dark:bg-blue-600/10 dark:text-blue-400 rounded-xl border border-blue-200 dark:border-blue-500/20">
+                      <div className="p-2.5 bg-blue-50 text-blue-600 dark:bg-blue-600/10 dark:text-blue-400 rounded-xl border border-blue-200 dark:border-blue-500/20 group-hover:scale-105 transition-transform">
                         <FileText className="w-5 h-5" />
                       </div>
                       <div>
-                        <h4 className="text-xs font-bold text-slate-900 dark:text-white font-mono">FACTURE N° {inv.invoiceNumber}</h4>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-xs font-bold text-slate-900 dark:text-white font-mono">FACTURE N° {inv.invoiceNumber}</h4>
+                          <span className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold group-hover:underline">
+                            (Cliquer pour afficher / imprimer)
+                          </span>
+                        </div>
                         <p className="text-xxs text-slate-500 dark:text-slate-400 mt-1">
                           Date : <strong className="text-slate-700 dark:text-slate-300 font-mono">{formatDate(inv.date)}</strong> • {inv.items.length} acte(s)
                         </p>
                       </div>
                     </div>
                     
-                    <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-6" onClick={(e) => e.stopPropagation()}>
                       <div className="text-right flex flex-col items-end gap-1">
                         <span className="text-xs font-bold text-slate-900 dark:text-white font-mono">{inv.netAmount.toFixed(2)} DH</span>
                         <span className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full ${
@@ -657,7 +1153,7 @@ export const PatientProfile: React.FC = () => {
                         </span>
                       </div>
                       
-                      <div className="flex gap-2">
+                      <div className="flex items-center gap-2">
                         {inv.paymentStatus !== 'Paid' && (
                           <button
                             onClick={() => handleOpenPaymentModal(inv._id)}
@@ -667,11 +1163,28 @@ export const PatientProfile: React.FC = () => {
                           </button>
                         )}
                         <button
-                          onClick={() => navigate('/invoices', { state: { printInvoiceId: inv._id } })}
-                          className="p-2 rounded-lg bg-white hover:bg-slate-100 dark:bg-white/5 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer transition-all shadow-xs"
-                          title="Imprimer / Importer PDF"
+                          onClick={() => setPreviewInvoiceData(inv)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 dark:bg-blue-600/10 dark:hover:bg-blue-600/20 text-blue-600 dark:text-blue-400 font-semibold text-xs border border-blue-200 dark:border-blue-500/20 transition-all cursor-pointer shadow-xs"
+                          title="Aperçu & Impression PDF de cette facture"
                         >
-                          <Eye className="w-4 h-4" />
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>Aperçu A4 / Imprimer PDF</span>
+                        </button>
+                        <button
+                          onClick={() =>
+                            navigate('/invoices', {
+                              state: {
+                                editInvoiceId: inv._id,
+                                returnPatientId: id,
+                                returnTab: 'Invoices',
+                              },
+                            })
+                          }
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-100 dark:bg-white/5 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer transition-all shadow-xs"
+                          title="Modifier directement cette facture dans l'éditeur"
+                        >
+                          <Edit className="w-3.5 h-3.5" />
+                          <span className="hidden sm:inline text-xs font-semibold">Modifier</span>
                         </button>
                       </div>
                     </div>
@@ -682,72 +1195,505 @@ export const PatientProfile: React.FC = () => {
           </div>
         )}
 
-        {/* PAYMENTS PANEL */}
-        {activeTab === 'Payments' && (
-          <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 shadow-sm flex flex-col gap-4">
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">Grand Livre des Encaissements</h3>
-            
-            {payments.length === 0 ? (
-              <p className="text-xs text-slate-400 text-center py-10">Aucun paiement enregistré.</p>
-            ) : (
-              <div className="flex flex-col gap-3">
-                {payments.map((p) => (
-                  <div key={p._id} className="flex justify-between items-center p-3.5 bg-slate-50 hover:bg-slate-100/80 dark:bg-white/5 dark:hover:bg-white/10 border border-slate-200/60 dark:border-white/5 rounded-xl transition-all">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-emerald-50 text-emerald-600 dark:bg-emerald-600/10 dark:text-emerald-400 rounded-xl border border-emerald-200 dark:border-emerald-500/20">
-                        <CreditCard className="w-4.5 h-4.5" />
-                      </div>
-                      <div>
-                        <h4 className="text-xs font-bold text-slate-900 dark:text-white">Reçu en {p.paymentMethod}</h4>
-                        <p className="text-xxs text-slate-500 dark:text-slate-400 mt-1">
-                          Date : <strong className="text-slate-700 dark:text-slate-300 font-mono">{formatDate(p.date)}</strong> • Réf Fact : {p.invoiceId?.invoiceNumber || 'FACT'}
-                        </p>
-                      </div>
-                    </div>
-                    <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 font-mono">
-                      +{p.amount.toFixed(2)} DH
-                    </span>
+        {/* CARNET FINANCIER & DIFTAR DU PATIENT */}
+        {activeTab === 'Ledger' && (
+          <div className="flex flex-col gap-5">
+            {/* 3 Top Summary KPI Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 shadow-xs flex items-center justify-between transition-all hover:border-blue-500/30">
+                <div>
+                  <span className="text-xxs font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-400">Total Soins Réalisés</span>
+                  <div className="text-2xl font-black text-slate-900 dark:text-white mt-1 tabular-nums">
+                    {(ledgerData?.summary?.totalActsAmount || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} <span className="text-sm font-bold text-slate-400">DH</span>
                   </div>
-                ))}
+                  <span className="text-xxs text-slate-500 dark:text-slate-400 mt-1 block">
+                    {ledgerData?.acts?.length || 0} soin(s) au carnet
+                  </span>
+                </div>
+                <div className="p-3.5 bg-blue-50 dark:bg-blue-600/10 text-blue-600 dark:text-blue-400 rounded-2xl border border-blue-200/60 dark:border-blue-500/20">
+                  <Bookmark className="w-6 h-6" />
+                </div>
               </div>
-            )}
+
+              <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 shadow-xs flex items-center justify-between transition-all hover:border-emerald-500/30">
+                <div>
+                  <span className="text-xxs font-extrabold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Total Versé / Réglé</span>
+                  <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1 tabular-nums">
+                    {(ledgerData?.summary?.totalPaidAmount || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} <span className="text-sm font-bold text-emerald-500/70">DH</span>
+                  </div>
+                  <span className="text-xxs text-slate-500 dark:text-slate-400 mt-1 block">
+                    {ledgerData?.payments?.length || 0} versement(s) encaissé(s)
+                  </span>
+                </div>
+                <div className="p-3.5 bg-emerald-50 dark:bg-emerald-600/10 text-emerald-600 dark:text-emerald-400 rounded-2xl border border-emerald-200/60 dark:border-emerald-500/20">
+                  <CreditCard className="w-6 h-6" />
+                </div>
+              </div>
+
+              <div className={`p-5 rounded-2xl border shadow-xs flex items-center justify-between transition-all ${
+                (ledgerData?.summary?.remainingBalance || 0) > 0
+                  ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-500/30'
+                  : 'bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-500/30'
+              }`}>
+                <div>
+                  <span className={`text-xxs font-extrabold uppercase tracking-wider ${
+                    (ledgerData?.summary?.remainingBalance || 0) > 0
+                      ? 'text-rose-600 dark:text-rose-400'
+                      : 'text-emerald-600 dark:text-emerald-400'
+                  }`}>
+                    {(ledgerData?.summary?.remainingBalance || 0) > 0 ? 'Reste Global à Payer' : 'Situation Financière'}
+                  </span>
+                  <div className={`text-2xl font-black mt-1 tabular-nums ${
+                    (ledgerData?.summary?.remainingBalance || 0) > 0
+                      ? 'text-rose-600 dark:text-rose-400'
+                      : 'text-emerald-600 dark:text-emerald-400'
+                  }`}>
+                    {(ledgerData?.summary?.remainingBalance || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} <span className="text-sm font-bold opacity-75">DH</span>
+                  </div>
+                  <span className={`text-xxs font-bold mt-1 block ${
+                    (ledgerData?.summary?.remainingBalance || 0) > 0
+                      ? 'text-rose-600 dark:text-rose-400'
+                      : 'text-emerald-600 dark:text-emerald-400'
+                  }`}>
+                    {(ledgerData?.summary?.remainingBalance || 0) > 0
+                      ? 'Solde restant dû par le patient'
+                      : 'Compte 100% à jour (Soldé)'}
+                  </span>
+                </div>
+                <div className={`p-3.5 rounded-2xl border ${
+                  (ledgerData?.summary?.remainingBalance || 0) > 0
+                    ? 'bg-rose-100 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-500/30'
+                    : 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/30'
+                }`}>
+                  <Receipt className="w-6 h-6" />
+                </div>
+              </div>
+            </div>
+
+            {/* Action Bar */}
+            <div className="flex justify-between items-center bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/90 dark:border-white/10 shadow-xs flex-wrap gap-3">
+              <div className="flex items-center gap-2.5">
+                <button
+                  onClick={handleOpenAddActModal}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
+                >
+                  <Plus className="w-4 h-4 stroke-[2.5]" />
+                  <span>Consigner un Soin / Acte</span>
+                </button>
+                <button
+                  onClick={() => handleOpenPaymentModal()}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
+                >
+                  <CreditCard className="w-4 h-4" />
+                  <span>Enregistrer un Versement</span>
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2.5">
+                <button
+                  onClick={handleInvoiceSelectedActs}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    selectedActsForInvoice.length > 0
+                      ? 'bg-purple-600 hover:bg-purple-500 text-white shadow-md shadow-purple-600/25 ring-2 ring-purple-400/40'
+                      : 'bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300'
+                  }`}
+                >
+                  <FileText className="w-4 h-4" />
+                  <span>
+                    {selectedActsForInvoice.length > 0
+                      ? `Facturer la sélection (${selectedActsForInvoice.length})`
+                      : 'Créer une Facture'}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => setShowCarnetPreview(true)}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/30 dark:hover:bg-purple-900/40 border border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-300 text-xs font-bold transition-all cursor-pointer"
+                  title="Aperçu avant impression du Carnet"
+                >
+                  <Eye className="w-4 h-4" />
+                  <span>Aperçu Carnet</span>
+                </button>
+
+                <button
+                  onClick={() => window.print()}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 text-xs font-bold transition-all cursor-pointer"
+                  title="Imprimer le carnet officiel du patient"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Imprimer le Carnet (A4)</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Carnet Ledger Table */}
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-white/10 shadow-sm overflow-hidden">
+              <div className="p-4 border-b border-slate-100 dark:border-white/5 flex justify-between items-center flex-wrap gap-2">
+                <div className="flex items-center gap-3">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                    Journal des Soins & Règlements
+                  </h4>
+                  {ledgerData?.acts?.some((a) => !a.invoiceId) ? (
+                    <button
+                      onClick={handleSelectAllUnbilled}
+                      className="text-xs text-blue-600 hover:text-blue-500 font-bold cursor-pointer underline underline-offset-2 ml-2"
+                    >
+                      {selectedActsForInvoice.length === ledgerData.acts.filter((a) => !a.invoiceId).length
+                        ? 'Tout désélectionner'
+                        : `Sélectionner tous les non facturés (${ledgerData.acts.filter((a) => !a.invoiceId).length})`}
+                    </button>
+                  ) : null}
+                </div>
+                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                  {((ledgerData?.acts?.length || 0) + (ledgerData?.payments?.length || 0))} opération(s)
+                </span>
+              </div>
+
+              {(!ledgerData || ((ledgerData.acts.length === 0) && (ledgerData.payments.length === 0))) ? (
+                <div className="p-12 text-center text-slate-400 text-xs">
+                  Aucun soin ou paiement enregistré dans le carnet pour ce patient.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 uppercase text-[11px] font-bold border-b border-slate-200/80 dark:border-white/10 tracking-wider">
+                        <th className="py-3.5 px-3 w-12 text-center">Sélec.</th>
+                        <th className="py-3.5 px-3 w-28 text-center">Date</th>
+                        <th className="py-3.5 px-3 w-32 text-center">Opération</th>
+                        <th className="py-3.5 px-2.5 w-16 text-center">Dent</th>
+                        <th className="py-3.5 px-4">Désignation de l'acte / Versement</th>
+                        <th className="py-3.5 px-4 text-right w-36">Soin (Débit)</th>
+                        <th className="py-3.5 px-4 text-right w-36 text-emerald-600 dark:text-emerald-400">Règlement (Crédit)</th>
+                        <th className="py-3.5 px-3 text-center w-44">Facturation</th>
+                        <th className="py-3.5 px-3 w-14 text-center">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                      {[
+                        ...ledgerData.acts.map((a) => ({ ...a, kind: 'SOIN' })),
+                        ...ledgerData.payments.map((p) => ({ ...p, kind: 'PAYMENT' })),
+                      ]
+                        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                        .map((entry: any) => {
+                          const isSoin = entry.kind === 'SOIN';
+                          const isSelected = selectedActsForInvoice.includes(entry._id);
+
+                          return (
+                            <tr
+                              key={entry._id}
+                              className={`hover:bg-slate-50/80 dark:hover:bg-white/5 transition-colors ${
+                                isSelected ? 'bg-blue-50/60 dark:bg-blue-900/15' : ''
+                              }`}
+                            >
+                              {/* Sélec */}
+                              <td className="py-3.5 px-3 text-center">
+                                {isSoin && !entry.invoiceId ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleActSelect(entry._id)}
+                                    title={isSelected ? 'Désélectionner' : 'Sélectionner pour facturer'}
+                                    className={`mx-auto w-5 h-5 rounded-md flex items-center justify-center transition-all cursor-pointer ${
+                                      isSelected
+                                        ? 'bg-blue-600 text-white shadow-xs'
+                                        : 'border-2 border-slate-300 dark:border-slate-600 hover:border-blue-500 bg-white dark:bg-slate-800'
+                                    }`}
+                                  >
+                                    {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                                  </button>
+                                ) : isSoin ? (
+                                  <span
+                                    title="Déjà inclus dans une facture"
+                                    className="inline-flex items-center justify-center w-5 h-5 rounded-md bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 border border-purple-200/50 dark:border-purple-500/20"
+                                  >
+                                    <Check className="w-3 h-3 stroke-[2.5]" />
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-300 dark:text-slate-600 text-xs">—</span>
+                                )}
+                              </td>
+
+                              {/* Date */}
+                              <td className="py-3.5 px-3 text-center">
+                                <span className="text-slate-700 dark:text-slate-200 font-semibold text-xs tabular-nums">
+                                  {formatDate(entry.date)}
+                                </span>
+                              </td>
+
+                              {/* Opération Badge */}
+                              <td className="py-3.5 px-3 text-center">
+                                {isSoin ? (
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-200/80 dark:border-blue-500/20 whitespace-nowrap">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0"></span>
+                                    Soin
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200/80 dark:border-emerald-500/20 whitespace-nowrap">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
+                                    Règlement
+                                  </span>
+                                )}
+                              </td>
+
+                              {/* Dent */}
+                              <td className="py-3.5 px-2.5 text-center">
+                                {isSoin && entry.tooth && entry.tooth !== '-' ? (
+                                  <span className="inline-flex items-center justify-center min-w-7 h-6 px-1.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold text-xs border border-slate-200 dark:border-white/10 shadow-2xs">
+                                    {entry.tooth}
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-300 dark:text-slate-600 text-xs">—</span>
+                                )}
+                              </td>
+
+                              {/* Désignation */}
+                              <td className="py-3.5 px-4">
+                                <div className="flex flex-col">
+                                  <span className="font-semibold text-slate-900 dark:text-slate-100 text-xs leading-snug">
+                                    {isSoin ? entry.description : `Versement reçu (${entry.paymentMethod || 'Espèces'})`}
+                                  </span>
+                                  {entry.notes && !entry.notes.startsWith('Facture N°') ? (
+                                    <span className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 leading-tight">
+                                      {entry.notes}
+                                    </span>
+                                  ) : null}
+                                </div>
+                              </td>
+
+                              {/* Soin (+) */}
+                              <td className="py-3.5 px-4 text-right">
+                                {isSoin ? (
+                                  <span className="text-slate-900 dark:text-white font-bold text-sm tabular-nums">
+                                    {(Number(entry.amount) || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} <span className="text-xs font-semibold text-slate-400">DH</span>
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-300 dark:text-slate-600 text-xs">—</span>
+                                )}
+                              </td>
+
+                              {/* Versé (-) */}
+                              <td className="py-3.5 px-4 text-right">
+                                {!isSoin ? (
+                                  <span className="text-emerald-600 dark:text-emerald-400 font-extrabold text-sm tabular-nums">
+                                    +{(Number(entry.amount) || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} <span className="text-xs font-semibold text-emerald-500/70">DH</span>
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-300 dark:text-slate-600 text-xs">—</span>
+                                )}
+                              </td>
+
+                              {/* Facturation */}
+                              <td className="py-3.5 px-3 text-center">
+                                {entry.invoiceId ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const invId = entry.invoiceId._id || entry.invoiceId;
+                                      const found = invoices.find((i) => i._id === invId);
+                                      if (found) {
+                                        setPreviewInvoiceData(found);
+                                      } else {
+                                        navigate('/invoices', {
+                                          state: { editInvoiceId: invId, returnPatientId: id, returnTab: 'Ledger' },
+                                        });
+                                      }
+                                    }}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-purple-50 hover:bg-purple-100 dark:bg-purple-900/25 dark:hover:bg-purple-900/40 text-purple-700 dark:text-purple-300 border border-purple-200/80 dark:border-purple-500/30 whitespace-nowrap cursor-pointer transition-all shadow-xs"
+                                    title="Cliquer pour voir et imprimer cette facture"
+                                  >
+                                    <FileText className="w-3 h-3 text-purple-600 dark:text-purple-400 shrink-0" />
+                                    <span>Facturé N° {entry.invoiceId.invoiceNumber || entry.invoiceId}</span>
+                                    <Eye className="w-2.5 h-2.5 ml-0.5 opacity-70" />
+                                  </button>
+                                ) : isSoin ? (
+                                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-amber-50 dark:bg-amber-950/25 text-amber-700 dark:text-amber-400 border border-amber-200/80 dark:border-amber-500/20 whitespace-nowrap">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                    À facturer
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-300 dark:text-slate-600 text-xs">—</span>
+                                )}
+                              </td>
+
+                              {/* Actions */}
+                              <td className="py-3.5 px-3 text-center">
+                                {isSoin && entry.source === 'TREATMENT' ? (
+                                  <button
+                                    onClick={() => handleDeleteTreatment(entry._id)}
+                                    className="p-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-lg transition-all cursor-pointer"
+                                    title="Supprimer ce soin du carnet"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                ) : !isSoin ? (
+                                  <button
+                                    onClick={() => handleDeletePayment(entry._id)}
+                                    className="p-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-lg transition-all cursor-pointer"
+                                    title="Annuler ce versement"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                ) : null}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
         {/* APPOINTMENTS PANEL */}
         {activeTab === 'Appointments' && (
           <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 shadow-sm flex flex-col gap-4">
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">Planification & Agenda Patient</h3>
+            <div className="flex justify-between items-center flex-wrap gap-2">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">Planification & Agenda Patient</h3>
+              <button
+                onClick={() =>
+                  navigate('/appointments', {
+                    state: {
+                      patientId: patient?._id,
+                      patientName: `${patient?.name || ''} ${patient?.prenom || ''}`.trim(),
+                    },
+                  })
+                }
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-xs transition-all cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                <span>Nouveau Rendez-vous</span>
+              </button>
+            </div>
             
             {appointments.length === 0 ? (
-              <p className="text-xs text-slate-400 text-center py-10">Aucun rendez-vous consigné.</p>
+              <div className="py-12 flex flex-col items-center justify-center gap-2 text-slate-400">
+                <Calendar className="w-10 h-10 opacity-30" />
+                <p className="text-xs font-semibold">Aucun rendez-vous consigné pour ce patient.</p>
+              </div>
             ) : (
               <div className="flex flex-col gap-3">
-                {appointments.map((appt) => (
-                  <div key={appt._id} className="flex justify-between items-center p-3.5 bg-slate-50 hover:bg-slate-100/80 dark:bg-white/5 dark:hover:bg-white/10 border border-slate-200/60 dark:border-white/5 rounded-xl transition-all">
-                    <div className="flex items-center gap-3.5">
-                      <div className="p-2 bg-indigo-50 text-indigo-600 dark:bg-indigo-600/10 dark:text-indigo-400 rounded-xl border border-indigo-200 dark:border-indigo-500/20">
-                        <Calendar className="w-4.5 h-4.5" />
+                {appointments.map((appt) => {
+                  const isCompleted = appt.status === 'Completed';
+                  const isCancelled = appt.status === 'Cancelled' || appt.status === 'No Show';
+                  const isScheduled = appt.status === 'Scheduled';
+
+                  return (
+                    <div
+                      key={appt._id}
+                      className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border transition-all ${
+                        isCompleted
+                          ? 'bg-emerald-50/40 dark:bg-emerald-950/10 border-emerald-200/60 dark:border-emerald-500/20'
+                          : isCancelled
+                          ? 'bg-rose-50/40 dark:bg-rose-950/10 border-rose-200/60 dark:border-rose-500/20 opacity-80'
+                          : 'bg-slate-50 dark:bg-white/5 border-slate-200/70 dark:border-white/5 hover:border-blue-500/40'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3.5">
+                        <div
+                          className={`p-2.5 rounded-xl shrink-0 ${
+                            isCompleted
+                              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400'
+                              : isCancelled
+                              ? 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-400'
+                              : 'bg-indigo-50 text-indigo-600 dark:bg-indigo-600/10 dark:text-indigo-400'
+                          }`}
+                        >
+                          <Calendar className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-xs font-bold text-slate-900 dark:text-white font-mono">
+                              {formatDateTime(appt.dateTime)}
+                            </h4>
+                            <span className="text-xxs text-slate-400">({formatRelativeDateTime(appt.dateTime)})</span>
+                          </div>
+                          <p className="text-xxs text-slate-500 dark:text-slate-400 mt-1">
+                            Durée : <strong className="text-slate-700 dark:text-slate-300 font-mono">{appt.duration} min</strong>
+                            {appt.notes ? ` • ${appt.notes}` : ' • Consultation & Soins'}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <h4 className="text-xs font-bold text-slate-900 dark:text-white font-mono">
-                          {formatRelativeDateTime(appt.dateTime)}
-                        </h4>
-                        <p className="text-xxs text-slate-500 dark:text-slate-400 mt-1">Durée : {appt.duration} min</p>
+
+                      {/* Direct Actions in Appointments Tab */}
+                      <div className="flex items-center gap-2 shrink-0 self-end sm:self-center flex-wrap">
+                        {isScheduled && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateApptStatus(appt._id, 'Completed')}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition-all shadow-xs cursor-pointer"
+                              title="Marquer le rendez-vous comme Terminé"
+                            >
+                              <Check className="w-3.5 h-3.5 stroke-[3]" />
+                              <span>Terminer</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleSendApptWhatsApp(appt)}
+                              className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-600/10 dark:hover:bg-emerald-600/20 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20 transition-all cursor-pointer"
+                              title="Envoyer un rappel par WhatsApp"
+                            >
+                              <MessageSquare className="w-3.5 h-3.5" />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateApptStatus(appt._id, 'Cancelled')}
+                              className="p-1.5 rounded-lg bg-slate-100 hover:bg-rose-50 dark:bg-white/5 dark:hover:bg-rose-950/30 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 border border-slate-200 dark:border-white/5 transition-all cursor-pointer"
+                              title="Annuler le rendez-vous"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+
+                            <span className="text-[9px] font-extrabold uppercase px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400 border border-blue-200 dark:border-blue-500/20">
+                              Planifié
+                            </span>
+                          </>
+                        )}
+
+                        {isCompleted && (
+                          <>
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-extrabold uppercase bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20">
+                              <Check className="w-3 h-3 stroke-[3]" />
+                              <span>Terminé</span>
+                            </span>
+
+                            <button
+                              type="button"
+                              onClick={handleOpenAddActModal}
+                              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 dark:bg-blue-600/10 dark:hover:bg-blue-600/20 text-blue-600 dark:text-blue-400 text-xs font-bold transition-all cursor-pointer border border-blue-200 dark:border-blue-500/20"
+                              title="Consigner le soin effectué au carnet du patient"
+                            >
+                              <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                              <span>Consigner un Soin</span>
+                            </button>
+                          </>
+                        )}
+
+                        {isCancelled && (
+                          <>
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-extrabold uppercase bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20">
+                              <span>{appt.status === 'No Show' ? 'Absent' : 'Annulé'}</span>
+                            </span>
+
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateApptStatus(appt._id, 'Scheduled')}
+                              className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-600 dark:text-slate-300 text-xs font-semibold transition-all cursor-pointer border border-slate-200 dark:border-white/10"
+                              title="Repasser en Planifié"
+                            >
+                              Rétablir
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
-
-                    <span className={`text-[9px] font-extrabold uppercase px-2.5 py-0.5 rounded-full ${
-                      appt.status === 'Completed'
-                        ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20'
-                        : appt.status === 'Scheduled'
-                        ? 'bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400 border border-blue-200 dark:border-blue-500/20'
-                        : 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20'
-                    }`}>
-                      {appt.status}
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -890,8 +1836,7 @@ export const PatientProfile: React.FC = () => {
                                     <Eye className="w-4.5 h-4.5" />
                                   </button>
                                   <a
-                                    href={getDocUrl(doc.filePath)}
-                                    download
+                                    href={`${API_URL}/documents/download/${doc._id}`}
                                     className="p-1 hover:bg-slate-200 dark:hover:bg-white/5 text-slate-500 hover:text-slate-900 dark:hover:text-white rounded transition-all cursor-pointer"
                                     title="Télécharger"
                                   >
@@ -920,15 +1865,35 @@ export const PatientProfile: React.FC = () => {
             {/* Direct preview panel if active */}
             {previewFile && (
               <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 flex flex-col gap-3 relative select-none shadow-lg">
-                <div className="flex justify-between items-center pr-10">
+                <div className="flex justify-between items-center pr-12 flex-wrap gap-2">
                   <h4 className="text-xs font-bold text-slate-900 dark:text-white truncate max-w-md">Aperçu : {previewFile.fileName}</h4>
-                  <button
-                    onClick={() => handleSendDocWhatsApp(previewFile)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
-                  >
-                    <MessageSquare className="w-3.5 h-3.5" />
-                    <span>Envoyer via WhatsApp</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <a
+                      href={`${API_URL}/documents/download/${previewFile._id}`}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
+                      title="Télécharger le fichier"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Télécharger</span>
+                    </a>
+                    <a
+                      href={`${API_URL}/documents/preview/${previewFile._id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition-all shadow-xs cursor-pointer"
+                      title="Ouvrir en plein écran dans un nouvel onglet"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span>Ouvrir</span>
+                    </a>
+                    <button
+                      onClick={() => handleSendDocWhatsApp(previewFile)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      <span>WhatsApp</span>
+                    </button>
+                  </div>
                 </div>
                 <button
                   onClick={() => setPreviewFile(null)}
@@ -980,8 +1945,7 @@ export const PatientProfile: React.FC = () => {
                             />
                           </div>
                           <a
-                            href={getDocUrl(previewFile.filePath)}
-                            download
+                            href={`${API_URL}/documents/download/${previewFile._id}`}
                             className="py-1.5 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
                           >
                             <Download className="w-3.5 h-3.5" />
@@ -1028,8 +1992,7 @@ export const PatientProfile: React.FC = () => {
                       <div className="flex justify-between items-center bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-white/10">
                         <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Contenu du Fichier Texte</span>
                         <a
-                          href={getDocUrl(previewFile.filePath)}
-                          download
+                          href={`${API_URL}/documents/download/${previewFile._id}`}
                           className="py-1 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5"
                         >
                           <Download className="w-3.5 h-3.5" />
@@ -1047,11 +2010,13 @@ export const PatientProfile: React.FC = () => {
                       className="max-h-[450px] object-contain rounded-lg mx-auto"
                     />
                   ) : previewFile.fileName.toLowerCase().endsWith('.pdf') ? (
-                    <iframe
-                      src={getDocUrl(previewFile.filePath)}
-                      title={previewFile.fileName}
-                      className="w-full h-[460px] rounded-lg border-0 bg-white"
-                    />
+                    <div className="w-full flex flex-col gap-2">
+                      <iframe
+                        src={`${API_URL}/documents/preview/${previewFile._id}#toolbar=1&navpanes=0`}
+                        title={previewFile.fileName}
+                        className="w-full h-[540px] rounded-xl border border-slate-200/80 dark:border-white/10 bg-white"
+                      />
+                    </div>
                   ) : (
                     <div className="flex flex-col items-center justify-center p-10 text-slate-500 gap-3">
                       <div className="p-4 bg-blue-50 dark:bg-blue-600/10 text-blue-600 dark:text-blue-400 rounded-2xl border border-blue-200 dark:border-blue-500/20">
@@ -1064,8 +2029,7 @@ export const PatientProfile: React.FC = () => {
                         </p>
                       </div>
                       <a
-                        href={getDocUrl(previewFile.filePath)}
-                        download
+                        href={`${API_URL}/documents/download/${previewFile._id}`}
                         className="mt-2 py-2.5 px-5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-2 cursor-pointer"
                       >
                         <Download className="w-4 h-4" />
@@ -1154,6 +2118,570 @@ export const PatientProfile: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Modal: Ajouter un Soin / Acte au Carnet */}
+      {showAddActModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl overflow-hidden p-6 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex justify-between items-center pb-4 border-b border-slate-100 dark:border-white/5">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-blue-50 dark:bg-blue-600/10 text-blue-600">
+                  <Bookmark className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">Consigner un Soin / Acte</h3>
+                  <p className="text-xs text-slate-500">Ajouter une prestation médicale au carnet du patient</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowAddActModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-white/5"
+              >
+                <XIcon />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddTreatment} className="mt-5 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Date du soin *</label>
+                  <input
+                    type="date"
+                    required
+                    value={actDate}
+                    onChange={(e) => setActDate(e.target.value)}
+                    className="h-11 px-3 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex justify-between items-center">
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Dent (N°)</label>
+                    {actTooth && parseToothNumbers(actTooth).length > 0 && (
+                      <span className="text-[11px] font-bold text-blue-600 dark:text-blue-400 truncate max-w-[150px]">
+                        {parseToothNumbers(actTooth).map((n) => `FDI ${n}`).join(', ')}
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="ex: 11, 26, 1 (ou -)"
+                    value={actTooth}
+                    onChange={(e) => setActTooth(e.target.value)}
+                    className="h-11 px-3 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 font-mono"
+                  />
+                  {/* Quick selection chips for most common teeth */}
+                  <div className="flex flex-wrap gap-1 mt-0.5">
+                    {[11, 12, 16, 21, 22, 26, 31, 36, 41, 46].map((num) => (
+                      <button
+                        key={num}
+                        type="button"
+                        onClick={() => setActTooth(String(num))}
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold transition-all cursor-pointer ${
+                          actTooth === String(num)
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-blue-100 dark:hover:bg-slate-700'
+                        }`}
+                      >
+                        {num}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                      Modèle d'acte fréquent (Rechercher par nom)
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenQuickCreateAct()}
+                      className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 hover:underline cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                      <span>+ Ajouter un modèle</span>
+                    </button>
+                  </div>
+                  <SearchableActSelect
+                    acts={dentalActs}
+                    selectedId={selectedActId}
+                    placeholder="Tapez directement pour rechercher un acte..."
+                    onSelect={(selected) => {
+                      setSelectedActId(selected._id);
+                      setActName(selected.name);
+                      setActCost(String(selected.defaultPrice || 0));
+                    }}
+                    onClear={() => {
+                      setSelectedActId('');
+                    }}
+                    onAddNewAct={(queryText) => {
+                      handleOpenQuickCreateAct(queryText);
+                    }}
+                  />
+                </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Désignation du soin / acte *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="ex: Détartrage supra-gingival, Composite dent 14..."
+                  value={actName}
+                  onChange={(e) => setActName(e.target.value)}
+                  className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Prix / Tarif convenu (DH) *</label>
+                <input
+                  type="number"
+                  required
+                  min="0"
+                  step="0.01"
+                  placeholder="0.00"
+                  value={actCost}
+                  onChange={(e) => setActCost(e.target.value)}
+                  className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 font-semibold"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Notes / Remarques</label>
+                <input
+                  type="text"
+                  placeholder="ex: Phase 1/3, anesthésie locale..."
+                  value={actNotes}
+                  onChange={(e) => setActNotes(e.target.value)}
+                  className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-3 border-t border-slate-100 dark:border-white/5">
+                <button
+                  type="button"
+                  onClick={() => setShowAddActModal(false)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition-all cursor-pointer shadow-xs"
+                >
+                  Consigner le Soin
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Aperçu du Carnet Patient A4 avant impression */}
+      {showCarnetPreview && patient && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-xs select-none">
+          <div className="w-full max-w-5xl max-h-[96vh] bg-slate-900 border border-slate-700/60 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header Toolbar */}
+            <div className="p-3.5 px-5 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 flex items-center justify-between gap-3 shrink-0 flex-wrap">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="p-2 rounded-xl bg-purple-50 dark:bg-purple-600/10 text-purple-600 dark:text-purple-400 shrink-0">
+                  <Printer className="w-5 h-5" />
+                </div>
+                <div className="truncate">
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate">
+                    Aperçu du Carnet Patient A4 (Dossier & Historique)
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                    {patient.name} {patient.prenom || ''} • Dossier N° {patient.nationalId || (patient as any).customId || patient._id.slice(-6).toUpperCase()}
+                  </p>
+                </div>
+              </div>
+
+              {/* PDF Zoom & Fit Toolbar */}
+              <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setCarnetPreviewScale((prev) => Math.max(0.45, Number((prev - 0.08).toFixed(2))))}
+                  className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-white dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                  title="Zoom Arrière (-)"
+                >
+                  <ZoomOut className="w-4 h-4" />
+                </button>
+
+                <span className="text-xs font-mono font-bold text-slate-700 dark:text-slate-300 min-w-[45px] text-center">
+                  {Math.round(carnetPreviewScale * 100)}%
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() => setCarnetPreviewScale((prev) => Math.min(1.4, Number((prev + 0.08).toFixed(2))))}
+                  className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-white dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                  title="Zoom Avant (+)"
+                >
+                  <ZoomIn className="w-4 h-4" />
+                </button>
+
+                <div className="h-4 w-px bg-slate-300 dark:bg-white/10 mx-1"></div>
+
+                <button
+                  type="button"
+                  onClick={() => setCarnetPreviewScale(0.70)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                    carnetPreviewScale === 0.70
+                      ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-2xs font-bold'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                  title="Afficher la page entière dans l'écran sans couper"
+                >
+                  Page Entière
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setCarnetPreviewScale(1.0)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                    carnetPreviewScale === 1.0
+                      ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-2xs font-bold'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                  title="Afficher en taille réelle 100%"
+                >
+                  100%
+                </button>
+              </div>
+
+              {/* Actions: Print and Close */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => window.print()}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-[#5c246e] hover:bg-[#4a1c59] text-white rounded-xl text-xs font-bold shadow-md shadow-[#5c246e]/25 transition-all cursor-pointer"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Imprimer le Carnet (A4)</span>
+                </button>
+                <button
+                  onClick={() => setShowCarnetPreview(false)}
+                  className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                  title="Fermer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body: Scaled Full-Page A4 Sheet View */}
+            <div className="flex-1 overflow-auto p-4 md:p-6 flex justify-center items-start bg-slate-950/70">
+              <div
+                style={{
+                  width: `${760 * carnetPreviewScale}px`,
+                  height: `${1060 * carnetPreviewScale}px`,
+                }}
+                className="relative shrink-0 shadow-2xl transition-all duration-150 my-auto"
+              >
+                <div
+                  style={{
+                    transform: `scale(${carnetPreviewScale})`,
+                    transformOrigin: 'top left',
+                    width: '760px',
+                    height: '1060px',
+                  }}
+                  className="absolute top-0 left-0 bg-white rounded-sm overflow-hidden border border-slate-300 shadow-2xl"
+                >
+                  <PatientLedgerPrintLayout
+                    patient={patient}
+                    config={clinicConfig}
+                    acts={ledgerData?.acts || []}
+                    payments={ledgerData?.payments || []}
+                    summary={ledgerData?.summary || { totalActsAmount: 0, totalPaidAmount: 0, remainingBalance: 0 }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Aperçu de la Facture A4 avant impression */}
+      {previewInvoiceData && clinicConfig && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-xs select-none">
+          <div className="w-full max-w-5xl max-h-[96vh] bg-slate-900 border border-slate-700/60 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header Toolbar */}
+            <div className="p-3.5 px-5 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 flex items-center justify-between gap-3 shrink-0 flex-wrap">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="p-2 rounded-xl bg-blue-50 dark:bg-blue-600/10 text-blue-600 dark:text-blue-400 shrink-0">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div className="truncate">
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate">
+                    Aperçu Facture N° {previewInvoiceData.invoiceNumber}
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                    Patient : {patient?.name} {patient?.prenom || ''} • Total : {previewInvoiceData.netAmount.toFixed(2)} DH
+                  </p>
+                </div>
+              </div>
+
+              {/* PDF Zoom & Fit Toolbar */}
+              <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setInvoicePreviewScale((prev) => Math.max(0.45, Number((prev - 0.08).toFixed(2))))}
+                  className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-white dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                  title="Zoom Arrière (-)"
+                >
+                  <ZoomOut className="w-4 h-4" />
+                </button>
+
+                <span className="text-xs font-mono font-bold text-slate-700 dark:text-slate-300 min-w-[45px] text-center">
+                  {Math.round(invoicePreviewScale * 100)}%
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() => setInvoicePreviewScale((prev) => Math.min(1.4, Number((prev + 0.08).toFixed(2))))}
+                  className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-white dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                  title="Zoom Avant (+)"
+                >
+                  <ZoomIn className="w-4 h-4" />
+                </button>
+
+                <div className="h-4 w-px bg-slate-300 dark:bg-white/10 mx-1"></div>
+
+                <button
+                  type="button"
+                  onClick={() => setInvoicePreviewScale(0.72)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                    invoicePreviewScale === 0.72
+                      ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-2xs font-bold'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                  title="Afficher la page entière"
+                >
+                  Page Entière
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setInvoicePreviewScale(1.0)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                    invoicePreviewScale === 1.0
+                      ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-2xs font-bold'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                  title="Afficher en taille réelle 100%"
+                >
+                  100%
+                </button>
+              </div>
+
+              {/* Actions: Edit, Print and Close */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() =>
+                    navigate('/invoices', {
+                      state: {
+                        editInvoiceId: previewInvoiceData._id,
+                        returnPatientId: id,
+                        returnTab: 'Invoices',
+                      },
+                    })
+                  }
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/15 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                  title="Ouvrir dans l'éditeur complet pour modifier les actes ou montants"
+                >
+                  <Edit className="w-3.5 h-3.5" />
+                  <span>Modifier</span>
+                </button>
+
+                <button
+                  onClick={() => window.print()}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-600/25 transition-all cursor-pointer"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Imprimer la Facture (A4)</span>
+                </button>
+
+                <button
+                  onClick={() => setPreviewInvoiceData(null)}
+                  className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                  title="Fermer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body: Scaled Full-Page A4 Sheet View */}
+            <div className="flex-1 overflow-auto p-4 md:p-6 flex justify-center items-start bg-slate-950/70">
+              <div
+                style={{
+                  width: `${760 * invoicePreviewScale}px`,
+                  height: `${1060 * invoicePreviewScale}px`,
+                }}
+                className="relative shrink-0 shadow-2xl transition-all duration-150 my-auto"
+              >
+                <div
+                  style={{
+                    transform: `scale(${invoicePreviewScale})`,
+                    transformOrigin: 'top left',
+                    width: '760px',
+                    height: '1060px',
+                  }}
+                  className="absolute top-0 left-0 bg-white rounded-sm overflow-hidden border border-slate-300 shadow-2xl"
+                >
+                  <InvoicePrintLayout
+                    invoice={previewInvoiceData}
+                    config={clinicConfig}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Ajouter un Acte / Modèle au Catalogue */}
+      {showQuickCreateActModal && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-slate-900/75 backdrop-blur-xs">
+          <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl overflow-hidden p-6 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex justify-between items-center pb-4 border-b border-slate-100 dark:border-white/5">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                  <Plus className="w-5 h-5 stroke-[2.5]" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                    Ajouter un Modèle au Catalogue
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Enregistrer un nouvel acte dans le catalogue médical
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowQuickCreateActModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-white/5 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleQuickCreateAct} className="mt-5 space-y-4">
+              {/* Nom de l'acte */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  Désignation de l'acte / soin *
+                </label>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  placeholder="ex: Gingivectomie, Facette céramique, Blanchiment..."
+                  value={newActFormName}
+                  onChange={(e) => setNewActFormName(e.target.value)}
+                  className="h-11 px-3.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 font-medium"
+                />
+              </div>
+
+              {/* Catégorie & Prix par défaut */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    Catégorie
+                  </label>
+                  <select
+                    value={newActFormCategory}
+                    onChange={(e) => setNewActFormCategory(e.target.value)}
+                    className="h-11 px-3 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 font-medium"
+                  >
+                    {DENTAL_CATEGORIES.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {cat}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    Prix par défaut (DH) *
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min="0"
+                    step="10"
+                    placeholder="0.00"
+                    value={newActFormPrice}
+                    onChange={(e) => setNewActFormPrice(e.target.value)}
+                    className="h-11 px-3.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-sm font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              {/* Description optionnelle */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  Description / Remarque (Optionnel)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Détails techniques, matériel..."
+                  value={newActFormDescription}
+                  onChange={(e) => setNewActFormDescription(e.target.value)}
+                  className="h-10 px-3.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              {/* Link to full catalog settings */}
+              <div className="pt-1 flex items-center justify-between text-[11px] text-slate-400">
+                <span>Enregistré dans le catalogue permanent.</span>
+                <a
+                  href="/settings"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-500 hover:text-blue-600 hover:underline flex items-center gap-1 font-semibold"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  <span>Gérer tout le catalogue</span>
+                </a>
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-100 dark:border-white/5">
+                <button
+                  type="button"
+                  onClick={() => setShowQuickCreateActModal(false)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingNewAct}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition-all cursor-pointer shadow-sm disabled:opacity-50"
+                >
+                  {savingNewAct ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Enregistrement...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4 stroke-[2.5]" />
+                      <span>Enregistrer & Sélectionner</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      </div>
     </div>
   );
 };

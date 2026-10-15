@@ -5,9 +5,11 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { formatDate } from '../utils/dateUtils';
 import { API_URL } from '../config/api';
+import { matchesTooth, mapActToToothStatus } from '../utils/dentalUtils';
 
 interface DentalChartProps {
   patientId: string;
+  carnetActs?: any[];
 }
 
 const statusOptions = [
@@ -24,7 +26,7 @@ const statusOptions = [
   { value: 'Wisdom Tooth', label: 'Dent de Sagesse', color: 'bg-indigo-600', textBadge: 'bg-indigo-600 text-white' },
 ];
 
-export const DentalChart: React.FC<DentalChartProps> = ({ patientId }) => {
+export const DentalChart: React.FC<DentalChartProps> = ({ patientId, carnetActs = [] }) => {
   const { token } = useAuth();
   const { toast, confirm } = useToast();
   const [odontogram, setOdontogram] = useState<any[]>([]);
@@ -64,20 +66,6 @@ export const DentalChart: React.FC<DentalChartProps> = ({ patientId }) => {
       .then((res) => res.json())
       .then((data) => setOdontogram(data))
       .catch((err) => console.error('Error fetching odontogram:', err));
-  };
-
-  const mapActToToothStatus = (actName: string): string => {
-    const lower = actName.toLowerCase();
-    if (lower.includes('implant')) return 'Implant';
-    if (lower.includes('bridge') || lower.includes('pont')) return 'Bridge';
-    if (lower.includes('couronne') || lower.includes('zircone') || lower.includes('céramique') || lower.includes('facette')) return 'Crown';
-    if (lower.includes('endo') || lower.includes('dévitalis') || lower.includes('reconstitution')) return 'Root Canal';
-    if (lower.includes('carie') || lower.includes('plombage') || lower.includes('obturation') || lower.includes('composite')) return 'Filling';
-    if (lower.includes('sagesse')) return 'Wisdom Tooth';
-    if (lower.includes('extraction') || lower.includes('exo')) return 'Extracted';
-    if (lower.includes('fracture')) return 'Fracture';
-    if (lower.includes('mobile')) return 'Mobile';
-    return 'Healthy';
   };
 
   const handleSelectAct = (act: DentalAct) => {
@@ -197,11 +185,21 @@ export const DentalChart: React.FC<DentalChartProps> = ({ patientId }) => {
       });
   };
 
+  const getToothStatus = (toothNum: number): string => {
+    const matchingAct = (carnetActs || []).find((a) => matchesTooth(a.tooth, toothNum));
+    const record = odontogram.find((t) => t.toothNumber === toothNum || (toothNum === 11 && t.toothNumber === 1));
+
+    if (matchingAct) {
+      const actStatus = mapActToToothStatus(matchingAct.description || matchingAct.actName || '', matchingAct.category || '');
+      if (actStatus !== 'Healthy') return actStatus;
+    }
+    return record?.status || 'Healthy';
+  };
+
   const getToothClass = (toothNum: number) => {
-    const record = odontogram.find((t) => t.toothNumber === toothNum);
-    if (!record) return 'fill-slate-300 dark:fill-slate-700 hover:fill-blue-500';
+    const status = getToothStatus(toothNum);
     
-    switch (record.status) {
+    switch (status) {
       case 'Missing': return 'fill-slate-500';
       case 'Extracted': return 'fill-rose-500';
       case 'Implant': return 'fill-blue-600';
@@ -217,21 +215,31 @@ export const DentalChart: React.FC<DentalChartProps> = ({ patientId }) => {
   };
 
   const renderToothSVG = (toothNum: number) => {
+    const status = getToothStatus(toothNum);
+    const isExtracted = status === 'Extracted';
+
     return (
       <svg
         viewBox="0 0 100 120"
-        className="w-11 h-13 transition-all duration-300 transform group-hover:scale-110 drop-shadow-sm"
+        className="w-11 h-13 transition-all duration-300 transform group-hover:scale-110 drop-shadow-sm relative"
       >
         {/* Crown */}
         <path
           d="M 20 50 C 15 20, 85 20, 80 50 C 80 70, 70 75, 50 75 C 30 75, 20 70, 20 50 Z"
-          className={`${getToothClass(toothNum)} transition-colors duration-300`}
+          className={`${getToothClass(toothNum)} transition-colors duration-300 ${isExtracted ? 'opacity-40' : ''}`}
         />
         {/* Roots */}
         <path
           d="M 25 70 C 25 95, 35 110, 40 110 C 45 110, 45 85, 50 75 C 55 85, 55 110, 60 110 C 65 110, 75 95, 75 70 Z"
-          className={`${getToothClass(toothNum)} opacity-65 transition-colors duration-300`}
+          className={`${getToothClass(toothNum)} opacity-50 transition-colors duration-300`}
         />
+        {/* Extracted Cross Marker */}
+        {isExtracted && (
+          <g stroke="#ef4444" strokeWidth="8" strokeLinecap="round">
+            <line x1="25" y1="35" x2="75" y2="95" />
+            <line x1="75" y1="35" x2="25" y2="95" />
+          </g>
+        )}
       </svg>
     );
   };

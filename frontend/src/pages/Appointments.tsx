@@ -510,7 +510,7 @@ export const Appointments: React.FC = () => {
   // Waiting Room Handlers
   const handleAddWaitingPatient = () => {
     const selectedPat = patients.find((p) => p._id === waitingPatientId);
-    const patName = selectedPat?.name || waitingPatientName.trim();
+    const patName = selectedPat ? `${selectedPat.name}${selectedPat.prenom ? ' ' + selectedPat.prenom : ''}` : waitingPatientName.trim();
     if (!patName) {
       toast.warning('Patient requis', 'Veuillez sélectionner un patient dans la liste.');
       return;
@@ -756,7 +756,7 @@ export const Appointments: React.FC = () => {
                           >
                             {cellAppts.map((appt) => {
                               const patObj = appt.patientId && typeof appt.patientId === 'object' ? (appt.patientId as Patient) : null;
-                              const patName = patObj?.name || 'Patient';
+                              const patName = patObj ? `${patObj.name}${patObj.prenom ? ' ' + patObj.prenom : ''}` : 'Patient';
                               const colorStyle = getDentistoCardColor(appt);
 
                               return (
@@ -848,7 +848,7 @@ export const Appointments: React.FC = () => {
                                   </div>
                                   <div>
                                     <div className="font-extrabold text-sm flex items-center gap-2">
-                                      <span>{patObj?.name || 'Patient'}</span>
+                                      <span>{patObj ? `${patObj.name}${patObj.prenom ? ' ' + patObj.prenom : ''}` : 'Patient'}</span>
                                       <span className="text-xxs px-2 py-0.5 rounded-full bg-black/20 font-mono">
                                         {formatTime(appt.dateTime)} ({appt.duration} min)
                                       </span>
@@ -999,7 +999,9 @@ export const Appointments: React.FC = () => {
                         {formatTime(appt.dateTime)}
                       </span>
                       <div>
-                        <h4 className="text-xs font-bold text-slate-900 dark:text-white">{patObj?.name || 'Patient'}</h4>
+                        <h4 className="text-xs font-bold text-slate-900 dark:text-white">
+                          {patObj ? `${patObj.name}${patObj.prenom ? ' ' + patObj.prenom : ''}` : 'Patient'}
+                        </h4>
                         <p className="text-[11px] text-slate-500">{formatDate(appt.dateTime)} • {appt.notes || 'Consultation'}</p>
                       </div>
                     </div>
@@ -1182,7 +1184,9 @@ export const Appointments: React.FC = () => {
                   {formatDate(selectedApptDetail.dateTime)} à {formatTime(selectedApptDetail.dateTime)}
                 </span>
                 <h3 className="text-lg font-extrabold text-slate-900 dark:text-white mt-0.5">
-                  {typeof selectedApptDetail.patientId === 'object' ? (selectedApptDetail.patientId as any)?.name : 'Patient'}
+                  {typeof selectedApptDetail.patientId === 'object'
+                    ? `${(selectedApptDetail.patientId as any)?.name}${(selectedApptDetail.patientId as any)?.prenom ? ' ' + (selectedApptDetail.patientId as any)?.prenom : ''}`
+                    : 'Patient'}
                 </h3>
               </div>
               <button
@@ -1425,7 +1429,7 @@ export const Appointments: React.FC = () => {
                   onChange={(id) => {
                     setWaitingPatientId(id);
                     const p = patients.find((pat) => pat._id === id);
-                    if (p) setWaitingPatientName(p.name);
+                    if (p) setWaitingPatientName(`${p.name}${p.prenom ? ' ' + p.prenom : ''}`);
                   }}
                 />
               </div>

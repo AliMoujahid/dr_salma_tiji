@@ -552,16 +552,16 @@ export const Dashboard: React.FC = () => {
                         <img
                           src={
                             appt.patientId?.profilePictureUrl ||
-                            `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(appt.patientId?.name || 'P')}`
+                            `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(((appt.patientId?.name || '') + ' ' + (appt.patientId?.prenom || '')).trim() || 'P')}`
                           }
-                          alt={appt.patientId?.name}
+                          alt={`${appt.patientId?.name || ''} ${appt.patientId?.prenom || ''}`}
                           className="w-full h-full object-cover"
                         />
                         <span className="absolute bottom-0.5 right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900"></span>
                       </div>
                       <div className="flex flex-col">
                         <h4 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                          {appt.patientId?.name || 'Patient'}
+                          <span className="uppercase">{appt.patientId?.name || 'Patient'}</span>{appt.patientId?.prenom ? ` ${appt.patientId.prenom}` : ''}
                         </h4>
                         <span className="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[200px]">
                           {appt.notes || 'Consultation dentaire courante'}
@@ -630,7 +630,9 @@ export const Dashboard: React.FC = () => {
                       <h4 className="text-xs font-extrabold text-slate-900 dark:text-white font-mono tracking-wider group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
                         FACT-{inv.invoiceNumber}
                       </h4>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{inv.patientId?.name || 'Patient'}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                        <span className="uppercase">{inv.patientId?.name || 'Patient'}</span>{inv.patientId?.prenom ? ` ${inv.patientId.prenom}` : ''}
+                      </p>
                     </div>
                   </div>
 

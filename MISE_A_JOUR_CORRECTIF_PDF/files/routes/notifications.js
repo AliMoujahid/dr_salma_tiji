@@ -1,0 +1,506 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = __importDefault(require("express"));
+const multer_1 = __importDefault(require("multer"));
+const path_1 = __importDefault(require("path"));
+const fs_1 = __importDefault(require("fs"));
+const NotificationLog_1 = __importDefault(require("../models/NotificationLog"));
+const MessageTemplate_1 = __importDefault(require("../models/MessageTemplate"));
+const NotificationSettings_1 = __importDefault(require("../models/NotificationSettings"));
+const Patient_1 = __importDefault(require("../models/Patient"));
+const Appointment_1 = __importDefault(require("../models/Appointment"));
+const Invoice_1 = __importDefault(require("../models/Invoice"));
+const Document_1 = __importDefault(require("../models/Document"));
+const notificationProvider_1 = require("../services/notificationProvider");
+const whatsappService_1 = require("../services/whatsappService");
+const auth_1 = require("../middleware/auth");
+const router = express_1.default.Router();
+// Configure temp upload for attachments
+const tempUploadDir = path_1.default.join(__dirname, '..', '..', 'uploads', 'temp');
+if (!fs_1.default.existsSync(tempUploadDir)) {
+    fs_1.default.mkdirSync(tempUploadDir, { recursive: true });
+}
+const upload = (0, multer_1.default)({
+    dest: tempUploadDir,
+    limits: { fileSize: 30 * 1024 * 1024 }, // 30 MB max
+});
+/**
+ * GET /api/notifications/whatsapp-status
+ * Fetch current WhatsApp Web connection status & QR code
+ */
+router.get('/whatsapp-status', auth_1.protect, (req, res) => {
+    try {
+        const status = whatsappService_1.whatsappService.getStatus();
+        res.json(status);
+    }
+    catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+/**
+ * POST /api/notifications/whatsapp-init
+ * Start WhatsApp Web headless client session
+ */
+router.post('/whatsapp-init', auth_1.protect, async (req, res) => {
+    try {
+        await whatsappService_1.whatsappService.initClient(true);
+        const status = whatsappService_1.whatsappService.getStatus();
+        res.json({ message: 'Initialisation de WhatsApp Web lancée...', status });
+    }
+    catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+/**
+ * POST /api/notifications/whatsapp-logout
+ * Logout and clear WhatsApp Web session data
+ */
+router.post('/whatsapp-logout', auth_1.protect, async (req, res) => {
+    try {
+        await whatsappService_1.whatsappService.logout();
+        const status = whatsappService_1.whatsappService.getStatus();
+        res.json({ message: 'WhatsApp Web déconnecté et session réinitialisée.', status });
+    }
+    catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+/**
+ * POST /api/notifications/whatsapp-reset
+ * Force reset session, clean files and immediately request fresh QR Code
+ */
+router.post('/whatsapp-reset', auth_1.protect, async (req, res) => {
+    try {
+        const status = await whatsappService_1.whatsappService.forceResetSession();
+        res.json({ message: 'Session réinitialisée. Nouveau QR Code en cours de génération...', status });
+    }
+    catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+/**
+ * GET /api/notifications/logs
+ * Fetch notification logs with optional filters & search
+ */
+router.get('/logs', auth_1.protect, async (req, res) => {
+    try {
+        const { channel, status, search, limit = 100 } = req.query;
+        const filter = {};
+        if (channel)
+            filter.channel = channel;
+        if (status)
+            filter.status = status;
+        let logs = await NotificationLog_1.default.find(filter)
+            .populate('patientId', 'name phone email')
+            .populate('appointmentId', 'dateTime status')
+            .sort({ createdAt: -1 })
+            .limit(Number(limit));
+        if (search && typeof search === 'string' && search.trim()) {
+            const q = search.trim().toLowerCase();
+            logs = logs.filter((l) => l.recipient?.toLowerCase()?.includes(q) ||
+                l.body?.toLowerCase()?.includes(q) ||
+                l.subject?.toLowerCase()?.includes(q) ||
+                l.patientId?.name?.toLowerCase()?.includes(q));
+        }
+        res.json(logs);
+    }
+    catch (err) {
+        res.status(500).json({ message: 'Error fetching notification logs', error: err.message });
+    }
+});
+/**
+ * GET /api/notifications/settings
+ * Fetch clinic notification configuration settings
+ */
+router.get('/settings', auth_1.protect, async (req, res) => {
+    try {
+        const settings = await notificationProvider_1.notificationProvider.getSettings();
+        res.json(settings);
+    }
+    catch (err) {
+        res.status(500).json({ message: 'Error fetching settings', error: err.message });
+    }
+});
+/**
+ * PUT /api/notifications/settings
+ * Update notification API credentials & settings
+ */
+router.put('/settings', auth_1.protect, async (req, res) => {
+    try {
+        let settings = await NotificationSettings_1.default.findOne();
+        if (!settings) {
+            settings = new NotificationSettings_1.default(req.body);
+        }
+        else {
+            Object.assign(settings, req.body);
+        }
+        await settings.save();
+        res.json(settings);
+    }
+    catch (err) {
+        res.status(500).json({ message: 'Error saving settings', error: err.message });
+    }
+});
+/**
+ * GET /api/notifications/templates
+ * Fetch message templates list
+ */
+router.get('/templates', auth_1.protect, async (req, res) => {
+    try {
+        let templates = await MessageTemplate_1.default.find().sort({ name: 1 });
+        if (templates.length === 0) {
+            // Seed default templates if empty
+            templates = await MessageTemplate_1.default.insertMany([
+                {
+                    name: 'Rappel WhatsApp 24H Standard',
+                    channel: 'WhatsApp',
+                    messageType: '24Hours',
+                    language: 'fr',
+                    body: 'Bonjour {{patient_name}},\n\nCeci est un rappel de votre rendez-vous au Cabinet Dentaire Dr. Salma Tijini.\n\n📅 Date: {{appointment_date}}\n🕒 Heure: {{appointment_time}}\n📍 Adresse: {{clinic_address}}\n\nMerci de confirmer votre présence.',
+                    buttons: [{ type: 'Confirm', label: '✅ Confirmer' }, { type: 'Cancel', label: '❌ Annuler' }],
+                    isDefault: true,
+                },
+                {
+                    name: 'Rappel SMS Court',
+                    channel: 'SMS',
+                    messageType: '24Hours',
+                    language: 'fr',
+                    body: 'Cabinet Dr Salma Tijini: RDV le {{appointment_date}} a {{appointment_time}}. Tel: {{clinic_phone}}',
+                    isDefault: true,
+                },
+            ]);
+        }
+        res.json(templates);
+    }
+    catch (err) {
+        res.status(500).json({ message: 'Error fetching templates', error: err.message });
+    }
+});
+/**
+ * POST /api/notifications/templates
+ * Create new message template
+ */
+router.post('/templates', auth_1.protect, async (req, res) => {
+    try {
+        const template = await MessageTemplate_1.default.create(req.body);
+        res.status(201).json(template);
+    }
+    catch (err) {
+        res.status(400).json({ message: 'Error creating template', error: err.message });
+    }
+});
+/**
+ * PUT /api/notifications/templates/:id
+ */
+router.put('/templates/:id', auth_1.protect, async (req, res) => {
+    try {
+        const template = await MessageTemplate_1.default.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        res.json(template);
+    }
+    catch (err) {
+        res.status(400).json({ message: 'Error updating template', error: err.message });
+    }
+});
+/**
+ * DELETE /api/notifications/templates/:id
+ */
+router.delete('/templates/:id', auth_1.protect, async (req, res) => {
+    try {
+        await MessageTemplate_1.default.findByIdAndDelete(req.params.id);
+        res.json({ message: 'Template deleted' });
+    }
+    catch (err) {
+        res.status(500).json({ message: 'Error deleting template', error: err.message });
+    }
+});
+/**
+ * GET /api/notifications/patient-attachments/:patientId
+ * Fetch patient's invoices and medical documents for WhatsApp attachment selection
+ */
+router.get('/patient-attachments/:patientId', auth_1.protect, async (req, res) => {
+    try {
+        const { patientId } = req.params;
+        const [invoices, documents] = await Promise.all([
+            Invoice_1.default.find({ patientId }).sort({ date: -1, createdAt: -1 }),
+            Document_1.default.find({ patientId }).sort({ uploadedAt: -1 }),
+        ]);
+        res.json({ invoices, documents });
+    }
+    catch (err) {
+        res.status(500).json({ message: 'Error fetching patient attachments', error: err.message });
+    }
+});
+/**
+ * POST /api/notifications/send-manual
+ * Send manual notification with optional invoice, document, or custom file attachment
+ */
+router.post('/send-manual', auth_1.protect, upload.single('attachment'), async (req, res) => {
+    try {
+        let { patientId, appointmentId, invoiceId, documentId, channel = 'WhatsApp', recipient, subject, body } = req.body;
+        let mediaPath;
+        let mediaFilename;
+        let mediaMimeType;
+        let targetPatientName = '';
+        // 1. If an invoiceId is specified, format complete invoice message breakdown
+        if (invoiceId) {
+            const inv = await Invoice_1.default.findById(invoiceId).populate('patientId');
+            if (inv) {
+                if (!recipient && inv.patientId?.phone) {
+                    recipient = inv.patientId.phone;
+                }
+                if (!patientId) {
+                    patientId = inv.patientId?._id;
+                }
+                targetPatientName = inv.patientId?.name || '';
+                // If custom body wasn't supplied or is default, generate structured professional invoice text
+                if (!body || body.trim() === '') {
+                    const invDateStr = new Date(inv.date || inv.createdAt).toLocaleDateString('fr-FR');
+                    const itemsText = inv.items?.map((it) => `  • ${it.description}${it.tooth ? ` (Dent ${it.tooth})` : ''} : ${it.amount.toLocaleString('fr-FR')} MAD`).join('\n') || '';
+                    const due = Math.max(0, inv.netAmount - (inv.paidAmount || 0));
+                    body = `🧾 *FACTURE N° ${inv.invoiceNumber}*\n` +
+                        `*Cabinet Dentaire Dr. Salma Tijini*\n` +
+                        `━━━━━━━━━━━━━━━━━━━━━\n` +
+                        `👤 Patient : *${targetPatientName || 'Client'}*\n` +
+                        `📅 Date : *${invDateStr}*\n\n` +
+                        `📋 *Détail des Soins :*\n${itemsText}\n\n` +
+                        `━━━━━━━━━━━━━━━━━━━━━\n` +
+                        `💰 Total Brut : *${inv.totalAmount.toLocaleString('fr-FR')} MAD*\n` +
+                        (inv.discount > 0 ? `🏷️ Remise : *-${inv.discount.toLocaleString('fr-FR')} MAD*\n` : '') +
+                        `💳 *Net à Payer : ${inv.netAmount.toLocaleString('fr-FR')} MAD*\n` +
+                        `✅ Montant Réglé : *${(inv.paidAmount || 0).toLocaleString('fr-FR')} MAD*\n` +
+                        `⏳ *Reste Dû : ${due.toLocaleString('fr-FR')} MAD*\n` +
+                        `━━━━━━━━━━━━━━━━━━━━━\n` +
+                        `Mode de règlement : ${inv.paymentMode}\n\n` +
+                        `Merci pour votre confiance. 🦷✨\n` +
+                        `_Cabinet Dr. Salma Tijini - Av Hassan II, Skhirat_`;
+                }
+            }
+        }
+        // 2. If a documentId is specified (uploaded patient document/X-Ray)
+        if (documentId) {
+            const doc = await Document_1.default.findById(documentId).populate('patientId');
+            if (doc) {
+                if (!recipient && doc.patientId?.phone) {
+                    recipient = doc.patientId.phone;
+                }
+                if (!patientId) {
+                    patientId = doc.patientId?._id;
+                }
+                if (!targetPatientName) {
+                    targetPatientName = doc.patientId?.name || '';
+                }
+                const fullPath = path_1.default.join(__dirname, '..', '..', 'uploads', doc.filePath.replace(/^\/+/, ''));
+                if (fs_1.default.existsSync(fullPath)) {
+                    mediaPath = fullPath;
+                    mediaFilename = doc.fileName;
+                }
+            }
+        }
+        // 3. If a custom file was uploaded directly in the request
+        if (req.file) {
+            mediaPath = req.file.path;
+            mediaFilename = req.file.originalname;
+            mediaMimeType = req.file.mimetype;
+        }
+        // Look up patient name and phone if patientId exists
+        if (patientId) {
+            const patient = await Patient_1.default.findById(patientId);
+            if (patient) {
+                if (!recipient) {
+                    recipient = channel === 'Email' ? patient.email : patient.phone;
+                }
+                if (!targetPatientName) {
+                    targetPatientName = patient.name;
+                }
+            }
+        }
+        // Interpolate variable {{patient_name}} with actual patient name
+        if (body) {
+            body = body.replace(/\{\{patient_name\}\}/g, targetPatientName || 'Cher patient');
+        }
+        if (!recipient) {
+            return res.status(400).json({ message: 'Numéro de téléphone / destinataire introuvable.' });
+        }
+        const result = await notificationProvider_1.notificationProvider.dispatch({
+            channel,
+            recipient,
+            subject: subject || (invoiceId ? 'Facture' : documentId || req.file ? 'Document' : undefined),
+            body: body || 'Veuillez trouver votre document ci-joint.',
+            mediaPath,
+            mediaFilename,
+            mediaMimeType,
+        });
+        let log = null;
+        try {
+            log = await NotificationLog_1.default.create({
+                patientId: patientId || undefined,
+                appointmentId: appointmentId || undefined,
+                channel,
+                provider: result.provider,
+                recipient,
+                messageType: invoiceId ? 'Invoice' : documentId || req.file ? 'Document' : 'Manual',
+                subject: subject || (invoiceId ? 'Facture Cabinet' : documentId || req.file ? 'Document Médical' : undefined),
+                body,
+                status: result.success ? 'Sent' : 'Failed',
+                errorDetails: result.errorDetails,
+                sentAt: result.success ? new Date() : undefined,
+            });
+        }
+        catch (logErr) {
+            console.warn('[NotificationLog] Warning creating log:', logErr);
+        }
+        // Clean up temporary upload file if one was created
+        if (req.file && fs_1.default.existsSync(req.file.path)) {
+            setTimeout(() => {
+                try {
+                    fs_1.default.unlinkSync(req.file.path);
+                }
+                catch { }
+            }, 5000);
+        }
+        res.json({ result, log, message: result.success ? 'Message et document envoyés avec succès !' : 'Échec de l\'envoi' });
+    }
+    catch (err) {
+        console.error('Error in send-manual notification:', err);
+        res.status(500).json({ message: 'Erreur lors de l\'envoi de la notification', error: err.message });
+    }
+});
+/**
+ * POST /api/notifications/send-bulk
+ * Bulk broadcast message to multiple patients
+ */
+router.post('/send-bulk', auth_1.protect, async (req, res) => {
+    try {
+        const { patientIds, channel, subject, body } = req.body;
+        if (!Array.isArray(patientIds) || patientIds.length === 0) {
+            return res.status(400).json({ message: 'No patients selected' });
+        }
+        const patients = await Patient_1.default.find({ _id: { $in: patientIds } });
+        const logs = [];
+        for (const patient of patients) {
+            const recipient = channel === 'Email' ? patient.email : patient.phone;
+            if (!recipient)
+                continue;
+            // Variable interpolation
+            const interpolatedBody = body.replace(/\{\{patient_name\}\}/g, patient.name);
+            const result = await notificationProvider_1.notificationProvider.dispatch({
+                channel,
+                recipient,
+                subject,
+                body: interpolatedBody,
+            });
+            const log = await NotificationLog_1.default.create({
+                patientId: patient._id,
+                channel,
+                provider: result.provider,
+                recipient,
+                messageType: 'Bulk',
+                subject,
+                body: interpolatedBody,
+                status: result.success ? 'Sent' : 'Failed',
+                errorDetails: result.errorDetails,
+                sentAt: result.success ? new Date() : undefined,
+            });
+            logs.push(log);
+        }
+        res.json({ message: `Bulk broadcast sent to ${logs.length} patients`, count: logs.length });
+    }
+    catch (err) {
+        res.status(500).json({ message: 'Error sending bulk broadcast', error: err.message });
+    }
+});
+/**
+ * POST /api/notifications/retry/:id
+ * Retry a failed message
+ */
+router.post('/retry/:id', auth_1.protect, async (req, res) => {
+    try {
+        const log = await NotificationLog_1.default.findById(req.params.id);
+        if (!log)
+            return res.status(404).json({ message: 'Log not found' });
+        const result = await notificationProvider_1.notificationProvider.dispatch({
+            channel: log.channel,
+            recipient: log.recipient,
+            subject: log.subject,
+            body: log.body,
+        });
+        log.retryCount = (log.retryCount || 0) + 1;
+        log.status = result.success ? 'Sent' : 'Failed';
+        log.errorDetails = result.success ? undefined : (result.errorDetails || 'Échec de renvoi');
+        if (result.success)
+            log.sentAt = new Date();
+        await log.save();
+        res.json({ success: result.success, log, message: result.success ? 'Message réexpédié avec succès !' : (result.errorDetails || 'Échec de renvoi') });
+    }
+    catch (err) {
+        res.status(500).json({ message: 'Error retrying notification', error: err.message });
+    }
+});
+/**
+ * DELETE /api/notifications/logs/:id
+ * Delete a specific notification log
+ */
+router.delete('/logs/:id', auth_1.protect, async (req, res) => {
+    try {
+        const deleted = await NotificationLog_1.default.findByIdAndDelete(req.params.id);
+        if (!deleted)
+            return res.status(404).json({ message: 'Notification non trouvée' });
+        res.json({ success: true, message: 'Notification supprimée avec succès' });
+    }
+    catch (err) {
+        res.status(500).json({ message: 'Erreur lors de la suppression', error: err.message });
+    }
+});
+/**
+ * POST /api/notifications/clear-failed
+ * Clear or dismiss all failed notification logs
+ */
+router.post('/clear-failed', auth_1.protect, async (req, res) => {
+    try {
+        const result = await NotificationLog_1.default.deleteMany({ status: 'Failed' });
+        res.json({ success: true, message: `${result.deletedCount} notification(s) en échec effacée(s)`, count: result.deletedCount });
+    }
+    catch (err) {
+        res.status(500).json({ message: 'Erreur lors de la suppression des notifications', error: err.message });
+    }
+});
+/**
+ * GET /api/notifications/confirm-appointment/:appointmentId/:action
+ * Public interactive response endpoint (Confirm / Cancel)
+ */
+router.get('/confirm-appointment/:appointmentId/:action', async (req, res) => {
+    try {
+        const { appointmentId, action } = req.params;
+        const appt = await Appointment_1.default.findById(appointmentId).populate('patientId');
+        if (!appt)
+            return res.send('<h2>Lien invalide ou rendez-vous inexistant.</h2>');
+        if (action === 'confirm') {
+            appt.status = 'Confirmed';
+            await appt.save();
+            return res.send(`
+        <div style="font-family: Arial; text-align: center; padding: 40px; color: #1e293b;">
+          <h1 style="color: #10b981;">✅ Rendez-vous Confirmé !</h1>
+          <p>Merci ! Votre rendez-vous au Cabinet Dentaire Dr. Salma Tijini est bien confirmé.</p>
+        </div>
+      `);
+        }
+        else if (action === 'cancel') {
+            appt.status = 'Cancelled';
+            await appt.save();
+            return res.send(`
+        <div style="font-family: Arial; text-align: center; padding: 40px; color: #1e293b;">
+          <h1 style="color: #ef4444;">❌ Rendez-vous Annulé</h1>
+          <p>Votre annulation a bien été prise en compte. Merci de nous avoir prévenus.</p>
+        </div>
+      `);
+        }
+        res.send('Action inconnue.');
+    }
+    catch (err) {
+        res.status(500).send('Erreur lors de la mise à jour.');
+    }
+});
+exports.default = router;

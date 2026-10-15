@@ -24,6 +24,8 @@ export type AuditAction =
   | 'TRIGGER_BACKUP'
   | 'RESTORE_BACKUP'
   | 'UPDATE_CLINIC_CONFIG'
+  | 'CREATE_TREATMENT'
+  | 'DELETE_TREATMENT'
   | 'SECURITY_ALERT'
   | 'OTHER';
 

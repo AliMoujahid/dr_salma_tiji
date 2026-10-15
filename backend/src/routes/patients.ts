@@ -34,16 +34,29 @@ router.get('/', protect, async (req: AuthRequest, res: Response) => {
       query.isFavorite = true;
     }
 
-    // Global Search (name, phone, email, nationalId) with escaped regex
+    // Global Search (name, prenom, phone, email, nationalId) with escaped regex
     if (search && typeof search === 'string' && search.trim()) {
       const sanitized = escapeRegex(search.trim());
       const searchRegex = new RegExp(sanitized, 'i');
-      query.$or = [
+      const tokens = search.trim().split(/\s+/).filter(Boolean);
+
+      const basicConditions: any[] = [
         { name: searchRegex },
+        { prenom: searchRegex },
         { phone: searchRegex },
         { email: searchRegex },
         { nationalId: searchRegex },
       ];
+
+      if (tokens.length > 1) {
+        const tokenRegexes = tokens.map((t) => new RegExp(escapeRegex(t), 'i'));
+        const andConditions = tokenRegexes.map((r) => ({
+          $or: [{ name: r }, { prenom: r }],
+        }));
+        query.$or = [...basicConditions, { $and: andConditions }];
+      } else {
+        query.$or = basicConditions;
+      }
     }
 
     const pageSize = Math.max(1, parseInt(limit as string, 10) || 10);
@@ -107,6 +120,7 @@ router.post('/', protect, async (req: AuthRequest, res: Response) => {
   try {
     const {
       name,
+      prenom,
       nationalId,
       phone,
       email,
@@ -130,6 +144,7 @@ router.post('/', protect, async (req: AuthRequest, res: Response) => {
 
     const newPatient = await Patient.create({
       name: name.trim(),
+      prenom: prenom ? prenom.trim() : '',
       nationalId: nationalId ? nationalId.trim() : undefined,
       phone: phone.trim(),
       email: email ? email.trim() : undefined,

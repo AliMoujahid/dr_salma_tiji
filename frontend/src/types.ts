@@ -8,7 +8,8 @@ export interface User {
 
 export interface Patient {
   _id: string;
-  name: string;
+  name: string; // Nom de famille
+  prenom?: string; // Prénom
   nationalId?: string;
   phone: string;
   email?: string;

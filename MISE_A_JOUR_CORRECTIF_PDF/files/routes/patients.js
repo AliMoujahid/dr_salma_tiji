@@ -1,0 +1,303 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const mongoose_1 = __importDefault(require("mongoose"));
+const Patient_1 = __importDefault(require("../models/Patient"));
+const Appointment_1 = __importDefault(require("../models/Appointment"));
+const auth_1 = require("../middleware/auth");
+const security_1 = require("../middleware/security");
+const liveSyncService_1 = require("../services/liveSyncService");
+const router = (0, express_1.Router)();
+// Helper to escape special regex characters and prevent ReDoS/syntax errors
+const escapeRegex = (text) => {
+    return text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+};
+const isValidObjectId = (id) => {
+    return typeof id === 'string' && mongoose_1.default.Types.ObjectId.isValid(id);
+};
+// Get all patients with filters, search, and pagination
+router.get('/', auth_1.protect, async (req, res) => {
+    try {
+        const { search, archived = 'false', favorite, limit = '10', page = '1' } = req.query;
+        const query = {};
+        query.deleted = { $ne: true };
+        // Filtering by archived status
+        query.isArchived = archived === 'true';
+        // Filter by favorite status
+        if (favorite === 'true') {
+            query.isFavorite = true;
+        }
+        // Global Search (name, prenom, phone, email, nationalId) with escaped regex
+        if (search && typeof search === 'string' && search.trim()) {
+            const sanitized = escapeRegex(search.trim());
+            const searchRegex = new RegExp(sanitized, 'i');
+            const tokens = search.trim().split(/\s+/).filter(Boolean);
+            const basicConditions = [
+                { name: searchRegex },
+                { prenom: searchRegex },
+                { phone: searchRegex },
+                { email: searchRegex },
+                { nationalId: searchRegex },
+            ];
+            if (tokens.length > 1) {
+                const tokenRegexes = tokens.map((t) => new RegExp(escapeRegex(t), 'i'));
+                const andConditions = tokenRegexes.map((r) => ({
+                    $or: [{ name: r }, { prenom: r }],
+                }));
+                query.$or = [...basicConditions, { $and: andConditions }];
+            }
+            else {
+                query.$or = basicConditions;
+            }
+        }
+        const pageSize = Math.max(1, parseInt(limit, 10) || 10);
+        const pageNum = Math.max(1, parseInt(page, 10) || 1);
+        const total = await Patient_1.default.countDocuments(query);
+        const list = await Patient_1.default.find(query)
+            .sort({ updatedAt: -1 })
+            .skip((pageNum - 1) * pageSize)
+            .limit(pageSize);
+        res.json({
+            patients: list,
+            total,
+            pages: Math.max(1, Math.ceil(total / pageSize)),
+            currentPage: pageNum,
+        });
+    }
+    catch (error) {
+        res.status(500).json({ message: 'Erreur lors de la récupération des patients.', error: error.message });
+    }
+});
+// Get recently viewed patients
+router.get('/recent', auth_1.protect, async (req, res) => {
+    try {
+        const recent = await Patient_1.default.find({ deleted: { $ne: true }, isArchived: false, recentlyViewedAt: { $ne: undefined } })
+            .sort({ recentlyViewedAt: -1 })
+            .limit(5);
+        res.json(recent);
+    }
+    catch (error) {
+        res.status(500).json({ message: 'Erreur lors de la récupération des patients récents.', error: error.message });
+    }
+});
+// Get patient details by ID
+router.get('/:id', auth_1.protect, async (req, res) => {
+    try {
+        if (!isValidObjectId(req.params.id)) {
+            res.status(400).json({ message: 'Identifiant patient invalide.' });
+            return;
+        }
+        const patient = await Patient_1.default.findOne({ _id: req.params.id, deleted: { $ne: true } });
+        if (!patient) {
+            res.status(404).json({ message: 'Patient introuvable.' });
+            return;
+        }
+        // Update recently viewed timestamp
+        patient.recentlyViewedAt = new Date();
+        await patient.save();
+        res.json(patient);
+    }
+    catch (error) {
+        res.status(500).json({ message: 'Erreur lors de la récupération du patient.', error: error.message });
+    }
+});
+// Create new patient with Audit Log
+router.post('/', auth_1.protect, async (req, res) => {
+    try {
+        const { name, prenom, nationalId, phone, email, address, birthDate, gender, bloodType, emergencyContact, insurance, medicalHistory, allergies, currentMedications, notes, profilePictureUrl, } = req.body;
+        if (!name || !phone || !birthDate || !gender) {
+            res.status(400).json({ message: 'Veuillez renseigner les champs obligatoires (Nom, Téléphone, Date de Naissance, Genre).' });
+            return;
+        }
+        const newPatient = await Patient_1.default.create({
+            name: name.trim(),
+            prenom: prenom ? prenom.trim() : '',
+            nationalId: nationalId ? nationalId.trim() : undefined,
+            phone: phone.trim(),
+            email: email ? email.trim() : undefined,
+            address,
+            birthDate: new Date(birthDate),
+            gender,
+            bloodType,
+            emergencyContact,
+            insurance,
+            medicalHistory: Array.isArray(medicalHistory) ? medicalHistory : [],
+            allergies: Array.isArray(allergies) ? allergies : [],
+            currentMedications: Array.isArray(currentMedications) ? currentMedications : [],
+            notes,
+            profilePictureUrl,
+            isArchived: false,
+            isFavorite: false,
+        });
+        await (0, security_1.recordAudit)({
+            userId: req.user?._id,
+            userName: req.user?.name || 'Praticien',
+            action: 'CREATE_PATIENT',
+            severity: 'INFO',
+            targetId: newPatient._id,
+            targetName: newPatient.name,
+            details: `Création de la fiche patient "${newPatient.name}" (${newPatient.phone}).`,
+            req,
+        });
+        liveSyncService_1.liveSyncService.broadcast('PATIENTS_CHANGED', 'create', {
+            entityId: newPatient._id.toString(),
+            entityName: newPatient.name,
+            sourceUser: req.user?.name,
+        });
+        res.status(201).json(newPatient);
+    }
+    catch (error) {
+        res.status(500).json({ message: 'Erreur lors de la création du patient.', error: error.message });
+    }
+});
+// Edit patient details with Audit Log
+router.put('/:id', auth_1.protect, async (req, res) => {
+    try {
+        if (!isValidObjectId(req.params.id)) {
+            res.status(400).json({ message: 'Identifiant patient invalide.' });
+            return;
+        }
+        const updatedPatient = await Patient_1.default.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+        if (!updatedPatient) {
+            res.status(404).json({ message: 'Patient introuvable.' });
+            return;
+        }
+        await (0, security_1.recordAudit)({
+            userId: req.user?._id,
+            userName: req.user?.name || 'Praticien',
+            action: 'UPDATE_PATIENT',
+            severity: 'INFO',
+            targetId: updatedPatient._id,
+            targetName: updatedPatient.name,
+            details: `Mise à jour des informations du patient "${updatedPatient.name}".`,
+            req,
+        });
+        liveSyncService_1.liveSyncService.broadcast('PATIENTS_CHANGED', 'update', {
+            entityId: updatedPatient._id.toString(),
+            entityName: updatedPatient.name,
+            sourceUser: req.user?.name,
+        });
+        res.json(updatedPatient);
+    }
+    catch (error) {
+        res.status(500).json({ message: 'Erreur lors de la mise à jour du patient.', error: error.message });
+    }
+});
+// Toggle Archive patient
+router.put('/:id/archive', auth_1.protect, async (req, res) => {
+    try {
+        if (!isValidObjectId(req.params.id)) {
+            res.status(400).json({ message: 'Identifiant patient invalide.' });
+            return;
+        }
+        const patient = await Patient_1.default.findById(req.params.id);
+        if (!patient) {
+            res.status(404).json({ message: 'Patient introuvable.' });
+            return;
+        }
+        patient.isArchived = !patient.isArchived;
+        await patient.save();
+        await (0, security_1.recordAudit)({
+            userId: req.user?._id,
+            userName: req.user?.name || 'Praticien',
+            action: 'UPDATE_PATIENT',
+            severity: 'INFO',
+            targetId: patient._id,
+            targetName: patient.name,
+            details: patient.isArchived ? `Archivage du dossier "${patient.name}".` : `Désarchivage du dossier "${patient.name}".`,
+            req,
+        });
+        liveSyncService_1.liveSyncService.broadcast('PATIENTS_CHANGED', 'archive', {
+            entityId: patient._id.toString(),
+            entityName: patient.name,
+            sourceUser: req.user?.name,
+        });
+        res.json({ message: patient.isArchived ? 'Patient archivé.' : 'Patient désarchivé.', patient });
+    }
+    catch (error) {
+        res.status(500).json({ message: 'Erreur lors de la modification de l\'archivage.', error: error.message });
+    }
+});
+// Toggle Favorite patient
+router.put('/:id/favorite', auth_1.protect, async (req, res) => {
+    try {
+        if (!isValidObjectId(req.params.id)) {
+            res.status(400).json({ message: 'Identifiant patient invalide.' });
+            return;
+        }
+        const patient = await Patient_1.default.findById(req.params.id);
+        if (!patient) {
+            res.status(404).json({ message: 'Patient introuvable.' });
+            return;
+        }
+        patient.isFavorite = !patient.isFavorite;
+        await patient.save();
+        liveSyncService_1.liveSyncService.broadcast('PATIENTS_CHANGED', 'favorite', {
+            entityId: patient._id.toString(),
+            entityName: patient.name,
+            sourceUser: req.user?.name,
+        });
+        res.json({ message: patient.isFavorite ? 'Ajouté aux favoris.' : 'Retiré des favoris.', patient });
+    }
+    catch (error) {
+        res.status(500).json({ message: 'Erreur lors du toggle favori.', error: error.message });
+    }
+});
+// Delete patient completely (Soft Delete with Audit Log tracking & restore capability)
+router.delete('/:id', auth_1.protect, async (req, res) => {
+    try {
+        if (!isValidObjectId(req.params.id)) {
+            res.status(400).json({ message: 'Identifiant patient invalide.' });
+            return;
+        }
+        const patient = await Patient_1.default.findOne({ _id: req.params.id, deleted: { $ne: true } });
+        if (!patient) {
+            res.status(404).json({ message: 'Patient introuvable.' });
+            return;
+        }
+        // Set soft-delete flags
+        patient.deleted = true;
+        patient.deletedAt = new Date();
+        patient.deletedBy = req.user?._id;
+        await patient.save();
+        // Automatically cancel pending future appointments for this patient
+        try {
+            await Appointment_1.default.updateMany({
+                patientId: patient._id,
+                dateTime: { $gte: new Date() },
+                status: { $in: ['Scheduled', 'Confirmed'] },
+            }, {
+                status: 'Cancelled',
+                notes: 'Annulé suite à la suppression du dossier patient.',
+            });
+        }
+        catch (apptErr) {
+            console.warn('Warning cancelling appointments for deleted patient:', apptErr);
+        }
+        // Create Audit Log with backupData snapshot for restore
+        await (0, security_1.recordAudit)({
+            userId: req.user?._id,
+            userName: req.user?.name || 'Inconnu',
+            action: 'DELETE_PATIENT',
+            severity: 'WARNING',
+            targetId: patient._id,
+            targetName: patient.name,
+            details: `Patient "${patient.name}" (${patient.nationalId || 'sans CIN'}) a été supprimé par ${req.user?.name}.`,
+            backupData: patient.toObject(),
+            req,
+        });
+        liveSyncService_1.liveSyncService.broadcast('PATIENTS_CHANGED', 'delete', {
+            entityId: patient._id.toString(),
+            entityName: patient.name,
+            sourceUser: req.user?.name,
+        });
+        res.json({ message: 'Patient supprimé et archivé dans l\'historique professionnel.' });
+    }
+    catch (error) {
+        res.status(500).json({ message: 'Erreur lors de la suppression du patient.', error: error.message });
+    }
+});
+exports.default = router;

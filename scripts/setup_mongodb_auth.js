@@ -1,7 +1,24 @@
-const { MongoClient } = require('mongodb');
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
+
+let MongoClient;
+const possibleMongodbPaths = [
+  'mongodb',
+  path.join(__dirname, '..', 'app', 'node_modules', 'mongodb'),
+  path.join(__dirname, '..', 'node_modules', 'mongodb'),
+  path.join(process.cwd(), 'app', 'node_modules', 'mongodb'),
+  path.join(process.cwd(), 'node_modules', 'mongodb'),
+];
+for (const p of possibleMongodbPaths) {
+  try {
+    MongoClient = require(p).MongoClient;
+    if (MongoClient) break;
+  } catch {}
+}
+if (!MongoClient) {
+  throw new Error('Module mongodb introuvable. Veuillez vérifier que node_modules existe.');
+}
 
 const ADMIN_USER = 'dr_tijini_admin';
 const ADMIN_PASS = 'Tijini@Secure#Db2026!';

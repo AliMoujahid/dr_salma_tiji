@@ -47,16 +47,18 @@ export const SearchablePatientSelect: React.FC<SearchablePatientSelectProps> = (
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Filter patients based on search query (name, phone, CNIE)
+  // Filter patients based on search query (name, prenom, phone, CNIE)
   const filteredPatients = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     if (!query) return patients;
 
     return patients.filter((p) => {
       const nameMatch = (p.name || '').toLowerCase().includes(query);
+      const prenomMatch = (p.prenom || '').toLowerCase().includes(query);
+      const fullNameMatch = `${p.name || ''} ${p.prenom || ''}`.toLowerCase().includes(query) || `${p.prenom || ''} ${p.name || ''}`.toLowerCase().includes(query);
       const phoneMatch = (p.phone || '').toLowerCase().includes(query);
       const cnieMatch = (p.nationalId || '').toLowerCase().includes(query);
-      return nameMatch || phoneMatch || cnieMatch;
+      return nameMatch || prenomMatch || fullNameMatch || phoneMatch || cnieMatch;
     });
   }, [patients, searchQuery]);
 
@@ -71,7 +73,10 @@ export const SearchablePatientSelect: React.FC<SearchablePatientSelectProps> = (
     setSearchQuery('');
   };
 
-  const getInitials = (name: string) => {
+  const getInitials = (name: string, prenom?: string) => {
+    if (prenom && name) {
+      return `${name[0]}${prenom[0]}`.toUpperCase();
+    }
     if (!name) return 'P';
     const parts = name.trim().split(' ');
     if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
@@ -92,11 +97,11 @@ export const SearchablePatientSelect: React.FC<SearchablePatientSelectProps> = (
         {selectedPatient ? (
           <div className="flex items-center gap-2.5 overflow-hidden">
             <div className="w-7 h-7 rounded-full bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-extrabold text-xxs flex items-center justify-center shrink-0 border border-emerald-300 dark:border-emerald-500/30">
-              {getInitials(selectedPatient.name)}
+              {getInitials(selectedPatient.name, selectedPatient.prenom)}
             </div>
             <div className="flex flex-col text-left truncate">
               <span className="font-extrabold text-slate-900 dark:text-white truncate">
-                {selectedPatient.name}
+                <span className="uppercase">{selectedPatient.name}</span>{selectedPatient.prenom ? ` ${selectedPatient.prenom}` : ''}
               </span>
               <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate flex items-center gap-1.5">
                 {selectedPatient.phone && <span>Tél : {selectedPatient.phone}</span>}
@@ -192,13 +197,13 @@ export const SearchablePatientSelect: React.FC<SearchablePatientSelectProps> = (
                             : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 group-hover:bg-emerald-100 group-hover:text-emerald-700'
                         }`}
                       >
-                        {getInitials(patient.name)}
+                        {getInitials(patient.name, patient.prenom)}
                       </div>
 
                       <div className="flex flex-col truncate">
                         <div className="flex items-center gap-1.5">
                           <span className={`font-bold truncate ${isSelected ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-900 dark:text-white'}`}>
-                            {patient.name}
+                            <span className="uppercase">{patient.name}</span>{patient.prenom ? ` ${patient.prenom}` : ''}
                           </span>
                           {patient.gender && (
                             <span className="text-[9px] font-semibold text-slate-400 px-1 py-0.2 rounded bg-slate-100 dark:bg-slate-800">

@@ -37,6 +37,7 @@ import auditLogRoutes from './routes/auditLogs';
 import dentalActsRoutes, { ensureDefaultActs } from './routes/dentalActs';
 import liveSyncRoutes from './routes/liveSync';
 import nanopixRoutes from './routes/nanopix';
+import treatmentRoutes from './routes/treatments';
 import { nanopixBridgeService } from './services/nanopixBridgeService';
 import { reminderScheduler } from './services/reminderScheduler';
 import { backupScheduler } from './services/backupScheduler';
@@ -62,25 +63,20 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use('/api', apiRateLimiter);
 
 
-// Ensure upload folders exist
+// Ensure upload folders exist and are served
 const possibleUploadDirs = [
-  path.join(__dirname, 'uploads'),
   path.join(__dirname, '..', 'uploads'),
-  path.join(process.cwd(), 'app', 'uploads'),
+  path.join(__dirname, 'uploads'),
   path.join(process.cwd(), 'uploads'),
+  path.join(process.cwd(), 'app', 'uploads'),
 ];
-let uploadsDir = possibleUploadDirs[0];
-for (const dir of possibleUploadDirs) {
-  if (fs.existsSync(dir)) {
-    uploadsDir = dir;
-    break;
-  }
-}
-const tempDir = path.join(uploadsDir, 'temp');
-fs.mkdirSync(tempDir, { recursive: true });
 
-// Static file hosting for uploaded patient documents
-app.use('/uploads', express.static(uploadsDir));
+for (const dir of possibleUploadDirs) {
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    app.use('/uploads', express.static(dir));
+  } catch {}
+}
 
 import bcrypt from 'bcryptjs';
 import User from './models/User';
@@ -224,6 +220,7 @@ app.use('/api/audit-logs', auditLogRoutes);
 app.use('/api/dental-acts', dentalActsRoutes);
 app.use('/api/events', liveSyncRoutes);
 app.use('/api/nanopix', nanopixRoutes);
+app.use('/api/treatments', treatmentRoutes);
 
 import { whatsappService } from './services/whatsappService';
 

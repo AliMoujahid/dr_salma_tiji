@@ -106,10 +106,12 @@ export const WaitingRoom: React.FC = () => {
                 <div className="flex justify-between items-start">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-white/10 shrink-0">
-                      <img src={a.patientId?.profilePictureUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${a.patientId?.name}`} alt={a.patientId?.name} className="w-full h-full object-cover" />
+                      <img src={a.patientId?.profilePictureUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent((a.patientId?.name || '') + ' ' + (a.patientId?.prenom || ''))}`} alt={`${a.patientId?.name || ''} ${a.patientId?.prenom || ''}`} className="w-full h-full object-cover" />
                     </div>
                     <div>
-                      <h4 className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-all">{a.patientId?.name}</h4>
+                      <h4 className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-all">
+                        <span className="uppercase">{a.patientId?.name}</span>{a.patientId?.prenom ? ` ${a.patientId.prenom}` : ''}
+                      </h4>
                       <p className="text-[10px] text-slate-500 font-medium font-mono mt-0.5">
                         RDV : {new Date(a.dateTime).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
                       </p>
@@ -155,10 +157,12 @@ export const WaitingRoom: React.FC = () => {
               >
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-white/10 shrink-0">
-                    <img src={a.patientId?.profilePictureUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${a.patientId?.name}`} alt={a.patientId?.name} className="w-full h-full object-cover" />
+                    <img src={a.patientId?.profilePictureUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent((a.patientId?.name || '') + ' ' + (a.patientId?.prenom || ''))}`} alt={`${a.patientId?.name || ''} ${a.patientId?.prenom || ''}`} className="w-full h-full object-cover" />
                   </div>
                   <div>
-                    <h4 className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-all">{a.patientId?.name}</h4>
+                    <h4 className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-all">
+                      <span className="uppercase">{a.patientId?.name}</span>{a.patientId?.prenom ? ` ${a.patientId.prenom}` : ''}
+                    </h4>
                     <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium mt-0.5">Consultation en cours</p>
                   </div>
                 </div>
@@ -201,10 +205,12 @@ export const WaitingRoom: React.FC = () => {
               >
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-white/10 shrink-0">
-                    <img src={a.patientId?.profilePictureUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${a.patientId?.name}`} alt={a.patientId?.name} className="w-full h-full object-cover" />
+                    <img src={a.patientId?.profilePictureUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent((a.patientId?.name || '') + ' ' + (a.patientId?.prenom || ''))}`} alt={`${a.patientId?.name || ''} ${a.patientId?.prenom || ''}`} className="w-full h-full object-cover" />
                   </div>
                   <div>
-                    <h4 className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-all">{a.patientId?.name}</h4>
+                    <h4 className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-all">
+                      <span className="uppercase">{a.patientId?.name}</span>{a.patientId?.prenom ? ` ${a.patientId.prenom}` : ''}
+                    </h4>
                     <p className="text-[10px] text-slate-500 font-medium font-mono mt-0.5">Visite terminée</p>
                   </div>
                 </div>

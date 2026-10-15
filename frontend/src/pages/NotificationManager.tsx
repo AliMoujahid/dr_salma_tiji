@@ -281,9 +281,10 @@ export const NotificationManager: React.FC = () => {
       const itemsText = inv.items?.map((it: any) => `  • ${it.description}${it.tooth ? ` (Dent ${it.tooth})` : ''} : ${it.amount.toLocaleString('fr-FR')} MAD`).join('\n') || '';
 
       const due = Math.max(0, inv.netAmount - (inv.paidAmount || 0));
+      const patientFullName = patient ? [patient.prenom, patient.name].filter(Boolean).join(' ') : '';
 
       setSendBody(
-        `Bonjour ${patient?.name || ''},\n\n` +
+        `Bonjour ${patientFullName},\n\n` +
         `Veuillez trouver ci-dessous le détail de votre Facture N° ${inv.invoiceNumber} du ${invDateStr} émise par le Cabinet Dentaire Dr. Salma Tijini.\n\n` +
         `📋 *Détail des Soins :*\n${itemsText}\n\n` +
         `━━━━━━━━━━━━━━━━━━━━━\n` +
@@ -304,8 +305,9 @@ export const NotificationManager: React.FC = () => {
     const doc = patientAttachments.documents.find((d) => d._id === docId);
     if (doc) {
       const patient = patients.find((p) => p._id === selectedPatients[0]);
+      const patientFullName = patient ? [patient.prenom, patient.name].filter(Boolean).join(' ') : '';
       setSendBody(
-        `Bonjour ${patient?.name || ''},\n\n` +
+        `Bonjour ${patientFullName},\n\n` +
         `Veuillez trouver ci-joint votre document médical : "${doc.fileName}" (${doc.fileType}) transmis par le Cabinet Dentaire Dr. Salma Tijini.\n\n` +
         `Restant à votre entière disposition pour tout renseignement.`
       );
@@ -994,7 +996,7 @@ export const NotificationManager: React.FC = () => {
                           ? 'Envoyer le Document Médical sur WhatsApp'
                           : attachmentType === 'Upload'
                           ? 'Envoyer le Fichier sur WhatsApp'
-                          : `Envoyer le Message à ${patients.find(p => p._id === selectedPatients[0])?.name || '1 patient'}`
+                          : `Envoyer le Message à ${(() => { const p = patients.find(x => x._id === selectedPatients[0]); return p ? `${p.name} ${p.prenom || ''}`.trim() : '1 patient'; })()}`
                         : `Diffuser à ${selectedPatients.length} patient(s)`}
                     </span>
                   </>
@@ -1040,6 +1042,8 @@ export const NotificationManager: React.FC = () => {
                   const q = patientSearchQuery.toLowerCase();
                   return (
                     p.name.toLowerCase().includes(q) ||
+                    (p.prenom && p.prenom.toLowerCase().includes(q)) ||
+                    `${p.name} ${p.prenom || ''}`.toLowerCase().includes(q) ||
                     (p.phone && p.phone.toLowerCase().includes(q)) ||
                     (p.nationalId && p.nationalId.toLowerCase().includes(q))
                   );
@@ -1068,7 +1072,9 @@ export const NotificationManager: React.FC = () => {
                       }`}
                     >
                       <div className="min-w-0 pr-2">
-                        <h5 className="text-xs font-bold text-slate-900 dark:text-slate-200 truncate">{p.name}</h5>
+                        <h5 className="text-xs font-bold text-slate-900 dark:text-slate-200 truncate">
+                          <span className="uppercase">{p.name}</span>{p.prenom ? ` ${p.prenom}` : ''}
+                        </h5>
                         <span className="text-xxs text-slate-500 dark:text-slate-400 block">{p.phone || 'Sans tél'}</span>
                       </div>
                       {isSelected && <CheckCircle2 className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />}

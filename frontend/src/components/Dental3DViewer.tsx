@@ -27,6 +27,7 @@ import { API_URL } from '../config/api';
 import { formatDate } from '../utils/dateUtils';
 
 import { TreatmentAnimationModal } from './TreatmentAnimationModal';
+import { matchesTooth, mapActToToothStatus, getToothLabel } from '../utils/dentalUtils';
 
 // --- ANATOMICAL METADATA DICTIONARY FOR ALL 32 ADULT & 20 CHILD TEETH ---
 const getToothMetadata = (fdiNumber: number): ToothMetadata => {
@@ -449,6 +450,40 @@ const ToothMesh3D: React.FC<{
         </mesh>
       )}
 
+      {/* Ghost holographic outline for Extracted teeth */}
+      {status === 'Extracted' && (
+        <group>
+          <mesh geometry={crownGeo}>
+            <meshStandardMaterial
+              color="#f43f5e"
+              transparent
+              opacity={0.22}
+              roughness={0.6}
+            />
+          </mesh>
+          <mesh geometry={crownGeo}>
+            <meshBasicMaterial
+              color="#ef4444"
+              wireframe={true}
+              transparent
+              opacity={0.35}
+            />
+          </mesh>
+        </group>
+      )}
+
+      {/* Ghost grey outline for Missing teeth */}
+      {status === 'Missing' && (
+        <mesh geometry={crownGeo}>
+          <meshBasicMaterial
+            color="#64748b"
+            wireframe={true}
+            transparent
+            opacity={0.25}
+          />
+        </mesh>
+      )}
+
       {/* Anatomical Root Mesh(es) */}
       {!isMissingOrExtracted && !isImplant && (
         <group>
@@ -501,10 +536,22 @@ const ToothMesh3D: React.FC<{
             className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono font-bold transition-all shadow-lg cursor-pointer backdrop-blur-md ${
               isSelected
                 ? 'bg-blue-600 text-white ring-2 ring-blue-400 scale-110'
+                : status === 'Extracted'
+                ? 'bg-rose-600 text-white border border-rose-400 ring-2 ring-rose-500/50 shadow-rose-950 font-black scale-105'
+                : status === 'Missing'
+                ? 'bg-slate-700 text-slate-300 border border-slate-500 line-through'
+                : status === 'Implant'
+                ? 'bg-blue-600 text-white border border-blue-400'
+                : status === 'Crown'
+                ? 'bg-amber-500 text-slate-900 border border-amber-300 font-black'
+                : status === 'Root Canal'
+                ? 'bg-pink-600 text-white border border-pink-400'
+                : status === 'Filling' || status === 'Composite Filling'
+                ? 'bg-cyan-600 text-white border border-cyan-400'
                 : 'bg-slate-900/85 text-slate-200 border border-white/10 hover:bg-blue-500 hover:text-white'
             }`}
           >
-            {fdiNumber}
+            {fdiNumber}{status === 'Extracted' ? ' ✕' : ''}
           </button>
         </Html>
       )}
@@ -577,9 +624,11 @@ const MandibularGingivaMesh: React.FC<{ showRoots: boolean }> = ({ showRoots }) 
 // --- MAIN 3D DENTAL CHART COMPONENT ---
 interface Dental3DViewerProps {
   patientId: string;
+  carnetActs?: any[];
+  onUpdateCarnet?: () => void;
 }
 
-export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId }) => {
+export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId, carnetActs = [], onUpdateCarnet }) => {
   const { token } = useAuth();
   const { toast, confirm } = useToast();
   const [odontogram, setOdontogram] = useState<any[]>([]);
@@ -598,8 +647,10 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId }) => 
 
   // Form states for adding intervention
   const [newStatus, setNewStatus] = useState<ToothStatusType>('Healthy');
+  const [procedureName, setProcedureName] = useState('');
   const [newNotes, setNewNotes] = useState('');
   const [newCost, setNewCost] = useState('');
+  const [syncWithCarnet, setSyncWithCarnet] = useState<boolean>(true);
   const [submitting, setSubmitting] = useState(false);
 
   // Modal overlays state
@@ -624,14 +675,42 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId }) => 
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => res.json())
-      .then((data) => setOdontogram(data))
+      .then((data) => {
+        if (Array.isArray(data)) setOdontogram(data);
+      })
       .catch((err) => console.error('Error fetching 3D odontogram:', err));
+  };
+
+  // Dynamically resolve tooth clinical state merging Odontogram and Carnet Treatments
+  const getToothState = (fdiNumber: number) => {
+    const matchingActs = (carnetActs || []).filter((a) => matchesTooth(a.tooth, fdiNumber));
+    const record = odontogram.find((t) => t.toothNumber === fdiNumber || (fdiNumber === 11 && t.toothNumber === 1));
+
+    let resolvedStatus: ToothStatusType = (record?.status as ToothStatusType) || 'Healthy';
+
+    if (matchingActs.length > 0) {
+      const sortedActs = [...matchingActs].sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+      );
+      const latestAct = sortedActs[0];
+      const actStatus = mapActToToothStatus(latestAct.description || latestAct.actName || '', latestAct.category || '');
+      if (actStatus !== 'Healthy') {
+        resolvedStatus = actStatus;
+      }
+    }
+
+    return {
+      status: resolvedStatus,
+      matchingActs,
+      record,
+    };
   };
 
   const handleSelectTooth = (toothNum: number) => {
     setSelectedTooth(toothNum);
-    const current = odontogram.find((t) => t.toothNumber === toothNum);
-    setNewStatus(current?.status || 'Healthy');
+    const toothState = getToothState(toothNum);
+    setNewStatus(toothState.status);
+    setProcedureName(toothState.status === 'Extracted' ? 'Extraction (Exo)' : '');
     setNewNotes('');
     setNewCost('');
 
@@ -657,19 +736,29 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId }) => 
       body: JSON.stringify({
         patientId,
         toothNumber: selectedTooth,
+        procedureName: procedureName.trim() || undefined,
         status: newStatus,
         notes: newNotes,
         cost: parseFloat(newCost) || 0,
+        addToCarnet: syncWithCarnet,
       }),
     })
       .then((res) => res.json())
       .then((newRecord) => {
         setToothHistoryList([newRecord, ...toothHistoryList]);
+        setProcedureName('');
         setNewNotes('');
         setNewCost('');
         fetchOdontogram();
+        if (syncWithCarnet && onUpdateCarnet) {
+          onUpdateCarnet();
+        }
+        toast.success('Acte enregistré', `L'acte sur la dent #${selectedTooth} a été mis à jour.`);
       })
-      .catch((err) => console.error('Error logging 3D tooth status:', err))
+      .catch((err) => {
+        console.error('Error logging 3D tooth status:', err);
+        toast.error('Erreur', 'Impossible d\'enregistrer l\'acte.');
+      })
       .finally(() => setSubmitting(false));
   };
 
@@ -920,14 +1009,14 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId }) => 
               <MaxillaryGingivaMesh showRoots={showRoots} />
               {upperTeeth.map(([numStr, { pos, rot }]) => {
                 const num = Number(numStr);
-                const record = odontogram.find((t) => t.toothNumber === num);
+                const toothState = getToothState(num);
                 return (
                   <ToothMesh3D
                     key={num}
                     fdiNumber={num}
                     position={pos}
                     rotation={rot}
-                    status={record?.status || 'Healthy'}
+                    status={toothState.status}
                     isSelected={selectedTooth === num}
                     showLabels={showLabels}
                     onClick={() => handleSelectTooth(num)}
@@ -944,14 +1033,14 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId }) => 
                 <MandibularGingivaMesh showRoots={showRoots} />
                 {lowerTeeth.map(([numStr, { pos, rot }]) => {
                   const num = Number(numStr);
-                  const record = odontogram.find((t) => t.toothNumber === num);
+                  const toothState = getToothState(num);
                   return (
                     <ToothMesh3D
                       key={num}
                       fdiNumber={num}
                       position={pos}
                       rotation={rot}
-                      status={record?.status || 'Healthy'}
+                      status={toothState.status}
                       isSelected={selectedTooth === num}
                       showLabels={showLabels}
                       onClick={() => handleSelectTooth(num)}
@@ -1020,19 +1109,58 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId }) => 
               </button>
             </div>
 
-            {/* AI Diagnostics Readiness Card */}
-            <div className="p-3.5 rounded-2xl bg-gradient-to-r from-blue-900/30 to-indigo-900/30 border border-blue-500/20 flex flex-col gap-2">
+            {/* Carnet Financier Treatments Display */}
+            <div className="p-3.5 rounded-2xl bg-gradient-to-r from-slate-900 to-indigo-950/40 border border-white/10 flex flex-col gap-2.5">
               <div className="flex items-center justify-between">
                 <span className="text-xxs font-bold uppercase tracking-wider text-blue-400 flex items-center gap-1.5">
-                  <Zap className="w-3.5 h-3.5 text-blue-400" /> Module IA Diagnostic Ready
+                  <Sparkles className="w-3.5 h-3.5 text-blue-400" /> Carnet Financier du Patient
                 </span>
-                <span className="text-xxs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold">
-                  Sain (98.4%)
+                <span
+                  className={`text-xxs px-2 py-0.5 rounded-full font-bold border ${
+                    getToothState(selectedTooth).status === 'Extracted'
+                      ? 'bg-rose-500/20 text-rose-400 border-rose-500/30'
+                      : getToothState(selectedTooth).status !== 'Healthy'
+                      ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                      : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                  }`}
+                >
+                  {STATUS_CONFIGS[getToothState(selectedTooth).status]?.label || 'Sain'}
                 </span>
               </div>
-              <p className="text-xxs text-slate-400 leading-relaxed">
-                Analyse prédictive des caries, résorptions et densité osseuse alvéolaire prêtes à être couplées à l'IA.
-              </p>
+
+              {getToothState(selectedTooth).matchingActs.length > 0 ? (
+                <div className="flex flex-col gap-2">
+                  {getToothState(selectedTooth).matchingActs.map((act: any) => (
+                    <div
+                      key={act._id}
+                      className="p-2.5 rounded-xl bg-slate-950/80 border border-white/10 flex flex-col gap-1"
+                    >
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="font-bold text-white truncate max-w-[170px]">
+                          {act.description || act.actName}
+                        </span>
+                        <span className="font-mono text-emerald-400 font-bold shrink-0">
+                          {Number(act.amount || act.cost || 0).toFixed(2)} DH
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center text-xxs text-slate-400">
+                        <span>{formatDate(act.date)}</span>
+                        <span
+                          className={`font-semibold ${
+                            act.invoiceId ? 'text-purple-400' : 'text-amber-400'
+                          }`}
+                        >
+                          {act.invoiceId ? 'Facturé' : 'À facturer'}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xxs text-slate-400 leading-relaxed">
+                  Aucun soin consigné dans le carnet pour cette dent ({selectedMeta.fdiNumber}).
+                </p>
+              )}
             </div>
 
             {/* Log New Intervention Form */}
@@ -1040,10 +1168,18 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId }) => 
               <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Poser un Acte Clinique</h4>
               
               <div>
-                <label className="block text-xxs font-semibold text-slate-400 mb-1">Condition / État</label>
+                <label className="block text-xxs font-semibold text-slate-400 mb-1">Condition / État 3D</label>
                 <select
                   value={newStatus}
-                  onChange={(e) => setNewStatus(e.target.value as ToothStatusType)}
+                  onChange={(e) => {
+                    const val = e.target.value as ToothStatusType;
+                    setNewStatus(val);
+                    if (val === 'Extracted') setProcedureName('Extraction (Exo)');
+                    else if (val === 'Crown') setProcedureName('Couronne');
+                    else if (val === 'Implant') setProcedureName('Implant');
+                    else if (val === 'Root Canal') setProcedureName('Endodontie');
+                    else if (val === 'Filling') setProcedureName('Composite');
+                  }}
                   className="w-full h-10 px-3 rounded-xl border border-white/10 bg-slate-900 text-xs text-white focus:outline-none focus:border-blue-500"
                 >
                   {Object.entries(STATUS_CONFIGS).map(([val, cfg]) => (
@@ -1052,6 +1188,17 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId }) => 
                     </option>
                   ))}
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-xxs font-semibold text-slate-400 mb-1">Désignation du Soin (Optionnel)</label>
+                <input
+                  type="text"
+                  placeholder="ex: Extraction (Exo), Couronne zircone..."
+                  value={procedureName}
+                  onChange={(e) => setProcedureName(e.target.value)}
+                  className="w-full h-10 px-3 rounded-xl border border-white/10 bg-slate-900 text-xs text-white focus:outline-none focus:border-blue-500"
+                />
               </div>
 
               <div>
@@ -1076,10 +1223,20 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({ patientId }) => 
                 />
               </div>
 
+              <label className="flex items-center gap-2 text-xxs font-semibold text-slate-300 cursor-pointer pt-1">
+                <input
+                  type="checkbox"
+                  checked={syncWithCarnet}
+                  onChange={(e) => setSyncWithCarnet(e.target.checked)}
+                  className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 bg-slate-900 border-white/10"
+                />
+                <span>Ajouter également au Carnet Financier du patient</span>
+              </label>
+
               <button
                 type="submit"
                 disabled={submitting}
-                className="w-full h-10 rounded-xl bg-blue-600 hover:bg-blue-500 font-semibold text-xs text-white transition-all shadow-lg shadow-blue-600/20 cursor-pointer"
+                className="w-full h-10 rounded-xl bg-blue-600 hover:bg-blue-500 font-semibold text-xs text-white transition-all shadow-lg shadow-blue-600/20 cursor-pointer mt-1"
               >
                 {submitting ? 'Enregistrement...' : 'Enregistrer Acte 3D'}
               </button>

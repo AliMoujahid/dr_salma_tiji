@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useLocation } from 'react-router-dom';
-import { Plus, Trash2, Printer, RefreshCw, Eye, ClipboardCopy, MessageSquare, Send, Search, X, Filter, CheckCircle2, Clock, AlertCircle, Coins, FileText } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Plus, Trash2, Printer, RefreshCw, Eye, ClipboardCopy, MessageSquare, Send, Search, X, Filter, CheckCircle2, Clock, AlertCircle, Coins, FileText } from 'lucide-react';
 import { Invoice, InvoiceItem, Patient, ClinicConfig, DentalAct } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -14,6 +14,7 @@ export const InvoiceEditor: React.FC = () => {
   const { token } = useAuth();
   const { toast } = useToast();
   const location = useLocation();
+  const navigate = useNavigate();
 
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -61,18 +62,37 @@ export const InvoiceEditor: React.FC = () => {
       .catch((err) => console.error('Error fetching dental acts:', err));
   };
 
-  // Listen to navigation state from other pages (e.g. from PatientProfile "Facturer" trigger)
+  // Listen to navigation state from other pages (e.g. from PatientProfile "Facturer" trigger or specific invoice view)
   useEffect(() => {
     if (location.state) {
       const stateObj = location.state as any;
-      if (stateObj.patientId) {
-        handleNewInvoice(stateObj.patientId);
-      }
-      if (stateObj.printInvoiceId) {
-        handlePrintOnly(stateObj.printInvoiceId);
+      const targetInvoiceId = stateObj.editInvoiceId || stateObj.invoiceId || stateObj.printInvoiceId;
+
+      if (targetInvoiceId) {
+        // Fetch and open the specific invoice directly in edit mode
+        fetch(`${API_URL}/invoices/${targetInvoiceId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+          .then((res) => res.json())
+          .then((inv) => {
+            if (inv && inv._id) {
+              handleEditInvoice(inv);
+              if (stateObj.printInvoiceId || stateObj.autoPrint) {
+                setPrintInvoiceData(inv);
+                setTimeout(() => {
+                  window.print();
+                }, 400);
+              }
+            }
+          })
+          .catch((err) => {
+            console.error('Error fetching specific invoice:', err);
+          });
+      } else if (stateObj.patientId) {
+        handleNewInvoice(stateObj.patientId, stateObj.prefilledItems || []);
       }
     }
-  }, [location]);
+  }, [location.state]);
 
   const fetchInvoices = () => {
     setLoading(true);
@@ -108,13 +128,11 @@ export const InvoiceEditor: React.FC = () => {
     const day = String(today.getDate()).padStart(2, '0');
     const month = String(today.getMonth() + 1).padStart(2, '0');
 
-    const newItem: InvoiceItem = {
+    const newItem = {
       date: `${day}/${month}`,
       tooth: '',
       description: act.name,
       amount: act.defaultPrice,
-      advance: act.defaultPrice,
-      remaining: 0,
     };
 
     // If only 1 initial blank line exists, replace it
@@ -131,7 +149,7 @@ export const InvoiceEditor: React.FC = () => {
     toast.success('Acte ajouté', `${act.name} (${act.defaultPrice} DH) ajouté.`);
   };
 
-  const handleNewInvoice = (preSelectedPatientId = '') => {
+  const handleNewInvoice = (preSelectedPatientId = '', prefilledActs: any[] = []) => {
     setEditInvoiceId(null);
     setSelectedPatientId(preSelectedPatientId || patients[0]?._id || '');
     setInvoiceNumber('');
@@ -139,18 +157,39 @@ export const InvoiceEditor: React.FC = () => {
     setDiscount('0');
     setPaymentMode('espèces');
     setPaymentStatus('Paid');
-    setPaidAmount('0');
-    
-    // Set standard today date formatted as DD/MM
+
     const today = new Date();
     const day = String(today.getDate()).padStart(2, '0');
     const month = String(today.getMonth() + 1).padStart(2, '0');
-    
-    setLineItems([{ date: `${day}/${month}`, tooth: '', description: '', amount: 0, advance: 0, remaining: 0 }]);
+
+    if (prefilledActs && prefilledActs.length > 0) {
+      const items = prefilledActs.map((act) => {
+        let dateStr = `${day}/${month}`;
+        if (act.date) {
+          const d = new Date(act.date);
+          if (!isNaN(d.getTime())) {
+            dateStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+          }
+        }
+        return {
+          date: dateStr,
+          tooth: act.tooth && act.tooth !== '-' ? act.tooth : '',
+          description: act.description || act.actName || '',
+          amount: Number(act.amount) || Number(act.cost) || 0,
+        };
+      });
+      setLineItems(items);
+      const gross = items.reduce((s, it) => s + it.amount, 0);
+      setPaidAmount(String(gross));
+    } else {
+      setLineItems([{ date: `${day}/${month}`, tooth: '', description: '', amount: 0 }]);
+      setPaidAmount('0');
+    }
     setViewMode('edit');
   };
 
   const handleEditInvoice = (inv: Invoice) => {
+    setPrintInvoiceData(null);
     setEditInvoiceId(inv._id);
     setSelectedPatientId(inv.patientId?._id || (inv.patientId as any) || '');
     setInvoiceNumber(inv.invoiceNumber);
@@ -160,17 +199,12 @@ export const InvoiceEditor: React.FC = () => {
     setPaymentStatus(inv.paymentStatus as any);
     setPaidAmount((inv.paidAmount || 0).toString());
     setLineItems(
-      inv.items.map((it) => {
-        const amt = Number(it.amount) || 0;
-        const adv = Number(it.advance !== undefined ? it.advance : (inv.paymentStatus === 'Paid' ? amt : 0));
-        const rem = Number(it.remaining !== undefined ? it.remaining : Math.max(0, amt - adv));
-        return {
-          ...it,
-          amount: amt,
-          advance: adv,
-          remaining: rem,
-        };
-      })
+      inv.items.map((it) => ({
+        date: it.date || '',
+        tooth: it.tooth || '',
+        description: it.description || '',
+        amount: Number(it.amount) || 0,
+      }))
     );
     setViewMode('edit');
   };
@@ -186,10 +220,10 @@ export const InvoiceEditor: React.FC = () => {
     setPaidAmount('0');
     setLineItems(
       inv.items.map((it) => ({
-        ...it,
+        date: it.date || '',
+        tooth: it.tooth || '',
+        description: it.description || '',
         amount: Number(it.amount) || 0,
-        advance: 0,
-        remaining: Number(it.amount) || 0,
       }))
     );
     setViewMode('edit');
@@ -199,7 +233,7 @@ export const InvoiceEditor: React.FC = () => {
     const lastItem = lineItems[lineItems.length - 1];
     setLineItems([
       ...lineItems,
-      { date: lastItem?.date || '', tooth: '', description: '', amount: 0, advance: 0, remaining: 0 },
+      { date: lastItem?.date || '', tooth: '', description: '', amount: 0 },
     ]);
   };
 
@@ -211,65 +245,33 @@ export const InvoiceEditor: React.FC = () => {
 
   const handleLineItemChange = (index: number, field: string, value: any) => {
     const updated = [...lineItems];
-    
     if (field === 'amount') {
       const amt = Math.max(0, parseFloat(value) || 0);
       updated[index].amount = amt;
-      // Default advance to amount if it was previously equal or 0
-      const currentAdv = updated[index].advance !== undefined ? updated[index].advance : 0;
-      if (currentAdv === 0 || currentAdv > amt) {
-        updated[index].advance = amt;
-      }
-      updated[index].remaining = Math.max(0, amt - (updated[index].advance || 0));
-    } else if (field === 'advance') {
-      const adv = Math.max(0, parseFloat(value) || 0);
-      updated[index].advance = adv;
-      const amt = parseFloat(updated[index].amount as any) || 0;
-      updated[index].remaining = Math.max(0, amt - adv);
     } else if (field === 'description') {
       updated[index].description = value;
-      // If description changed and matches a known dental act, auto-populate amount if 0
       const match = dentalActs.find(
         (a) => a.name.toLowerCase() === (value || '').trim().toLowerCase()
       );
       if (match && (!updated[index].amount || Number(updated[index].amount) === 0)) {
         updated[index].amount = match.defaultPrice;
-        updated[index].advance = match.defaultPrice;
-        updated[index].remaining = 0;
       }
     } else {
       updated[index][field] = value;
     }
-
     setLineItems(updated);
   };
 
   const handleMarkAllPaid = () => {
-    const updated = lineItems.map((it) => {
-      const amt = Number(it.amount) || 0;
-      return {
-        ...it,
-        advance: amt,
-        remaining: 0,
-      };
-    });
-    setLineItems(updated);
+    setPaidAmount(String(calculateNetToPay()));
     setPaymentStatus('Paid');
-    toast.success('Tout Réglé', 'Toutes les lignes ont été marquées payées en totalité.');
+    toast.success('Facture Soldée', 'Le montant versé a été ajusté au total net.');
   };
 
   const handleMarkAllUnpaid = () => {
-    const updated = lineItems.map((it) => {
-      const amt = Number(it.amount) || 0;
-      return {
-        ...it,
-        advance: 0,
-        remaining: amt,
-      };
-    });
-    setLineItems(updated);
+    setPaidAmount('0');
     setPaymentStatus('Unpaid');
-    toast.info('Avances Réinitialisées', 'Les avances ont été remises à 0 (Reste = 100%).');
+    toast.info('Non Réglé', 'Le montant versé a été remis à 0.');
   };
 
   const calculateGrossTotal = () => {
@@ -277,7 +279,7 @@ export const InvoiceEditor: React.FC = () => {
   };
 
   const calculateTotalAdvance = () => {
-    return lineItems.reduce((sum, item) => sum + (parseFloat(item.advance as any) || 0), 0);
+    return Math.max(0, parseFloat(paidAmount) || 0);
   };
 
   const calculateNetToPay = () => {
@@ -288,14 +290,36 @@ export const InvoiceEditor: React.FC = () => {
     return Math.max(0, calculateNetToPay() - calculateTotalAdvance());
   };
 
-  const handlePrintOnly = (invId: string) => {
-    const inv = invoices.find((i) => i._id === invId);
-    if (inv) {
-      setPrintInvoiceData(inv);
-      setTimeout(() => {
-        window.print();
-      }, 300);
+  const handleReturnToCarnet = () => {
+    const stateObj = location.state as any;
+    const targetId = selectedPatientId || stateObj?.patientId || stateObj?.returnPatientId;
+    if (targetId) {
+      navigate(`/patients/${targetId}`, {
+        state: {
+          activeTab: stateObj?.returnTab || (stateObj?.patientId ? 'Ledger' : 'Invoices'),
+          selectedActIds: stateObj?.prefilledItems?.map((a: any) => a._id) || [],
+        },
+      });
+    } else {
+      setViewMode('list');
     }
+  };
+
+  const handlePrintOnly = (invId: string) => {
+    fetch(`${API_URL}/invoices/${invId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => res.json())
+      .then((inv) => {
+        if (inv && inv._id) {
+          handleEditInvoice(inv);
+          setPrintInvoiceData(inv);
+          setTimeout(() => {
+            window.print();
+          }, 400);
+        }
+      })
+      .catch((err) => console.error('Error fetching invoice for print:', err));
   };
 
   const handleSendInvoiceWhatsApp = async (inv: Invoice) => {
@@ -331,25 +355,23 @@ export const InvoiceEditor: React.FC = () => {
       .filter((it) => it.description && (Number(it.amount) || 0) > 0)
       .map((it) => {
         const amt = Number(it.amount) || 0;
-        const adv = Number(it.advance !== undefined ? it.advance : amt);
-        const rem = Number(it.remaining !== undefined ? it.remaining : Math.max(0, amt - adv));
         return {
-          date: it.date,
+          date: it.date || '',
           tooth: it.tooth || '',
           description: it.description,
           amount: amt,
-          advance: adv,
-          remaining: rem,
+          advance: amt,
+          remaining: 0,
         };
       });
 
-    const totAvance = validItems.reduce((s, it) => s + (it.advance || 0), 0);
     const netPay = calculateNetToPay();
+    const payVal = Math.max(0, parseFloat(paidAmount) || 0);
 
     let autoStatus = paymentStatus;
-    if (totAvance >= netPay && netPay > 0) {
+    if (payVal >= netPay && netPay > 0) {
       autoStatus = 'Paid';
-    } else if (totAvance > 0) {
+    } else if (payVal > 0) {
       autoStatus = 'Partially Paid';
     } else {
       autoStatus = 'Unpaid';
@@ -362,7 +384,7 @@ export const InvoiceEditor: React.FC = () => {
       discount: parseFloat(discount) || 0,
       paymentMode,
       paymentStatus: autoStatus,
-      paidAmount: totAvance,
+      paidAmount: payVal,
     };
 
     const method = editInvoiceId ? 'PUT' : 'POST';
@@ -581,6 +603,8 @@ export const InvoiceEditor: React.FC = () => {
                 if (!searchTerm.trim()) return true;
                 const term = searchTerm.toLowerCase();
                 const patName = (inv.patientId?.name || '').toLowerCase();
+                const patPrenom = (inv.patientId?.prenom || '').toLowerCase();
+                const patFullName = `${patName} ${patPrenom}`;
                 const patPhone = (inv.patientId?.phone || '').toLowerCase();
                 const num = (inv.invoiceNumber || '').toLowerCase();
                 const dateStr = new Date(inv.date).toLocaleDateString('fr-FR');
@@ -591,6 +615,8 @@ export const InvoiceEditor: React.FC = () => {
                 );
                 return (
                   patName.includes(term) ||
+                  patPrenom.includes(term) ||
+                  patFullName.includes(term) ||
                   patPhone.includes(term) ||
                   num.includes(term) ||
                   `fac-${num}`.includes(term) ||
@@ -625,19 +651,23 @@ export const InvoiceEditor: React.FC = () => {
                   {filteredInvoices.map((inv) => (
                     <div
                       key={inv._id}
+                      onClick={() => handleEditInvoice(inv)}
                       className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 shadow-sm flex justify-between items-center hover:bg-slate-50 dark:hover:bg-slate-900/60 transition-all cursor-pointer group"
                     >
                       <div className="flex items-center gap-4">
-                        <div className="p-2.5 bg-blue-50 text-blue-600 dark:bg-blue-600/10 dark:text-blue-400 rounded-xl border border-blue-200 dark:border-blue-500/15">
+                        <div className="p-2.5 bg-blue-50 text-blue-600 dark:bg-blue-600/10 dark:text-blue-400 rounded-xl border border-blue-200 dark:border-blue-500/15 group-hover:scale-105 transition-transform">
                           <FileTextIcon />
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
                             <h4 className="text-xs font-bold text-slate-900 dark:text-white font-mono">FAC-{inv.invoiceNumber}</h4>
+                            <span className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold group-hover:underline">
+                              (Cliquer pour modifier / afficher)
+                            </span>
                             <span className="text-[10px] text-slate-400">• {new Date(inv.date).toLocaleDateString('fr-FR')}</span>
                           </div>
                           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                            Patient : <strong className="text-slate-800 dark:text-slate-200">{inv.patientId?.name || 'Inconnu'}</strong>
+                            Patient : <strong className="text-slate-800 dark:text-slate-200 uppercase">{inv.patientId?.name || 'Inconnu'}</strong>{inv.patientId?.prenom ? ` ${inv.patientId.prenom}` : ''}
                             {inv.items && inv.items.length > 0 && (
                               <span className="hidden md:inline text-slate-400 ml-2">
                                 ({inv.items.map((it: any) => it.description).join(', ').slice(0, 45)}...)
@@ -647,7 +677,7 @@ export const InvoiceEditor: React.FC = () => {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-6">
+                      <div className="flex items-center gap-6" onClick={(e) => e.stopPropagation()}>
                         <div className="text-right flex flex-col items-end gap-1">
                           <div className="flex items-center gap-2">
                             <span className="text-xs font-bold text-slate-900 dark:text-white font-mono" title="Net à payer">
@@ -678,7 +708,7 @@ export const InvoiceEditor: React.FC = () => {
                           </div>
                         </div>
 
-                        <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-all select-none">
+                        <div className="flex gap-1.5 sm:opacity-90 group-hover:opacity-100 transition-all select-none">
                           <button
                             onClick={() => handleEditInvoice(inv)}
                             className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 border border-slate-200 dark:border-white/5 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white cursor-pointer transition-all shadow-xs"
@@ -719,19 +749,54 @@ export const InvoiceEditor: React.FC = () => {
 
 
         {/* EDITOR / DUAL LAYOUT VIEW */}
-        {viewMode === 'edit' && config && (
+        {viewMode === 'edit' && (
+          !config ? (
+            <div className="py-20 flex flex-col items-center justify-center gap-3">
+              <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+              <p className="text-xs text-slate-400">Chargement des données du cabinet...</p>
+            </div>
+          ) : (
           <div className="flex flex-col xl:flex-row gap-8 items-start">
             
             {/* Left Side: Invoice Fields Editor */}
             <div className="flex-1 w-full rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 p-6 shadow-sm flex flex-col gap-6">
               <div className="flex justify-between items-center border-b border-slate-100 dark:border-white/5 pb-4">
-                <h3 className="text-base font-bold text-slate-900 dark:text-white">Éditeur de Facture</h3>
-                <button
-                  onClick={() => setViewMode('list')}
-                  className="px-3.5 py-1.5 rounded-xl border border-slate-200 dark:border-white/5 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer shadow-xs"
-                >
-                  Fermer
-                </button>
+                <div className="flex items-center gap-2.5">
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">Éditeur de Facture</h3>
+                  {(selectedPatientId || (location.state as any)?.patientId) && (
+                    <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xxs font-bold bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200/80 dark:border-blue-500/20">
+                      Carnet Patient Lié
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {(selectedPatientId || (location.state as any)?.patientId) && (
+                    <button
+                      type="button"
+                      onClick={handleReturnToCarnet}
+                      className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/40 dark:hover:bg-purple-900/50 text-purple-700 dark:text-purple-300 border border-purple-200/80 dark:border-purple-500/30 text-xs font-bold transition-all cursor-pointer shadow-xs"
+                      title="Retourner au carnet du patient pour modifier la sélection (ajouter ou enlever des articles)"
+                    >
+                      <ArrowLeft className="w-3.5 h-3.5" />
+                      <span>Retour au Carnet</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if ((location.state as any)?.patientId) {
+                        handleReturnToCarnet();
+                      } else {
+                        setViewMode('list');
+                      }
+                    }}
+                    className="px-3.5 py-1.5 rounded-xl border border-slate-200 dark:border-white/5 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer shadow-xs"
+                  >
+                    Fermer
+                  </button>
+                </div>
               </div>
 
               <form onSubmit={handleSaveInvoice} className="flex flex-col gap-5">
@@ -837,20 +902,14 @@ export const InvoiceEditor: React.FC = () => {
                   {/* Column Headers */}
                   <div className="grid grid-cols-12 gap-2 text-xxs font-bold uppercase text-slate-400 dark:text-slate-500 px-1 pt-1">
                     <span className="col-span-2 text-center">Date</span>
-                    <span className="col-span-1 text-center">Dent</span>
-                    <span className="col-span-4 pl-1">Acte / Soin</span>
-                    <span className="col-span-2 text-right pr-2">À Payer</span>
-                    <span className="col-span-2 text-right pr-2 text-emerald-600 dark:text-emerald-400">Avance</span>
-                    <span className="col-span-1 text-center text-rose-600 dark:text-rose-400">Reste</span>
+                    <span className="col-span-2 text-center">Dent</span>
+                    <span className="col-span-6 pl-1">Acte / Soin Réalisé</span>
+                    <span className="col-span-2 text-right pr-2">Montant (DH)</span>
                   </div>
 
                   {/* Rows */}
                   <div className="max-h-72 overflow-y-auto pr-1 flex flex-col gap-2.5 no-scrollbar">
                     {lineItems.map((item, index) => {
-                      const amt = Number(item.amount) || 0;
-                      const adv = Number(item.advance !== undefined ? item.advance : amt);
-                      const rem = Number(item.remaining !== undefined ? item.remaining : Math.max(0, amt - adv));
-
                       return (
                         <div key={index} className="grid grid-cols-12 gap-2 items-center bg-slate-50/50 dark:bg-slate-900/30 p-1.5 rounded-xl border border-slate-200/60 dark:border-white/5">
                           {/* Date */}
@@ -865,10 +924,10 @@ export const InvoiceEditor: React.FC = () => {
                           {/* Dent */}
                           <input
                             type="text"
-                            placeholder="Dent"
+                            placeholder="Dent (-)"
                             value={item.tooth}
                             onChange={(e) => handleLineItemChange(index, 'tooth', e.target.value)}
-                            className="col-span-1 h-9 px-1 rounded-lg text-xs border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-center placeholder-slate-400 shadow-xs focus:outline-none focus:border-blue-500 font-bold"
+                            className="col-span-2 h-9 px-1 rounded-lg text-xs border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-center placeholder-slate-400 shadow-xs focus:outline-none focus:border-blue-500 font-bold"
                           />
 
                           {/* Description / Acte */}
@@ -878,51 +937,23 @@ export const InvoiceEditor: React.FC = () => {
                             placeholder="Acte (ex: Couronne zircone...)"
                             value={item.description}
                             onChange={(e) => handleLineItemChange(index, 'description', e.target.value)}
-                            className="col-span-4 h-9 px-3 rounded-lg text-xs border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white placeholder-slate-400 shadow-xs focus:outline-none focus:border-blue-500 font-medium truncate"
+                            className="col-span-6 h-9 px-3 rounded-lg text-xs border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white placeholder-slate-400 shadow-xs focus:outline-none focus:border-blue-500 font-medium truncate"
                           />
 
-                          {/* À Payer */}
-                          <div className="col-span-2 relative">
-                            <input
-                              type="number"
-                              placeholder="Total"
-                              value={item.amount || ''}
-                              onChange={(e) => handleLineItemChange(index, 'amount', e.target.value)}
-                              className="w-full h-9 px-2 pr-6 rounded-lg text-xs border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-right font-mono font-bold shadow-xs focus:outline-none focus:border-blue-500"
-                              title="Montant total prévu pour cet acte"
-                            />
-                            <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] font-bold text-slate-400 pointer-events-none">
-                              DH
-                            </span>
-                          </div>
-
-                          {/* Avance */}
-                          <div className="col-span-2 relative">
-                            <input
-                              type="number"
-                              placeholder="Avance"
-                              value={item.advance !== undefined ? item.advance : ''}
-                              onChange={(e) => handleLineItemChange(index, 'advance', e.target.value)}
-                              className="w-full h-9 px-2 pr-6 rounded-lg text-xs border border-emerald-200 dark:border-emerald-500/30 bg-emerald-50/30 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 text-right font-mono font-bold shadow-xs focus:outline-none focus:border-emerald-500"
-                              title="Avance versée par le patient pour cet acte"
-                            />
-                            <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] font-bold text-emerald-500 pointer-events-none">
-                              DH
-                            </span>
-                          </div>
-
-                          {/* Reste & Delete */}
-                          <div className="col-span-1 flex items-center justify-between gap-1">
-                            <span
-                              className={`text-[10px] font-mono font-extrabold px-1.5 py-0.5 rounded ${
-                                rem === 0
-                                  ? 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30'
-                                  : 'text-rose-600 bg-rose-50 dark:bg-rose-950/30 font-bold'
-                              }`}
-                              title={`Reste dû : ${rem} DH`}
-                            >
-                              {rem.toFixed(0)}
-                            </span>
+                          {/* Montant & Delete */}
+                          <div className="col-span-2 flex items-center gap-1.5">
+                            <div className="relative flex-1">
+                              <input
+                                type="number"
+                                placeholder="0.00"
+                                value={item.amount || ''}
+                                onChange={(e) => handleLineItemChange(index, 'amount', e.target.value)}
+                                className="w-full h-9 px-2 pr-6 rounded-lg text-xs border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-right font-mono font-bold shadow-xs focus:outline-none focus:border-blue-500"
+                              />
+                              <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] font-bold text-slate-400 pointer-events-none">
+                                DH
+                              </span>
+                            </div>
                             <button
                               type="button"
                               onClick={() => handleRemoveLineItem(index)}
@@ -949,7 +980,7 @@ export const InvoiceEditor: React.FC = () => {
                 {/* 5-Card Financial Summaries Bar */}
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 border-t border-slate-100 dark:border-white/5 pt-4 mt-2">
                   <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/80 dark:border-white/5 flex flex-col gap-1">
-                    <span className="text-xxs font-bold text-slate-500 dark:text-slate-400 uppercase">Total À Payer</span>
+                    <span className="text-xxs font-bold text-slate-500 dark:text-slate-400 uppercase">Total Brut</span>
                     <span className="text-sm font-extrabold text-slate-900 dark:text-white font-mono">
                       {calculateGrossTotal().toFixed(2)} DH
                     </span>
@@ -973,10 +1004,28 @@ export const InvoiceEditor: React.FC = () => {
                   </div>
 
                   <div className="p-3 rounded-xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-500/20 flex flex-col gap-1">
-                    <span className="text-xxs font-bold text-emerald-600 dark:text-emerald-400 uppercase">Total Avance</span>
-                    <span className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400 font-mono">
-                      {calculateTotalAdvance().toFixed(2)} DH
-                    </span>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xxs font-bold text-emerald-600 dark:text-emerald-400 uppercase">Acompte Versé</span>
+                      <button
+                        type="button"
+                        onClick={() => setPaidAmount(String(calculateNetToPay()))}
+                        className="text-[9px] font-bold text-emerald-700 dark:text-emerald-300 underline cursor-pointer"
+                        title="Marquer la facture payée à 100%"
+                      >
+                        Soldé
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        value={paidAmount}
+                        onChange={(e) => setPaidAmount(e.target.value)}
+                        className="w-full h-7 px-2 pr-6 rounded-lg text-xs border border-emerald-200 dark:border-emerald-500/30 bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 font-mono font-bold shadow-xs focus:outline-none focus:border-emerald-500 text-right"
+                      />
+                      <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] font-bold text-emerald-500 pointer-events-none">
+                        DH
+                      </span>
+                    </div>
                   </div>
 
                   <div className={`p-3 rounded-xl border flex flex-col gap-1 col-span-2 sm:col-span-1 ${
@@ -984,7 +1033,7 @@ export const InvoiceEditor: React.FC = () => {
                       ? 'bg-rose-50/60 dark:bg-rose-950/20 border-rose-200/60 dark:border-rose-500/20 text-rose-600 dark:text-rose-400'
                       : 'bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-200/60 dark:border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
                   }`}>
-                    <span className="text-xxs font-bold uppercase">Reste Global</span>
+                    <span className="text-xxs font-bold uppercase">Reste Facture</span>
                     <span className="text-sm font-extrabold font-mono">
                       {calculateTotalRemaining().toFixed(2)} DH
                     </span>
@@ -1028,34 +1077,49 @@ export const InvoiceEditor: React.FC = () => {
                 </div>
 
                 {/* Save and Print triggers */}
-                <div className="flex justify-end gap-3.5 border-t border-slate-100 dark:border-white/5 pt-5 mt-4 select-none flex-wrap">
-                  <button
-                    type="submit"
-                    className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 font-semibold text-xs text-white transition-all shadow-md shadow-emerald-600/20 cursor-pointer"
-                  >
-                    Enregistrer la Facture
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => window.print()}
-                    className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 font-semibold text-xs text-white transition-all shadow-md shadow-blue-600/20 cursor-pointer"
-                  >
-                    <Printer className="w-4 h-4" />
-                    <span>Imprimer (A4)</span>
-                  </button>
-                  {editInvoiceId && (
+                <div className="flex justify-between items-center border-t border-slate-100 dark:border-white/5 pt-5 mt-4 select-none flex-wrap gap-3">
+                  <div>
+                    {(selectedPatientId || (location.state as any)?.patientId) && (
+                      <button
+                        type="button"
+                        onClick={handleReturnToCarnet}
+                        className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white cursor-pointer transition-colors shadow-xs"
+                      >
+                        <ArrowLeft className="w-4 h-4" />
+                        <span>Retour au Carnet Patient</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-3.5 flex-wrap">
+                    <button
+                      type="submit"
+                      className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 font-semibold text-xs text-white transition-all shadow-md shadow-emerald-600/20 cursor-pointer"
+                    >
+                      Enregistrer la Facture
+                    </button>
                     <button
                       type="button"
-                      onClick={() => {
-                        const inv = invoices.find((i) => i._id === editInvoiceId);
-                        if (inv) handleSendInvoiceWhatsApp(inv);
-                      }}
-                      className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-600 font-semibold text-xs text-white transition-all shadow-md shadow-emerald-700/20 cursor-pointer"
+                      onClick={() => window.print()}
+                      className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 font-semibold text-xs text-white transition-all shadow-md shadow-blue-600/20 cursor-pointer"
                     >
-                      <MessageSquare className="w-4 h-4" />
-                      <span>Envoyer par WhatsApp</span>
+                      <Printer className="w-4 h-4" />
+                      <span>Imprimer (A4)</span>
                     </button>
-                  )}
+                    {editInvoiceId && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const inv = invoices.find((i) => i._id === editInvoiceId);
+                          if (inv) handleSendInvoiceWhatsApp(inv);
+                        }}
+                        className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-600 font-semibold text-xs text-white transition-all shadow-md shadow-emerald-700/20 cursor-pointer"
+                      >
+                        <MessageSquare className="w-4 h-4" />
+                        <span>Envoyer par WhatsApp</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
 
               </form>
@@ -1074,6 +1138,7 @@ export const InvoiceEditor: React.FC = () => {
             </div>
 
           </div>
+          )
         )}
 
       </div>

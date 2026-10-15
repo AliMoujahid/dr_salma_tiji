@@ -1,7 +1,8 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IPatient extends Document {
-  name: string;
+  name: string; // Nom de famille
+  prenom?: string; // Prénom
   nationalId?: string;
   phone: string;
   email?: string;
@@ -36,6 +37,7 @@ export interface IPatient extends Document {
 const PatientSchema: Schema = new Schema(
   {
     name: { type: String, required: true, index: true },
+    prenom: { type: String, trim: true, default: '' },
     nationalId: { type: String, trim: true },
     phone: { type: String, required: true, trim: true },
     email: { type: String, lowercase: true, trim: true },

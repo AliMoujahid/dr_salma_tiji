@@ -41,6 +41,7 @@ export const Patients: React.FC = () => {
 
   // Form Fields State
   const [name, setName] = useState('');
+  const [prenom, setPrenom] = useState('');
   const [nationalId, setNationalId] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
@@ -89,6 +90,7 @@ export const Patients: React.FC = () => {
   const handleOpenCreateModal = () => {
     setEditPatientId(null);
     setName('');
+    setPrenom('');
     setNationalId('');
     setPhone('');
     setEmail('');
@@ -111,6 +113,7 @@ export const Patients: React.FC = () => {
   const handleOpenEditModal = (patient: Patient) => {
     setEditPatientId(patient._id);
     setName(patient.name);
+    setPrenom(patient.prenom || '');
     setNationalId(patient.nationalId || '');
     setPhone(patient.phone);
     setEmail(patient.email || '');
@@ -137,7 +140,8 @@ export const Patients: React.FC = () => {
     if (!name || !phone || !birthDate) return;
 
     const payload = {
-      name,
+      name: name.trim(),
+      prenom: prenom.trim(),
       nationalId,
       phone,
       email,
@@ -328,8 +332,8 @@ export const Patients: React.FC = () => {
                   <div className="flex justify-between items-start mb-4">
                     <div className="w-12 h-12 rounded-full overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-white/10 shrink-0">
                       <img
-                        src={patient.profilePictureUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${patient.name}`}
-                        alt={patient.name}
+                        src={patient.profilePictureUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(patient.name + ' ' + (patient.prenom || ''))}`}
+                        alt={`${patient.name} ${patient.prenom || ''}`}
                         className="w-full h-full object-cover"
                       />
                     </div>
@@ -344,7 +348,8 @@ export const Patients: React.FC = () => {
                   </div>
 
                   <h3 className="text-sm font-bold text-slate-900 dark:text-white leading-normal truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-all">
-                    {patient.name}
+                    <span className="uppercase">{patient.name}</span>
+                    {patient.prenom ? ` ${patient.prenom}` : ''}
                   </h3>
                   
                   <div className="flex flex-wrap items-center gap-1.5 mt-2">
@@ -453,15 +458,26 @@ export const Patients: React.FC = () => {
             <form onSubmit={handleSubmitPatient} className="flex-1 overflow-y-auto p-6 flex flex-col gap-6 no-scrollbar">
               
               {/* Core Details Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 pl-0.5">Nom Complet *</label>
+                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 pl-0.5">Nom de famille *</label>
                   <input
                     type="text"
                     required
+                    placeholder="Ex: TIJINI"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-950 focus:outline-none focus:border-blue-500"
+                    className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-950 focus:outline-none focus:border-blue-500 uppercase font-semibold"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 pl-0.5">Prénom</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: Salma"
+                    value={prenom}
+                    onChange={(e) => setPrenom(e.target.value)}
+                    className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-950 focus:outline-none focus:border-blue-500 capitalize"
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">

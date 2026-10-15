@@ -46,7 +46,8 @@ const storage = multer.diskStorage({
         const patient = await Patient.findById(patientId);
         if (patient) {
           // Normalize patient name strictly against path traversal
-          patientName = patient.name.replace(/[^a-zA-Z0-9\s-_]/g, '').replace(/\s+/g, '_').trim() || 'Patient';
+          const full = [patient.name, patient.prenom].filter(Boolean).join(' ');
+          patientName = full.replace(/[^a-zA-Z0-9\s-_]/g, '').replace(/\s+/g, '_').trim() || 'Patient';
         }
       }
 
@@ -93,6 +94,70 @@ const upload = multer({
     cb(null, true);
   },
 });
+
+// Helper to recursively find a file by filename in a directory
+const findFileRecursively = (dir: string, targetName: string, maxDepth = 4): string | null => {
+  try {
+    if (!fs.existsSync(dir) || maxDepth < 0) return null;
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name);
+      if (entry.isFile()) {
+        if (entry.name.toLowerCase() === targetName.toLowerCase()) {
+          return full;
+        }
+      } else if (entry.isDirectory()) {
+        const found = findFileRecursively(full, targetName, maxDepth - 1);
+        if (found) return found;
+      }
+    }
+  } catch {}
+  return null;
+};
+
+// Helper to reliably resolve the physical document path on disk across any environment
+export const resolveDocumentPath = (doc: any): string | null => {
+  if (!doc || !doc.filePath) return null;
+  if (typeof doc.filePath === 'string' && fs.existsSync(doc.filePath)) {
+    return doc.filePath;
+  }
+
+  const rawPath = String(doc.filePath || '');
+  const normalized = rawPath.replace(/\\/g, '/').replace(/^\/+/, '');
+  const withoutUploads = normalized.replace(/^uploads\//i, '');
+  const fileNameOnDisk = path.basename(normalized);
+
+  const candidateDirs = [
+    path.join(__dirname, '..', '..', 'uploads'),
+    path.join(__dirname, '..', 'uploads'),
+    path.join(process.cwd(), 'uploads'),
+    path.join(process.cwd(), 'app', 'uploads'),
+    'C:\\Cabinet_Dr_Salma_Tijini_Release\\uploads',
+    'C:\\Cabinet_Dr_Salma_Tijini_Release\\app\\uploads',
+  ];
+
+  // 1. Direct candidate matching
+  for (const dir of candidateDirs) {
+    const directCandidate = path.join(dir, withoutUploads);
+    if (fs.existsSync(directCandidate)) return directCandidate;
+
+    const normCandidate = path.join(dir, normalized);
+    if (fs.existsSync(normCandidate)) return normCandidate;
+
+    const baseCandidate = path.join(dir, fileNameOnDisk);
+    if (fs.existsSync(baseCandidate)) return baseCandidate;
+  }
+
+  // 2. Recursive fallback in candidate upload folders
+  for (const dir of candidateDirs) {
+    if (fs.existsSync(dir)) {
+      const found = findFileRecursively(dir, fileNameOnDisk);
+      if (found) return found;
+    }
+  }
+
+  return null;
+};
 
 // Helper to reliably compute relative upload path with leading slash
 const getRelativeUploadPath = (fullPath: string): string => {
@@ -226,7 +291,7 @@ router.put('/:id/rename', protect, async (req: AuthRequest, res: Response) => {
     const oldName = doc.fileName;
 
     // Rename file physically on disk safely
-    const absolutePath = path.join(__dirname, '..', '..', 'uploads', doc.filePath.replace(/^\/+/, ''));
+    const absolutePath = resolveDocumentPath(doc) || path.join(__dirname, '..', '..', 'uploads', doc.filePath.replace(/^\/+/, ''));
     const dir = path.dirname(absolutePath);
     const ext = path.extname(absolutePath);
     
@@ -282,9 +347,9 @@ router.delete('/:id', protect, async (req: AuthRequest, res: Response) => {
 
     // Delete physical file on disk safely
     try {
-      const absolutePath = path.join(__dirname, '..', '..', 'uploads', doc.filePath.replace(/^\/+/, ''));
-      if (fs.existsSync(absolutePath)) {
-        fs.unlinkSync(absolutePath);
+      const physicalPath = resolveDocumentPath(doc);
+      if (physicalPath && fs.existsSync(physicalPath)) {
+        fs.unlinkSync(physicalPath);
       }
     } catch (fsErr: any) {
       console.warn('Physical file delete warning:', fsErr.message);
@@ -306,6 +371,73 @@ router.delete('/:id', protect, async (req: AuthRequest, res: Response) => {
     res.json({ message: 'Fichier supprimé avec succès.' });
   } catch (error: any) {
     res.status(500).json({ message: 'Erreur lors de la suppression du fichier.', error: error.message });
+  }
+});
+
+// 5. Preview document inline (PDF, images, etc.)
+router.get('/preview/:id', async (req: any, res: Response) => {
+  try {
+    if (!isValidObjectId(req.params.id)) {
+      res.status(400).send('Identifiant de document invalide');
+      return;
+    }
+
+    const doc = await DocumentModel.findById(req.params.id);
+    if (!doc) {
+      res.status(404).send('Document introuvable');
+      return;
+    }
+
+    const foundFile = resolveDocumentPath(doc);
+    if (!foundFile) {
+      res.status(404).send('Fichier physique introuvable sur le disque');
+      return;
+    }
+
+    const ext = path.extname(foundFile).toLowerCase();
+    if (ext === '.pdf') {
+      res.setHeader('Content-Type', 'application/pdf');
+    } else if (['.jpg', '.jpeg'].includes(ext)) {
+      res.setHeader('Content-Type', 'image/jpeg');
+    } else if (ext === '.png') {
+      res.setHeader('Content-Type', 'image/png');
+    } else if (ext === '.webp') {
+      res.setHeader('Content-Type', 'image/webp');
+    } else if (['.mp4', '.mov'].includes(ext)) {
+      res.setHeader('Content-Type', 'video/mp4');
+    }
+
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(doc.fileName || path.basename(foundFile))}"`);
+    res.sendFile(path.resolve(foundFile));
+  } catch (err: any) {
+    res.status(500).send('Erreur affichage du document : ' + err.message);
+  }
+});
+
+// 6. Direct file download with forced attachment header
+router.get('/download/:id', async (req: any, res: Response) => {
+  try {
+    if (!isValidObjectId(req.params.id)) {
+      res.status(400).send('Identifiant de document invalide');
+      return;
+    }
+
+    const doc = await DocumentModel.findById(req.params.id);
+    if (!doc) {
+      res.status(404).send('Document introuvable');
+      return;
+    }
+
+    const foundFile = resolveDocumentPath(doc);
+    if (!foundFile) {
+      res.status(404).send('Fichier physique introuvable sur le disque');
+      return;
+    }
+
+    const downloadFileName = doc.fileName || path.basename(foundFile);
+    res.download(path.resolve(foundFile), downloadFileName);
+  } catch (err: any) {
+    res.status(500).send('Erreur lors du téléchargement : ' + err.message);
   }
 });
 
