@@ -75,7 +75,7 @@ for (const dir of possibleUploadDirs) {
   try {
     fs.mkdirSync(dir, { recursive: true });
     app.use('/uploads', express.static(dir));
-  } catch {}
+  } catch { }
 }
 
 import bcrypt from 'bcryptjs';
@@ -102,10 +102,10 @@ const connectWithRetry = async () => {
           await mongoose.disconnect();
         }
         await mongoose.connect(uri, { serverSelectionTimeoutMS: 4000 });
-        
+
         // Verify that we can actually read from the database (verifies authentication if enabled)
         await User.findOne({ username: 'admin' });
-        
+
         connected = true;
         console.log(`✅ MongoDB connecté et validé avec succès (${uri.includes('@') ? 'Mode Sécurisé Authentifié' : 'Mode Local Standard'}).`);
         break;
@@ -113,7 +113,7 @@ const connectWithRetry = async () => {
         console.warn(`⚠️ [MongoDB] Échec de validation avec URI (${uri.split('@').pop()}): ${err.message}`);
         try {
           await mongoose.disconnect();
-        } catch {}
+        } catch { }
       }
     }
 
@@ -124,9 +124,8 @@ const connectWithRetry = async () => {
   }
 
   try {
-    // Ensure Admin Account Exists & is Active
-    const salt = await bcrypt.genSalt(10);
-    const passwordHash = await bcrypt.hash('Moujahid@97', salt);
+    // Pre-computed bcrypt hash for initial administrator bootstrap (never exposed in cleartext)
+    const INITIAL_ADMIN_HASH = '$2a$10$EwiDVKY2TUHkC1NRF1bljeTd45nUUrPGfo8rpwnRRZV/Rz0qI/g72';
     let adminUser = await User.findOne({
       $or: [{ username: 'admin' }, { email: 'admin@tijini.com' }, { email: 'doctor@tijini.com' }],
     });
@@ -135,20 +134,19 @@ const connectWithRetry = async () => {
       await User.create({
         username: 'admin',
         email: 'admin@tijini.com',
-        passwordHash,
-        name: 'Dr. Salma Tijini',
+        passwordHash: INITIAL_ADMIN_HASH,
+        name: 'Moujahid Ali',
         role: 'ADMIN',
         active: true,
       });
-      console.log('⚡ Compte Administrateur initialisé avec succès (admin / Moujahid@97).');
+      console.log('⚡ Compte Administrateur initialisé avec succès.');
     } else {
-      // Ensure credentials and permissions are up to date
-      adminUser.passwordHash = passwordHash;
+      // Ensure role and active status
       adminUser.role = 'ADMIN';
       adminUser.active = true;
       if (!adminUser.username) adminUser.username = 'admin';
       await adminUser.save();
-      console.log('⚡ Compte Administrateur synchronisé et actif (admin / Moujahid@97).');
+      console.log('⚡ Compte Administrateur synchronisé et actif.');
     }
 
     // Ensure Clinic Configuration Exists

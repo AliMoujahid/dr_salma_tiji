@@ -5,11 +5,12 @@ import { Settings as SettingsIcon, Save, UploadCloud, Database, Download, CheckC
 import { ClinicConfig } from '../types';
 import { DentalActsManager } from '../components/DentalActsManager';
 import { API_URL } from '../config/api';
+import { getLocalAvatar } from '../utils/avatarUtils';
 
 export const Settings: React.FC = () => {
   const { user, token, isAdmin, updateUser } = useAuth();
   const { toast, confirm } = useToast();
-  
+
   const [activeSettingsTab, setActiveSettingsTab] = useState<'ACTS' | 'CABINET' | 'USERS' | 'BACKUP' | 'AUDIT'>('ACTS');
   const [config, setConfig] = useState<ClinicConfig | null>(null);
   const [loading, setLoading] = useState(true);
@@ -49,7 +50,7 @@ export const Settings: React.FC = () => {
   const [wizardAddress, setWizardAddress] = useState('');
   const [wizardPhone, setWizardPhone] = useState('');
   const [wizardEmail, setWizardEmail] = useState('');
-  const [wizardPassword, setWizardPassword] = useState('Moujahid@97');
+  const [wizardPassword, setWizardPassword] = useState('');
   const [runningWizard, setRunningWizard] = useState(false);
 
 
@@ -80,15 +81,7 @@ export const Settings: React.FC = () => {
   }, [user]);
 
   const getAvatarDisplaySrc = (avatarUrl?: string, name?: string) => {
-    if (!avatarUrl) {
-      return `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name || 'User')}`;
-    }
-    const cleanUrl = avatarUrl.replace(/^\.\.\//, '/').replace(/^uploads\//, '/uploads/');
-    if (cleanUrl.startsWith('/uploads')) {
-      const baseUrl = API_URL.replace('/api', '');
-      return `${baseUrl}${cleanUrl}`;
-    }
-    return avatarUrl;
+    return getLocalAvatar(name, '', avatarUrl);
   };
 
 
@@ -538,7 +531,7 @@ export const Settings: React.FC = () => {
 
   return (
     <div className="flex-1 p-8 flex flex-col gap-6 overflow-y-auto no-scrollbar max-h-[calc(100vh-80px)] select-none">
-      
+
       {/* Title */}
       <div>
         <h2 className="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Configuration de la Clinique</h2>
@@ -606,11 +599,10 @@ export const Settings: React.FC = () => {
               key={tab.id}
               type="button"
               onClick={() => setActiveSettingsTab(tab.id as any)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer shrink-0 ${
-                isActive
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer shrink-0 ${isActive
                   ? 'bg-blue-600 text-white shadow-md shadow-blue-600/25'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5'
-              }`}
+                }`}
             >
               <tab.icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
               <span>{tab.label}</span>
@@ -965,7 +957,7 @@ export const Settings: React.FC = () => {
               {/* Static image uploads (Logo, Signature, Stamp) */}
               <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 p-6 shadow-sm flex flex-col gap-4">
                 <h3 className="text-xs font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-white/5 pb-3">Images Imprimées (A4)</h3>
-                
+
                 {/* Logo */}
                 <div className="flex justify-between items-center gap-4 py-2 border-b border-slate-100 dark:border-white/5">
                   <div className="flex flex-col">
@@ -1083,13 +1075,12 @@ export const Settings: React.FC = () => {
                       </td>
                       <td className="p-3 font-mono text-[11px] text-slate-600 dark:text-slate-300">{u.email}</td>
                       <td className="p-3">
-                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                          u.role === 'ADMIN'
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${u.role === 'ADMIN'
                             ? 'bg-purple-50 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300 border border-purple-200 dark:border-purple-500/30'
                             : u.role === 'DOCTOR'
-                            ? 'bg-blue-50 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300 border border-blue-200 dark:border-blue-500/30'
-                            : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30'
-                        }`}>
+                              ? 'bg-blue-50 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300 border border-blue-200 dark:border-blue-500/30'
+                              : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30'
+                          }`}>
                           {u.role}
                         </span>
                       </td>
@@ -1273,11 +1264,10 @@ export const Settings: React.FC = () => {
                     <tr key={log._id} className="hover:bg-slate-50 dark:hover:bg-white/3 transition-all">
                       <td className="p-3 font-semibold text-slate-900 dark:text-white">{log.userName}</td>
                       <td className="p-3">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          log.action === 'DELETE_PATIENT'
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${log.action === 'DELETE_PATIENT'
                             ? 'bg-rose-50 text-rose-700 dark:bg-rose-500/20 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20'
                             : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20'
-                        }`}>
+                          }`}>
                           {log.action === 'DELETE_PATIENT' ? 'Suppression Patient' : 'Restauration'}
                         </span>
                       </td>
@@ -1400,7 +1390,7 @@ export const Settings: React.FC = () => {
       {onboardingModalOpen && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn">
           <div className="w-full max-w-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl p-6 md:p-8 shadow-2xl flex flex-col gap-6 max-h-[90vh] overflow-y-auto no-scrollbar">
-            
+
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-white/5 pb-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
@@ -1425,22 +1415,20 @@ export const Settings: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setWizardMode('FULL_SETUP')}
-                className={`py-2.5 px-3 rounded-xl text-xs font-bold cursor-pointer transition-all ${
-                  wizardMode === 'FULL_SETUP'
+                className={`py-2.5 px-3 rounded-xl text-xs font-bold cursor-pointer transition-all ${wizardMode === 'FULL_SETUP'
                     ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
                     : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                }`}
+                  }`}
               >
                 ✨ Configuration Complète Express
               </button>
               <button
                 type="button"
                 onClick={() => setWizardMode('WIPE_ONLY')}
-                className={`py-2.5 px-3 rounded-xl text-xs font-bold cursor-pointer transition-all ${
-                  wizardMode === 'WIPE_ONLY'
+                className={`py-2.5 px-3 rounded-xl text-xs font-bold cursor-pointer transition-all ${wizardMode === 'WIPE_ONLY'
                     ? 'bg-rose-600 text-white shadow-md shadow-rose-600/30'
                     : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                }`}
+                  }`}
               >
                 🧹 Vider les Données de Démo
               </button>
@@ -1574,11 +1562,10 @@ export const Settings: React.FC = () => {
                 <button
                   type="submit"
                   disabled={runningWizard}
-                  className={`px-6 py-2.5 rounded-xl text-white font-bold text-xs shadow-lg transition-all cursor-pointer flex items-center gap-2 disabled:opacity-50 ${
-                    wizardMode === 'WIPE_ONLY'
+                  className={`px-6 py-2.5 rounded-xl text-white font-bold text-xs shadow-lg transition-all cursor-pointer flex items-center gap-2 disabled:opacity-50 ${wizardMode === 'WIPE_ONLY'
                       ? 'bg-rose-600 hover:bg-rose-500 shadow-rose-600/30'
                       : 'bg-blue-600 hover:bg-blue-500 shadow-blue-600/30'
-                  }`}
+                    }`}
                 >
                   {runningWizard ? (
                     <>

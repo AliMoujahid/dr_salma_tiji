@@ -35,38 +35,19 @@ async function seed() {
 
     console.log('Cleared existing collections.');
 
-    // 1. Create staff users
-    const salt = await bcrypt.genSalt(10);
-    const commonPasswordHash = await bcrypt.hash('Moujahid@97', salt);
+    // 1. Create single admin user for initial installation
+    const INITIAL_ADMIN_HASH = '$2a$10$EwiDVKY2TUHkC1NRF1bljeTd45nUUrPGfo8rpwnRRZV/Rz0qI/g72';
 
     const admin = await User.create({
       username: 'admin',
       email: 'admin@tijini.com',
-      passwordHash: commonPasswordHash,
+      passwordHash: INITIAL_ADMIN_HASH,
       name: 'Moujahid Ali',
       role: 'ADMIN',
       avatarUrl: '/uploads/avatars/avatar-1787945011413-961832010.jpg',
     });
 
-    const doctor = await User.create({
-      username: 'doctor',
-      email: 'doctor@tijini.com',
-      passwordHash: commonPasswordHash,
-      name: 'Dr. Salma Tijini',
-      role: 'DOCTOR',
-      avatarUrl: '/uploads/avatars/avatar-1787945011413-961832010.jpg',
-    });
-
-    const receptionist = await User.create({
-      username: 'receptionist',
-      email: 'receptionist@tijini.com',
-      passwordHash: commonPasswordHash,
-      name: 'Asmae El Hilali',
-      role: 'RECEPTIONIST',
-      avatarUrl: '/uploads/avatars/avatar-1787945081420-898414264.jpg',
-    });
-
-    console.log('Seeded staff users.');
+    console.log('Seeded single initial admin user.');
 
 
 
@@ -379,13 +360,13 @@ async function seed() {
       for (let i = 0; i < 8; i++) {
         const patient = patients[(monthOffset * 3 + i) % patients.length];
         const treatment = treatments[(i + monthOffset) % treatments.length];
-        
+
         const apptDate = new Date(now.getFullYear(), now.getMonth() - monthOffset, 2 + i * 3, 9 + (i % 6), (i % 2) * 30);
         const dateStrFormatted = `${String(apptDate.getDate()).padStart(2, '0')}/${String(apptDate.getMonth() + 1).padStart(2, '0')}/${apptDate.getFullYear()}`;
 
         appointmentsToInsert.push({
           patientId: patient._id,
-          doctorId: doctor._id,
+          doctorId: admin._id,
           dateTime: apptDate,
           duration: treatment.duration,
           status: 'Completed',
@@ -421,7 +402,7 @@ async function seed() {
           paymentMode,
           paymentStatus: 'Paid',
           paidAmount: net,
-          createdBy: doctor._id,
+          createdBy: admin._id,
         });
 
         // Generate matching payment transaction
@@ -469,7 +450,7 @@ async function seed() {
 
       appointmentsToInsert.push({
         patientId: patient._id,
-        doctorId: doctor._id,
+        doctorId: admin._id,
         dateTime: apptDate,
         duration: slot.duration,
         status: slot.status as any,
@@ -494,7 +475,7 @@ async function seed() {
           paymentMode: 'carte',
           paymentStatus: 'Paid',
           paidAmount: total,
-          createdBy: receptionist._id,
+          createdBy: admin._id,
         });
 
         paymentsToInsert.push({
@@ -534,7 +515,7 @@ async function seed() {
 
         appointmentsToInsert.push({
           patientId: patient._id,
-          doctorId: doctor._id,
+          doctorId: admin._id,
           dateTime: apptDate,
           duration: treatment.duration,
           status: day <= 3 ? 'Confirmed' : 'Scheduled',

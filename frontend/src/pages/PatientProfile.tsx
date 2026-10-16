@@ -43,6 +43,7 @@ import {
   ZoomOut,
   Maximize2,
   Edit,
+  AlertTriangle,
 } from 'lucide-react';
 import { Patient, Invoice, PaymentTransaction, Appointment, Document, DentalAct, ClinicConfig } from '../types';
 import { formatDate, formatDateTime, formatBirthDateWithAge, formatRelativeDateTime } from '../utils/dateUtils';
@@ -51,6 +52,7 @@ import { InvoicePrintLayout } from '../components/InvoicePrintLayout';
 import { SearchableActSelect } from '../components/SearchableActSelect';
 import { DENTAL_CATEGORIES } from '../components/DentalActsManager';
 import { parseToothNumbers, getToothLabel } from '../utils/dentalUtils';
+import { getLocalAvatar } from '../utils/avatarUtils';
 
 
 export const PatientProfile: React.FC = () => {
@@ -109,7 +111,20 @@ export const PatientProfile: React.FC = () => {
   const [actTooth, setActTooth] = useState('');
   const [actName, setActName] = useState('');
   const [actCost, setActCost] = useState('');
+  const [actAdvance, setActAdvance] = useState('');
+  const [actPaymentMode, setActPaymentMode] = useState('espèces');
   const [actNotes, setActNotes] = useState('');
+
+  // Quick Act Advance / Tranche Payment modal state
+  const [showActAdvanceModal, setShowActAdvanceModal] = useState(false);
+  const [selectedActForAdvance, setSelectedActForAdvance] = useState<any>(null);
+  const [actAdvanceAmount, setActAdvanceAmount] = useState('');
+  const [actAdvancePaymentMode, setActAdvancePaymentMode] = useState('espèces');
+  const [actAdvanceDate, setActAdvanceDate] = useState(new Date().toISOString().split('T')[0]);
+  const [actAdvanceNotes, setActAdvanceNotes] = useState('');
+  const [actAdvanceHistory, setActAdvanceHistory] = useState<any[]>([]);
+  const [loadingAdvanceHistory, setLoadingAdvanceHistory] = useState(false);
+  const [savingActAdvance, setSavingActAdvance] = useState(false);
 
   const handleOpenAddActModal = () => {
     setSelectedActId('');
@@ -117,6 +132,8 @@ export const PatientProfile: React.FC = () => {
     setActTooth('');
     setActName('');
     setActCost('');
+    setActAdvance('');
+    setActPaymentMode('espèces');
     setActNotes('');
     setShowAddActModal(true);
   };
@@ -281,7 +298,21 @@ export const PatientProfile: React.FC = () => {
       const headers = { Authorization: `Bearer ${token}` };
       
       const patRes = await fetch(`${API_URL}/patients/${id}`, { headers });
+      if (!patRes.ok) {
+        setLoading(false);
+        setPatient(null);
+        toast.error('Patient introuvable', 'Ce dossier patient n\'existe pas ou a été supprimé.');
+        navigate('/patients');
+        return;
+      }
       const patData = await patRes.json();
+      if (!patData || !patData._id) {
+        setLoading(false);
+        setPatient(null);
+        toast.error('Patient introuvable', 'Ce dossier patient n\'existe pas.');
+        navigate('/patients');
+        return;
+      }
       setPatient(patData);
 
       // Fetch Sub-resources concurrently
@@ -400,6 +431,8 @@ export const PatientProfile: React.FC = () => {
     try {
       const parsedTeeth = parseToothNumbers(actTooth);
       const normalizedTooth = parsedTeeth.length === 1 ? String(parsedTeeth[0]) : actTooth.trim();
+      const parsedCost = parseFloat(actCost) || 0;
+      const parsedAdvance = parseFloat(actAdvance) || 0;
 
       const res = await fetch(`${API_URL}/treatments`, {
         method: 'POST',
@@ -409,7 +442,9 @@ export const PatientProfile: React.FC = () => {
           date: actDate,
           tooth: normalizedTooth,
           actName: actName.trim(),
-          cost: parseFloat(actCost) || 0,
+          cost: parsedCost,
+          advance: parsedAdvance,
+          paymentMode: actPaymentMode || 'espèces',
           notes: actNotes,
         }),
       });
@@ -419,16 +454,132 @@ export const PatientProfile: React.FC = () => {
         throw new Error(data.message || 'Erreur lors de l\'enregistrement du soin.');
       }
 
-      toast.success('Soin consigné', `L'acte "${actName}" a été ajouté au carnet.`);
+      toast.success(
+        'Soin consigné',
+        parsedAdvance > 0
+          ? `L'acte "${actName}" a été ajouté (A payer: ${parsedCost} DH, Avance: ${parsedAdvance} DH).`
+          : `L'acte "${actName}" a été ajouté au carnet (${parsedCost} DH).`
+      );
       setShowAddActModal(false);
       setSelectedActId('');
       setActTooth('');
       setActName('');
       setActCost('');
+      setActAdvance('');
+      setActPaymentMode('espèces');
       setActNotes('');
       fetchLedger();
+      fetchPatientProfile();
     } catch (err: any) {
       toast.error('Erreur', err.message || 'Impossible d\'enregistrer le soin.');
+    }
+  };
+
+  const fetchActAdvanceHistory = async (treatmentId: string) => {
+    setLoadingAdvanceHistory(true);
+    try {
+      const res = await fetch(`${API_URL}/treatments/${treatmentId}/advances`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setActAdvanceHistory(data.payments || []);
+        setSelectedActForAdvance((prev: any) => ({
+          ...prev,
+          amount: data.cost !== undefined ? data.cost : prev?.amount,
+          paidAmount: data.paidAmount !== undefined ? data.paidAmount : prev?.paidAmount,
+          remainingAmount: data.remainingAmount !== undefined ? data.remainingAmount : prev?.remainingAmount,
+        }));
+      }
+    } catch (err) {
+      console.error('Error fetching advance history:', err);
+    } finally {
+      setLoadingAdvanceHistory(false);
+    }
+  };
+
+  const handleOpenActAdvanceModal = (act: any) => {
+    setSelectedActForAdvance(act);
+    setActAdvanceAmount('');
+    setActAdvancePaymentMode('espèces');
+    setActAdvanceDate(new Date().toISOString().split('T')[0]);
+    setActAdvanceNotes('');
+    setActAdvanceHistory([]);
+    fetchActAdvanceHistory(act._id);
+    setShowActAdvanceModal(true);
+  };
+
+  const handleSaveActAdvance = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedActForAdvance || !selectedActForAdvance._id) return;
+    const amt = parseFloat(actAdvanceAmount);
+    if (!amt || amt <= 0) {
+      toast.warning('Montant invalide', 'Veuillez saisir un montant supérieur à 0.');
+      return;
+    }
+
+    setSavingActAdvance(true);
+    try {
+      const res = await fetch(`${API_URL}/treatments/${selectedActForAdvance._id}/advance`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          amount: amt,
+          paymentMethod: actAdvancePaymentMode,
+          date: actAdvanceDate,
+          notes: actAdvanceNotes,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || 'Erreur lors de l\'enregistrement de l\'acompte.');
+      }
+
+      toast.success('Acompte enregistré', `Versement de ${amt.toFixed(2)} DH consigné avec succès.`);
+      setActAdvanceAmount('');
+      setActAdvanceNotes('');
+      await fetchActAdvanceHistory(selectedActForAdvance._id);
+      fetchLedger();
+      fetchPatientProfile();
+    } catch (err: any) {
+      toast.error('Erreur', err.message || 'Impossible d\'enregistrer l\'acompte.');
+    } finally {
+      setSavingActAdvance(false);
+    }
+  };
+
+  const handleDeleteActAdvance = async (paymentId: string, amount: number) => {
+    if (!selectedActForAdvance || !selectedActForAdvance._id) return;
+    const ok = await confirm({
+      title: 'Supprimer ce versement ?',
+      message: `Êtes-vous sûr de vouloir supprimer ce versement de ${amount.toFixed(2)} DH ? Le reste dû sera automatiquement réajusté.`,
+      confirmText: 'Supprimer',
+      variant: 'danger',
+    });
+    if (!ok) return;
+
+    try {
+      const res = await fetch(`${API_URL}/treatments/${selectedActForAdvance._id}/advance/${paymentId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.message || 'Erreur lors de la suppression du versement');
+      }
+      const data = await res.json();
+      toast.success('Versement supprimé', 'Le versement a été retiré et le solde réajusté.');
+      setActAdvanceHistory(data.payments || []);
+      setSelectedActForAdvance((prev: any) => ({
+        ...prev,
+        paidAmount: data.paidAmount,
+        remainingAmount: data.remainingAmount,
+      }));
+      fetchLedger();
+      fetchPatientProfile();
+    } catch (err: any) {
+      toast.error('Erreur', err.message || 'Impossible de supprimer ce versement.');
     }
   };
 
@@ -679,10 +830,31 @@ export const PatientProfile: React.FC = () => {
     }
   };
 
-  if (loading || !patient) {
+  if (loading) {
     return (
       <div className="flex-1 p-8 flex items-center justify-center">
         <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  if (!patient || !patient._id) {
+    return (
+      <div className="flex-1 p-8 flex flex-col items-center justify-center gap-4 text-center min-h-[500px]">
+        <div className="w-16 h-16 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center border border-amber-500/20">
+          <AlertTriangle className="w-8 h-8" />
+        </div>
+        <h3 className="text-lg font-bold text-slate-900 dark:text-white">Dossier Patient Introuvable</h3>
+        <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm">
+          Ce dossier patient n'existe pas dans la base de données ou a été supprimé.
+        </p>
+        <button
+          onClick={() => navigate('/patients')}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>Retour à la liste des Patients</span>
+        </button>
       </div>
     );
   }
@@ -735,9 +907,12 @@ export const PatientProfile: React.FC = () => {
         <div className="flex items-center gap-5">
           <div className="w-16 h-16 rounded-2xl overflow-hidden border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-slate-800 shrink-0 shadow-xs">
             <img
-              src={patient.profilePictureUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(patient.name + ' ' + (patient.prenom || ''))}`}
+              src={getLocalAvatar(patient.name, patient.prenom, patient.profilePictureUrl)}
               alt={`${patient.name} ${patient.prenom || ''}`}
               className="w-full h-full object-cover"
+              onError={(e) => {
+                e.currentTarget.src = getLocalAvatar(patient.name, patient.prenom);
+              }}
             />
           </div>
           <div>
@@ -1361,13 +1536,14 @@ export const PatientProfile: React.FC = () => {
                       <tr className="bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 uppercase text-[11px] font-bold border-b border-slate-200/80 dark:border-white/10 tracking-wider">
                         <th className="py-3.5 px-3 w-12 text-center">Sélec.</th>
                         <th className="py-3.5 px-3 w-28 text-center">Date</th>
-                        <th className="py-3.5 px-3 w-32 text-center">Opération</th>
+                        <th className="py-3.5 px-3 w-28 text-center">Opération</th>
                         <th className="py-3.5 px-2.5 w-16 text-center">Dent</th>
-                        <th className="py-3.5 px-4">Désignation de l'acte / Versement</th>
-                        <th className="py-3.5 px-4 text-right w-36">Soin (Débit)</th>
-                        <th className="py-3.5 px-4 text-right w-36 text-emerald-600 dark:text-emerald-400">Règlement (Crédit)</th>
-                        <th className="py-3.5 px-3 text-center w-44">Facturation</th>
-                        <th className="py-3.5 px-3 w-14 text-center">Actions</th>
+                        <th className="py-3.5 px-4">Désignation</th>
+                        <th className="py-3.5 px-3 text-right w-28">A Payer</th>
+                        <th className="py-3.5 px-3 text-right w-28 text-purple-600 dark:text-purple-400">Avance</th>
+                        <th className="py-3.5 px-3 text-right w-28 text-amber-600 dark:text-amber-400">Reste</th>
+                        <th className="py-3.5 px-3 text-center w-36">Facturation</th>
+                        <th className="py-3.5 px-3 w-28 text-center">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-white/5">
@@ -1379,6 +1555,11 @@ export const PatientProfile: React.FC = () => {
                         .map((entry: any) => {
                           const isSoin = entry.kind === 'SOIN';
                           const isSelected = selectedActsForInvoice.includes(entry._id);
+                          const actCost = Number(entry.amount) || 0;
+                          const actPaid = Number(entry.paidAmount) || 0;
+                          const actRemaining = entry.remainingAmount !== undefined
+                            ? Number(entry.remainingAmount)
+                            : Math.max(0, actCost - actPaid);
 
                           return (
                             <tr
@@ -1424,12 +1605,12 @@ export const PatientProfile: React.FC = () => {
                               {/* Opération Badge */}
                               <td className="py-3.5 px-3 text-center">
                                 {isSoin ? (
-                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-200/80 dark:border-blue-500/20 whitespace-nowrap">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-200/80 dark:border-blue-500/20 whitespace-nowrap">
                                     <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0"></span>
                                     Soin
                                   </span>
                                 ) : (
-                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200/80 dark:border-emerald-500/20 whitespace-nowrap">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200/80 dark:border-emerald-500/20 whitespace-nowrap">
                                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
                                     Règlement
                                   </span>
@@ -1461,23 +1642,46 @@ export const PatientProfile: React.FC = () => {
                                 </div>
                               </td>
 
-                              {/* Soin (+) */}
-                              <td className="py-3.5 px-4 text-right">
+                              {/* A Payer */}
+                              <td className="py-3.5 px-3 text-right">
                                 {isSoin ? (
-                                  <span className="text-slate-900 dark:text-white font-bold text-sm tabular-nums">
-                                    {(Number(entry.amount) || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} <span className="text-xs font-semibold text-slate-400">DH</span>
+                                  <span className="text-slate-900 dark:text-white font-bold text-xs tabular-nums">
+                                    {actCost.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} <span className="text-[10px] text-slate-400">DH</span>
                                   </span>
                                 ) : (
                                   <span className="text-slate-300 dark:text-slate-600 text-xs">—</span>
                                 )}
                               </td>
 
-                              {/* Versé (-) */}
-                              <td className="py-3.5 px-4 text-right">
-                                {!isSoin ? (
-                                  <span className="text-emerald-600 dark:text-emerald-400 font-extrabold text-sm tabular-nums">
-                                    +{(Number(entry.amount) || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} <span className="text-xs font-semibold text-emerald-500/70">DH</span>
+                              {/* Avance */}
+                              <td className="py-3.5 px-3 text-right">
+                                {isSoin ? (
+                                  actPaid > 0 ? (
+                                    <span className="text-purple-600 dark:text-purple-400 font-extrabold text-xs tabular-nums">
+                                      {actPaid.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} <span className="text-[10px] text-purple-400">DH</span>
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-300 dark:text-slate-600 text-xs">—</span>
+                                  )
+                                ) : (
+                                  <span className="text-emerald-600 dark:text-emerald-400 font-extrabold text-xs tabular-nums">
+                                    +{(Number(entry.amount) || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} <span className="text-[10px] text-emerald-500/70">DH</span>
                                   </span>
+                                )}
+                              </td>
+
+                              {/* Reste */}
+                              <td className="py-3.5 px-3 text-right">
+                                {isSoin ? (
+                                  actRemaining > 0 ? (
+                                    <span className="inline-flex items-center gap-0.5 font-black text-xs text-amber-600 dark:text-amber-400 tabular-nums">
+                                      {actRemaining.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} <span className="text-[10px] text-amber-400/80">DH</span>
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-500/20">
+                                      Réglé ✓
+                                    </span>
+                                  )
                                 ) : (
                                   <span className="text-slate-300 dark:text-slate-600 text-xs">—</span>
                                 )}
@@ -1499,7 +1703,7 @@ export const PatientProfile: React.FC = () => {
                                         });
                                       }
                                     }}
-                                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-purple-50 hover:bg-purple-100 dark:bg-purple-900/25 dark:hover:bg-purple-900/40 text-purple-700 dark:text-purple-300 border border-purple-200/80 dark:border-purple-500/30 whitespace-nowrap cursor-pointer transition-all shadow-xs"
+                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-50 hover:bg-purple-100 dark:bg-purple-900/25 dark:hover:bg-purple-900/40 text-purple-700 dark:text-purple-300 border border-purple-200/80 dark:border-purple-500/30 whitespace-nowrap cursor-pointer transition-all shadow-xs"
                                     title="Cliquer pour voir et imprimer cette facture"
                                   >
                                     <FileText className="w-3 h-3 text-purple-600 dark:text-purple-400 shrink-0" />
@@ -1507,7 +1711,7 @@ export const PatientProfile: React.FC = () => {
                                     <Eye className="w-2.5 h-2.5 ml-0.5 opacity-70" />
                                   </button>
                                 ) : isSoin ? (
-                                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-amber-50 dark:bg-amber-950/25 text-amber-700 dark:text-amber-400 border border-amber-200/80 dark:border-amber-500/20 whitespace-nowrap">
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-50 dark:bg-amber-950/25 text-amber-700 dark:text-amber-400 border border-amber-200/80 dark:border-amber-500/20 whitespace-nowrap">
                                     <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
                                     À facturer
                                   </span>
@@ -1518,23 +1722,38 @@ export const PatientProfile: React.FC = () => {
 
                               {/* Actions */}
                               <td className="py-3.5 px-3 text-center">
-                                {isSoin && entry.source === 'TREATMENT' ? (
-                                  <button
-                                    onClick={() => handleDeleteTreatment(entry._id)}
-                                    className="p-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-lg transition-all cursor-pointer"
-                                    title="Supprimer ce soin du carnet"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                ) : !isSoin ? (
-                                  <button
-                                    onClick={() => handleDeletePayment(entry._id)}
-                                    className="p-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-lg transition-all cursor-pointer"
-                                    title="Annuler ce versement"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                ) : null}
+                                <div className="flex items-center justify-center gap-1">
+                                  {isSoin && entry.source === 'TREATMENT' && actRemaining > 0 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenActAdvanceModal(entry)}
+                                      className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/30 dark:hover:bg-purple-900/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 text-[11px] font-bold transition-all cursor-pointer shadow-2xs"
+                                      title="Verser un acompte sur ce soin"
+                                    >
+                                      <Plus className="w-3 h-3 stroke-[3]" />
+                                      <span>Acompte</span>
+                                    </button>
+                                  )}
+                                  {isSoin && entry.source === 'TREATMENT' ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteTreatment(entry._id)}
+                                      className="p-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-lg transition-all cursor-pointer"
+                                      title="Supprimer ce soin du carnet"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  ) : !isSoin ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeletePayment(entry._id)}
+                                      className="p-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-lg transition-all cursor-pointer"
+                                      title="Annuler ce versement"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  ) : null}
+                                </div>
                               </td>
                             </tr>
                           );
@@ -2233,18 +2452,77 @@ export const PatientProfile: React.FC = () => {
                 />
               </div>
 
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Prix / Tarif convenu (DH) *</label>
-                <input
-                  type="number"
-                  required
-                  min="0"
-                  step="0.01"
-                  placeholder="0.00"
-                  value={actCost}
-                  onChange={(e) => setActCost(e.target.value)}
-                  className="h-11 px-4 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 font-semibold"
-                />
+              {/* Tarification : A Payer, Avance, Reste */}
+              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-white/10 space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Tarif convenu (A Payer) *
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        required
+                        min="0"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={actCost}
+                        onChange={(e) => setActCost(e.target.value)}
+                        className="h-11 w-full pl-3.5 pr-10 rounded-xl text-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 font-bold"
+                      />
+                      <span className="absolute right-3 top-3 text-xs font-bold text-slate-400">DH</span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-bold text-purple-700 dark:text-purple-400">
+                      Avance versée (Facultatif)
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min="0"
+                        max={actCost ? parseFloat(actCost) : undefined}
+                        step="0.01"
+                        placeholder="0.00"
+                        value={actAdvance}
+                        onChange={(e) => setActAdvance(e.target.value)}
+                        className="h-11 w-full pl-3.5 pr-10 rounded-xl text-sm border border-purple-200 dark:border-purple-500/30 bg-white dark:bg-slate-950 text-purple-900 dark:text-purple-200 focus:outline-none focus:border-purple-500 font-bold"
+                      />
+                      <span className="absolute right-3 top-3 text-xs font-bold text-purple-400">DH</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Live Summary Bar: A Payer / Avance / Reste */}
+                <div className="flex items-center justify-between pt-2 border-t border-slate-200/60 dark:border-white/5 text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-slate-500">Reste à payer :</span>
+                    <span className={`font-black text-sm tabular-nums ${
+                      (parseFloat(actCost) || 0) - (parseFloat(actAdvance) || 0) > 0
+                        ? 'text-amber-600 dark:text-amber-400'
+                        : 'text-emerald-600 dark:text-emerald-400'
+                    }`}>
+                      {Math.max(0, (parseFloat(actCost) || 0) - (parseFloat(actAdvance) || 0)).toFixed(2)} DH
+                    </span>
+                  </div>
+
+                  {parseFloat(actAdvance) > 0 && (
+                    <div className="flex items-center gap-2">
+                      <label className="text-[11px] font-semibold text-slate-500">Mode :</label>
+                      <select
+                        value={actPaymentMode}
+                        onChange={(e) => setActPaymentMode(e.target.value)}
+                        className="h-8 px-2 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 border border-purple-200 dark:border-purple-500/30 text-purple-700 dark:text-purple-300 focus:outline-none"
+                      >
+                        <option value="espèces">Espèces</option>
+                        <option value="carte">Carte Bancaire</option>
+                        <option value="chèque">Chèque</option>
+                        <option value="virement">Virement</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="flex flex-col gap-1.5">
@@ -2277,6 +2555,322 @@ export const PatientProfile: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Modal: Verser un Acompte & Historique des Règlements */}
+      {showActAdvanceModal && selectedActForAdvance && (() => {
+        const actCost = Number(selectedActForAdvance.amount || 0);
+        const actPaid = Number(selectedActForAdvance.paidAmount || 0);
+        const actReste = Math.max(0, actCost - actPaid);
+        const enteredAmt = parseFloat(actAdvanceAmount) || 0;
+        const simTotalPaid = actPaid + enteredAmt;
+        const simNewReste = Math.max(0, actCost - simTotalPaid);
+        const isOverpaying = enteredAmt > actReste;
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-xs select-none">
+            <div className="w-full max-w-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-150">
+              
+              {/* Header */}
+              <div className="p-4 px-6 border-b border-slate-100 dark:border-white/5 flex items-center justify-between bg-slate-50/60 dark:bg-white/[0.02]">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-purple-600/10 text-purple-600 dark:bg-purple-500/20 dark:text-purple-400">
+                    <Wallet className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                      <span>Règlement & Acomptes</span>
+                      {selectedActForAdvance.tooth && selectedActForAdvance.tooth !== '-' && (
+                        <span className="text-xs px-2 py-0.5 rounded-md bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 font-extrabold">
+                          Dent {selectedActForAdvance.tooth}
+                        </span>
+                      )}
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium truncate max-w-md">
+                      {selectedActForAdvance.description || selectedActForAdvance.actName}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowActAdvanceModal(false)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-white/5 cursor-pointer transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Scrollable Content */}
+              <div className="p-5 sm:p-6 overflow-y-auto space-y-5">
+                
+                {/* 1. TOP STATS CARDS (Tarif convenu, Déjà versé, Reste actuel) */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="p-3 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200/80 dark:border-white/10 text-center">
+                    <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      Tarif (A Payer)
+                    </div>
+                    <div className="text-base sm:text-lg font-black text-slate-900 dark:text-white mt-0.5 tabular-nums">
+                      {actCost.toFixed(2)} <span className="text-xs font-bold text-slate-500">DH</span>
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-purple-50/60 dark:bg-purple-950/20 border border-purple-200/60 dark:border-purple-800/40 text-center">
+                    <div className="text-[11px] font-semibold text-purple-700 dark:text-purple-300 uppercase tracking-wider">
+                      Déjà Versé
+                    </div>
+                    <div className="text-base sm:text-lg font-black text-purple-700 dark:text-purple-300 mt-0.5 tabular-nums">
+                      {actPaid.toFixed(2)} <span className="text-xs font-bold text-purple-500">DH</span>
+                    </div>
+                  </div>
+
+                  <div className={`p-3 rounded-xl border text-center ${
+                    actReste <= 0
+                      ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/40 text-emerald-700 dark:text-emerald-300'
+                      : 'bg-amber-50/70 dark:bg-amber-950/20 border-amber-200/70 dark:border-amber-800/40 text-amber-800 dark:text-amber-300'
+                  }`}>
+                    <div className="text-[11px] font-semibold uppercase tracking-wider">
+                      Reste Dû
+                    </div>
+                    <div className="text-base sm:text-lg font-black mt-0.5 tabular-nums">
+                      {actReste.toFixed(2)} <span className="text-xs font-bold">DH</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. FORM: AJOUTER UN NOUVEAU VERSEMENT */}
+                <form onSubmit={handleSaveActAdvance} className="p-4 rounded-xl bg-purple-50/40 dark:bg-purple-950/10 border border-purple-200/70 dark:border-purple-800/40 space-y-3.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-purple-950 dark:text-purple-200 uppercase tracking-wider flex items-center gap-1.5">
+                      <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                      Nouveau Versement / Tranche
+                    </span>
+
+                    {/* Quick Preset Buttons */}
+                    {actReste > 0 && (
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => setActAdvanceAmount(String(actReste))}
+                          className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-purple-600 hover:bg-purple-700 text-white transition-all cursor-pointer shadow-2xs"
+                        >
+                          Solder tout ({actReste.toFixed(2)} DH)
+                        </button>
+                        {actReste >= 100 && (
+                          <button
+                            type="button"
+                            onClick={() => setActAdvanceAmount('100')}
+                            className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-white dark:bg-slate-800 border border-purple-200 dark:border-purple-700 text-purple-700 dark:text-purple-300 hover:bg-purple-50 cursor-pointer"
+                          >
+                            100 DH
+                          </button>
+                        )}
+                        {actReste >= 200 && (
+                          <button
+                            type="button"
+                            onClick={() => setActAdvanceAmount('200')}
+                            className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-white dark:bg-slate-800 border border-purple-200 dark:border-purple-700 text-purple-700 dark:text-purple-300 hover:bg-purple-50 cursor-pointer"
+                          >
+                            200 DH
+                          </button>
+                        )}
+                        {actReste >= 500 && (
+                          <button
+                            type="button"
+                            onClick={() => setActAdvanceAmount('500')}
+                            className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-white dark:bg-slate-800 border border-purple-200 dark:border-purple-700 text-purple-700 dark:text-purple-300 hover:bg-purple-50 cursor-pointer"
+                          >
+                            500 DH
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Input Amount */}
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Montant à verser aujourd'hui (DH) *
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        required
+                        min="1"
+                        step="0.01"
+                        placeholder="Tapez le montant versé (ex: 100, 200...)"
+                        value={actAdvanceAmount}
+                        onChange={(e) => setActAdvanceAmount(e.target.value)}
+                        className="h-11 w-full pl-3.5 pr-12 rounded-xl text-base font-black border border-purple-300 dark:border-purple-500/50 bg-white dark:bg-slate-950 text-purple-900 dark:text-purple-100 placeholder:text-slate-400 placeholder:font-normal focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-500/20"
+                      />
+                      <span className="absolute right-3.5 top-2.5 text-xs font-black text-purple-500 bg-purple-50 dark:bg-purple-950/60 px-2 py-1 rounded-md">
+                        DH
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* DYNAMIC LIVE SIMULATION BAR (Automatically updates without mental math!) */}
+                  {enteredAmt > 0 && (
+                    <div className={`p-3 rounded-xl border text-xs flex items-center justify-between transition-all ${
+                      isOverpaying
+                        ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-300 text-amber-900 dark:text-amber-200'
+                        : simNewReste === 0
+                        ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 text-emerald-900 dark:text-emerald-200'
+                        : 'bg-indigo-50/70 dark:bg-indigo-950/30 border-indigo-200 text-indigo-900 dark:text-indigo-200'
+                    }`}>
+                      <div className="flex items-center gap-2">
+                        {simNewReste === 0 ? (
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-600 text-white font-extrabold text-[10px]">
+                            SOLDE FINAL ✓
+                          </span>
+                        ) : (
+                          <span className="font-bold">Calcul en temps réel :</span>
+                        )}
+                        <span>Total versé : <strong>{simTotalPaid.toFixed(2)} DH</strong></span>
+                      </div>
+                      <div className="font-extrabold text-sm">
+                        Nouveau Reste : <span className={simNewReste === 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-300'}>{simNewReste.toFixed(2)} DH</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Date & Mode de paiement */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Date du versement *</label>
+                      <input
+                        type="date"
+                        required
+                        value={actAdvanceDate}
+                        onChange={(e) => setActAdvanceDate(e.target.value)}
+                        className="h-10 px-3 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:border-purple-500"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Mode de règlement</label>
+                      <select
+                        value={actAdvancePaymentMode}
+                        onChange={(e) => setActAdvancePaymentMode(e.target.value)}
+                        className="h-10 px-3 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-purple-500"
+                      >
+                        <option value="espèces">Espèces</option>
+                        <option value="carte">Carte Bancaire</option>
+                        <option value="chèque">Chèque</option>
+                        <option value="virement">Virement</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Notes */}
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Notes (Optionnel)</label>
+                    <input
+                      type="text"
+                      placeholder="ex: 2ème tranche, acompte, solde..."
+                      value={actAdvanceNotes}
+                      onChange={(e) => setActAdvanceNotes(e.target.value)}
+                      className="h-9 px-3 rounded-xl text-xs border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:border-purple-500"
+                    />
+                  </div>
+
+                  {/* Submit Button */}
+                  <div className="flex justify-end pt-1">
+                    <button
+                      type="submit"
+                      disabled={enteredAmt <= 0 || savingActAdvance}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white font-bold text-xs transition-all cursor-pointer shadow-sm disabled:cursor-not-allowed"
+                    >
+                      {savingActAdvance ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Enregistrement...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="w-4 h-4 stroke-[2.5]" />
+                          <span>Enregistrer le Versement {enteredAmt > 0 ? `(+ ${enteredAmt.toFixed(2)} DH)` : ''}</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+
+                {/* 3. HISTORIQUE DES VERSEMENTS / TRANCHES POUR CE SOIN */}
+                <div className="space-y-2.5 pt-2 border-t border-slate-100 dark:border-white/5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5 uppercase tracking-wider">
+                      <History className="w-3.5 h-3.5 text-purple-600" />
+                      Historique des versements de ce soin ({actAdvanceHistory.length})
+                    </span>
+                    {loadingAdvanceHistory && (
+                      <Loader2 className="w-3.5 h-3.5 text-purple-600 animate-spin" />
+                    )}
+                  </div>
+
+                  {actAdvanceHistory.length === 0 ? (
+                    <div className="p-4 rounded-xl border border-dashed border-slate-200 dark:border-white/10 text-center text-xs text-slate-400">
+                      Aucun versement n'a encore été enregistré pour ce soin.
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-slate-100 dark:divide-white/5 border border-slate-200/80 dark:border-white/10 rounded-xl overflow-hidden bg-white dark:bg-slate-950/40">
+                      {actAdvanceHistory.map((pmt, pIdx) => (
+                        <div
+                          key={pmt._id || `pmt-${pIdx}`}
+                          className="p-3 flex items-center justify-between hover:bg-slate-50/70 dark:hover:bg-white/[0.02] transition-colors gap-3"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-7 h-7 rounded-lg bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 font-bold text-xs flex items-center justify-center shrink-0">
+                              #{actAdvanceHistory.length - pIdx}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold text-slate-900 dark:text-white tabular-nums">
+                                  {pmt.date ? formatDate(pmt.date) : '—'}
+                                </span>
+                                <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-300">
+                                  {pmt.paymentMethod || 'Espèces'}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                                {pmt.notes || `Acompte #${actAdvanceHistory.length - pIdx}`}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-3 shrink-0">
+                            <span className="text-sm font-black text-purple-700 dark:text-purple-300 tabular-nums">
+                              + {Number(pmt.amount || 0).toFixed(2)} DH
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteActAdvance(pmt._id, pmt.amount)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                              title="Supprimer ce versement avec confirmation"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+              </div>
+
+              {/* Footer */}
+              <div className="p-3.5 px-6 border-t border-slate-100 dark:border-white/5 bg-slate-50/60 dark:bg-white/[0.02] flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowActAdvanceModal(false)}
+                  className="px-5 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 dark:bg-white/10 dark:hover:bg-white/15 text-slate-800 dark:text-white font-bold text-xs transition-colors cursor-pointer"
+                >
+                  Fermer
+                </button>
+              </div>
+
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Modal: Aperçu du Carnet Patient A4 avant impression */}
       {showCarnetPreview && patient && (

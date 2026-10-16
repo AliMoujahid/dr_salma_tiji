@@ -115,22 +115,14 @@ export const Appointments: React.FC = () => {
   const [doctorFilter, setDoctorFilter] = useState<string>('All');
 
   // Waiting Room State
-  const [waitingRoom, setWaitingRoom] = useState<WaitingPatient[]>([
-    { id: 'w1', name: 'Kawtar Fattane', arrivedAt: '10:15', act: 'Consultation & Soins' },
-    { id: 'w2', name: 'Omar Bennani', arrivedAt: '10:35', act: 'Contrôle Ortho' },
-  ]);
+  const [waitingRoom, setWaitingRoom] = useState<WaitingPatient[]>([]);
   const [isWaitingModalOpen, setIsWaitingModalOpen] = useState(false);
   const [waitingPatientId, setWaitingPatientId] = useState('');
   const [waitingPatientName, setWaitingPatientName] = useState('');
   const [waitingPatientAct, setWaitingPatientAct] = useState('Consultation');
 
   // Daily Tasks State
-  const [dailyTasks, setDailyTasks] = useState<ClinicTask[]>([
-    { id: 't1', text: 'Stérilisation des plateaux & turbines', done: true },
-    { id: 't2', text: 'Vérifier livraisons prothèses laboratoire', done: true },
-    { id: 't3', text: 'Rappels WhatsApp 24H envoyés aux patients', done: true },
-    { id: 't4', text: 'Commander composite & anesthésiques', done: false },
-  ]);
+  const [dailyTasks, setDailyTasks] = useState<ClinicTask[]>([]);
   const [newTaskText, setNewTaskText] = useState('');
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
 
@@ -583,8 +575,8 @@ export const Appointments: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 p-3 md:p-6 flex flex-col gap-4 overflow-y-auto no-scrollbar max-h-[calc(100vh-80px)] font-sans select-none bg-slate-100/70 dark:bg-slate-950">
-      
+    <div className="flex-1 p-3 md:p-4 lg:p-5 flex flex-col gap-3 font-sans select-none bg-slate-100/70 dark:bg-slate-950 overflow-hidden">
+
       {/* ========================================================================= */}
       {/* 🌟 1. TOP HEADER & FILTER BAR (Dentisto Style)                            */}
       {/* ========================================================================= */}
@@ -610,7 +602,7 @@ export const Appointments: React.FC = () => {
 
         {/* Dentisto Sub-Bar: Navigation + Date Range + Filters */}
         <div className="p-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-white/10 shadow-xs flex flex-wrap items-center justify-between gap-3">
-          
+
           {/* Left: Navigation Buttons + Date Range Pill */}
           <div className="flex items-center gap-2">
             <button
@@ -687,18 +679,18 @@ export const Appointments: React.FC = () => {
       {/* 🌟 2. MAIN SPLIT: AGENDA GRID (LEFT 78%) + CLINIC PANEL (RIGHT 22%)        */}
       {/* ========================================================================= */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
-        
+
         {/* ======================================================================= */}
         {/* A. DENTISTO WEEKLY TIMETABLE MATRIX (lg:col-span-9)                     */}
         {/* ======================================================================= */}
         <div className="lg:col-span-9 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-white/10 shadow-sm overflow-hidden flex flex-col">
-          
+
           {viewMode === 'week' && (
-            <div className="overflow-x-auto">
+            <div className="overflow-auto max-h-[calc(100vh-255px)] scroll-smooth">
               <div className="min-w-[760px] flex flex-col">
-                
-                {/* 1. Header Row (7 Days: LUN. 31 (16) -> DIM. 6 (0)) */}
-                <div className="grid grid-cols-8 border-b border-slate-200 dark:border-white/10 bg-slate-50/80 dark:bg-slate-950/60 sticky top-0 z-20">
+
+                {/* 1. Header Row (7 Days: LUN. 31 (16) -> DIM. 6 (0)) - Sticky at top during internal scroll */}
+                <div className="grid grid-cols-8 border-b border-slate-200 dark:border-white/10 bg-slate-50/95 dark:bg-slate-900/95 backdrop-blur-md sticky top-0 z-20 shadow-xs">
                   {/* Empty Corner for Time column */}
                   <div className="p-2 border-r border-slate-200 dark:border-white/10 text-center text-slate-400 text-xxs font-bold uppercase tracking-wider flex items-center justify-center">
                     Heure
@@ -716,9 +708,8 @@ export const Appointments: React.FC = () => {
                       <div
                         key={dayKey}
                         onClick={() => handleOpenCreateModal(dayObj)}
-                        className={`py-2.5 px-1 border-r border-slate-200 dark:border-white/10 last:border-r-0 text-center transition-colors cursor-pointer ${
-                          isToday ? 'bg-blue-50/70 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-bold' : 'hover:bg-slate-100/50'
-                        }`}
+                        className={`py-2.5 px-1 border-r border-slate-200 dark:border-white/10 last:border-r-0 text-center transition-colors cursor-pointer ${isToday ? 'bg-blue-50/70 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-bold' : 'hover:bg-slate-100/50'
+                          }`}
                       >
                         <span className="text-xs uppercase font-extrabold tracking-tight">
                           {shortName}. {dayNum}{' '}
@@ -735,7 +726,7 @@ export const Appointments: React.FC = () => {
                 <div className="relative flex flex-col">
                   {TIME_SLOTS.map((timeStr, slotIdx) => (
                     <div key={timeStr} className="grid grid-cols-8 border-b border-slate-100 dark:border-white/5 min-h-[50px]">
-                      
+
                       {/* Left Time Label */}
                       <div className="border-r border-slate-200 dark:border-white/10 p-1.5 text-center text-[11px] font-mono font-bold text-slate-400 dark:text-slate-500 bg-slate-50/40 dark:bg-slate-950/30 flex items-start justify-center">
                         {timeStr}
@@ -750,9 +741,8 @@ export const Appointments: React.FC = () => {
                           <div
                             key={`${getApptDateKey(dayObj)}-${timeStr}`}
                             onClick={() => handleOpenCreateModal(dayObj, timeStr)}
-                            className={`border-r border-slate-100 dark:border-white/5 last:border-r-0 p-1 transition-all group relative min-h-[50px] flex flex-col gap-1 ${
-                              isToday ? 'bg-blue-50/15 dark:bg-blue-950/10' : 'hover:bg-slate-50/80 dark:hover:bg-slate-800/40'
-                            }`}
+                            className={`border-r border-slate-100 dark:border-white/5 last:border-r-0 p-1 transition-all group relative min-h-[50px] flex flex-col gap-1 ${isToday ? 'bg-blue-50/15 dark:bg-blue-950/10' : 'hover:bg-slate-50/80 dark:hover:bg-slate-800/40'
+                              }`}
                           >
                             {cellAppts.map((appt) => {
                               const patObj = appt.patientId && typeof appt.patientId === 'object' ? (appt.patientId as Patient) : null;
@@ -811,7 +801,7 @@ export const Appointments: React.FC = () => {
                 </button>
               </div>
 
-              <div className="divide-y divide-slate-100 dark:divide-white/5 overflow-y-auto max-h-[640px] no-scrollbar">
+              <div className="divide-y divide-slate-100 dark:divide-white/5 overflow-y-auto max-h-[calc(100vh-255px)] scroll-smooth">
                 {TIME_SLOTS.map((timeStr, slotIdx) => {
                   const slotAppts = getApptsForSlot(currentDate, timeStr, slotIdx);
                   return (
@@ -930,17 +920,15 @@ export const Appointments: React.FC = () => {
                       <div
                         key={`day-${d}`}
                         onClick={() => handleOpenCreateModal(dateObj)}
-                        className={`min-h-[96px] p-2 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
-                          isToday
-                            ? 'bg-blue-50/50 dark:bg-blue-950/30 border-blue-400 dark:border-blue-500/50 shadow-xs'
-                            : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-white/10 hover:border-emerald-400 hover:shadow-xs'
-                        }`}
+                        className={`min-h-[96px] p-2 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${isToday
+                          ? 'bg-blue-50/50 dark:bg-blue-950/30 border-blue-400 dark:border-blue-500/50 shadow-xs'
+                          : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-white/10 hover:border-emerald-400 hover:shadow-xs'
+                          }`}
                       >
                         <div className="flex items-center justify-between">
                           <span
-                            className={`text-xs font-mono font-bold ${
-                              isToday ? 'text-blue-600 dark:text-blue-400' : 'text-slate-800 dark:text-slate-200'
-                            }`}
+                            className={`text-xs font-mono font-bold ${isToday ? 'text-blue-600 dark:text-blue-400' : 'text-slate-800 dark:text-slate-200'
+                              }`}
                           >
                             {d}
                           </span>
@@ -1019,8 +1007,8 @@ export const Appointments: React.FC = () => {
         {/* ======================================================================= */}
         {/* B. DENTISTO RIGHT CLINIC PANEL (lg:col-span-3)                          */}
         {/* ======================================================================= */}
-        <div className="lg:col-span-3 flex flex-col gap-4">
-          
+        <div className="lg:col-span-3 flex flex-col gap-4 sticky top-4">
+
           {/* 1. Doctor Profile Pill */}
           <div className="p-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-white/10 shadow-xs flex items-center justify-between">
             <div className="flex items-center gap-2.5">
@@ -1140,18 +1128,16 @@ export const Appointments: React.FC = () => {
                   className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/40 cursor-pointer transition-colors"
                 >
                   <div
-                    className={`w-4 h-4 rounded flex items-center justify-center border transition-all ${
-                      task.done
-                        ? 'bg-emerald-500 border-emerald-500 text-white'
-                        : 'border-slate-300 dark:border-white/20'
-                    }`}
+                    className={`w-4 h-4 rounded flex items-center justify-center border transition-all ${task.done
+                      ? 'bg-emerald-500 border-emerald-500 text-white'
+                      : 'border-slate-300 dark:border-white/20'
+                      }`}
                   >
                     {task.done && <Check className="w-3 h-3" />}
                   </div>
                   <span
-                    className={`text-xs truncate ${
-                      task.done ? 'line-through text-slate-400' : 'text-slate-700 dark:text-slate-200 font-medium'
-                    }`}
+                    className={`text-xs truncate ${task.done ? 'line-through text-slate-400' : 'text-slate-700 dark:text-slate-200 font-medium'
+                      }`}
                   >
                     {task.text}
                   </span>
@@ -1177,7 +1163,7 @@ export const Appointments: React.FC = () => {
       {selectedApptDetail && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-in fade-in duration-150">
           <div className="w-full max-w-md rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-2xl p-6 flex flex-col gap-5 animate-in zoom-in-95 duration-150">
-            
+
             <div className="flex justify-between items-start border-b border-slate-100 dark:border-white/10 pb-4">
               <div>
                 <span className="text-xxs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest font-mono">
@@ -1229,33 +1215,30 @@ export const Appointments: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleUpdateStatus(selectedApptDetail._id, 'Confirmed')}
-                  className={`py-2 px-1 rounded-xl text-xxs font-bold border transition-all cursor-pointer ${
-                    selectedApptDetail.status === 'Confirmed'
-                      ? 'bg-teal-600 text-white border-teal-600'
-                      : 'bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100'
-                  }`}
+                  className={`py-2 px-1 rounded-xl text-xxs font-bold border transition-all cursor-pointer ${selectedApptDetail.status === 'Confirmed'
+                    ? 'bg-teal-600 text-white border-teal-600'
+                    : 'bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100'
+                    }`}
                 >
                   ✓ Confirmé
                 </button>
                 <button
                   type="button"
                   onClick={() => handleUpdateStatus(selectedApptDetail._id, 'In Treatment')}
-                  className={`py-2 px-1 rounded-xl text-xxs font-bold border transition-all cursor-pointer ${
-                    selectedApptDetail.status === 'In Treatment'
-                      ? 'bg-amber-600 text-white border-amber-600'
-                      : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
-                  }`}
+                  className={`py-2 px-1 rounded-xl text-xxs font-bold border transition-all cursor-pointer ${selectedApptDetail.status === 'In Treatment'
+                    ? 'bg-amber-600 text-white border-amber-600'
+                    : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+                    }`}
                 >
                   ⏳ En Soin
                 </button>
                 <button
                   type="button"
                   onClick={() => handleUpdateStatus(selectedApptDetail._id, 'Completed')}
-                  className={`py-2 px-1 rounded-xl text-xxs font-bold border transition-all cursor-pointer ${
-                    selectedApptDetail.status === 'Completed'
-                      ? 'bg-emerald-600 text-white border-emerald-600'
-                      : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                  }`}
+                  className={`py-2 px-1 rounded-xl text-xxs font-bold border transition-all cursor-pointer ${selectedApptDetail.status === 'Completed'
+                    ? 'bg-emerald-600 text-white border-emerald-600'
+                    : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                    }`}
                 >
                   ✅ Terminé
                 </button>

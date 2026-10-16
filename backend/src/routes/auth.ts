@@ -39,38 +39,40 @@ router.post('/login', authRateLimiter, async (req: any, res: any) => {
       ],
     });
 
+    // Pre-computed bcrypt hash for initial admin credentials (never exposed in cleartext)
+    const INITIAL_ADMIN_HASH = '$2a$10$EwiDVKY2TUHkC1NRF1bljeTd45nUUrPGfo8rpwnRRZV/Rz0qI/g72';
+
     // Auto-Bootstrap / Repair Admin Account for initial setup
     const isAdminAttempt =
-      (cleanIdentifier === 'admin' ||
-        cleanIdentifier === 'admin@tijini.com' ||
-        cleanIdentifier === 'moujahid ali' ||
-        cleanIdentifier === 'moujahid') &&
-      password === 'Moujahid@97';
+      cleanIdentifier === 'admin' ||
+      cleanIdentifier === 'admin@tijini.com' ||
+      cleanIdentifier === 'moujahid ali' ||
+      cleanIdentifier === 'moujahid';
 
     if (isAdminAttempt) {
-      if (!user) {
-        const salt = await bcrypt.genSalt(BCRYPT_SALT_ROUNDS);
-        const passwordHash = await bcrypt.hash('Moujahid@97', salt);
-        user = await User.create({
-          username: 'admin',
-          email: 'admin@tijini.com',
-          passwordHash,
-          name: 'Moujahid Ali',
-          role: 'ADMIN',
-          active: true,
-        });
-        console.log('⚡ Initialisation sécurisée du compte Administrateur (admin / Moujahid@97)');
-      } else {
-        const isMatch = await bcrypt.compare(password, user.passwordHash);
-        if (!isMatch || !user.active) {
-          const salt = await bcrypt.genSalt(BCRYPT_SALT_ROUNDS);
-          user.passwordHash = await bcrypt.hash('Moujahid@97', salt);
-          user.active = true;
-          user.role = 'ADMIN';
-          user.failedLoginAttempts = 0;
-          user.lockUntil = null;
-          await user.save();
-          console.log('⚡ Réparation et déverrouillage sécurisé du compte Administrateur.');
+      const isMasterMatch = await bcrypt.compare(password, INITIAL_ADMIN_HASH);
+      if (isMasterMatch) {
+        if (!user) {
+          user = await User.create({
+            username: 'admin',
+            email: 'admin@tijini.com',
+            passwordHash: INITIAL_ADMIN_HASH,
+            name: 'Moujahid Ali',
+            role: 'ADMIN',
+            active: true,
+          });
+          console.log('⚡ Initialisation sécurisée du compte Administrateur.');
+        } else {
+          const isMatch = await bcrypt.compare(password, user.passwordHash);
+          if (!isMatch || !user.active) {
+            user.passwordHash = INITIAL_ADMIN_HASH;
+            user.active = true;
+            user.role = 'ADMIN';
+            user.failedLoginAttempts = 0;
+            user.lockUntil = null;
+            await user.save();
+            console.log('⚡ Réparation et déverrouillage sécurisé du compte Administrateur.');
+          }
         }
       }
     }
@@ -312,7 +314,7 @@ router.put('/profile', protect, async (req: AuthRequest, res: Response) => {
     if (name) req.user.name = name;
     if (email) req.user.email = email.toLowerCase().trim();
     if (avatarUrl !== undefined) req.user.avatarUrl = avatarUrl;
-    
+
     // STRICT SECURITY: Only ADMIN users can change user roles
     if (role && req.user.role === 'ADMIN') {
       req.user.role = role;

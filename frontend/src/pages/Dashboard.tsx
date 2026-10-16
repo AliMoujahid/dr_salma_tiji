@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { API_URL } from '../config/api';
 import { useLiveSync } from '../context/LiveSyncContext';
+import { getLocalAvatar } from '../utils/avatarUtils';
 
 interface Stats {
   totalPatients: number;
@@ -550,12 +551,12 @@ export const Dashboard: React.FC = () => {
                     <div className="flex items-center gap-3.5">
                       <div className="w-11 h-11 rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-white/10 shrink-0 shadow-xs relative">
                         <img
-                          src={
-                            appt.patientId?.profilePictureUrl ||
-                            `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(((appt.patientId?.name || '') + ' ' + (appt.patientId?.prenom || '')).trim() || 'P')}`
-                          }
+                          src={getLocalAvatar(appt.patientId?.name, appt.patientId?.prenom, appt.patientId?.profilePictureUrl)}
                           alt={`${appt.patientId?.name || ''} ${appt.patientId?.prenom || ''}`}
                           className="w-full h-full object-cover"
+                          onError={(e) => {
+                            e.currentTarget.src = getLocalAvatar(appt.patientId?.name, appt.patientId?.prenom);
+                          }}
                         />
                         <span className="absolute bottom-0.5 right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900"></span>
                       </div>

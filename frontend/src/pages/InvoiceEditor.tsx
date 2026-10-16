@@ -292,7 +292,19 @@ export const InvoiceEditor: React.FC = () => {
 
   const handleReturnToCarnet = () => {
     const stateObj = location.state as any;
-    const targetId = selectedPatientId || stateObj?.patientId || stateObj?.returnPatientId;
+    const foundPatient =
+      patients.find((p) => p._id === selectedPatientId) ||
+      patients.find((p) => p._id === stateObj?.patientId) ||
+      patients.find((p) => p._id === stateObj?.returnPatientId);
+
+    const targetId = foundPatient?._id || selectedPatientId || stateObj?.patientId || stateObj?.returnPatientId;
+
+    if (targetId && patients.length > 0 && !patients.some((p) => p._id === targetId)) {
+      toast.info('Retour aux Patients', 'Veuillez sélectionner un patient dans la liste.');
+      navigate('/patients');
+      return;
+    }
+
     if (targetId) {
       navigate(`/patients/${targetId}`, {
         state: {
@@ -301,7 +313,7 @@ export const InvoiceEditor: React.FC = () => {
         },
       });
     } else {
-      setViewMode('list');
+      navigate('/patients');
     }
   };
 
@@ -763,7 +775,7 @@ export const InvoiceEditor: React.FC = () => {
               <div className="flex justify-between items-center border-b border-slate-100 dark:border-white/5 pb-4">
                 <div className="flex items-center gap-2.5">
                   <h3 className="text-base font-bold text-slate-900 dark:text-white">Éditeur de Facture</h3>
-                  {(selectedPatientId || (location.state as any)?.patientId) && (
+                  {selectedPatientId && patients.some((p) => p._id === selectedPatientId) && (
                     <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xxs font-bold bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200/80 dark:border-blue-500/20">
                       Carnet Patient Lié
                     </span>
@@ -771,7 +783,7 @@ export const InvoiceEditor: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  {(selectedPatientId || (location.state as any)?.patientId) && (
+                  {selectedPatientId && (
                     <button
                       type="button"
                       onClick={handleReturnToCarnet}
@@ -1079,7 +1091,7 @@ export const InvoiceEditor: React.FC = () => {
                 {/* Save and Print triggers */}
                 <div className="flex justify-between items-center border-t border-slate-100 dark:border-white/5 pt-5 mt-4 select-none flex-wrap gap-3">
                   <div>
-                    {(selectedPatientId || (location.state as any)?.patientId) && (
+                    {selectedPatientId && (
                       <button
                         type="button"
                         onClick={handleReturnToCarnet}

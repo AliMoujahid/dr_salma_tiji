@@ -427,6 +427,8 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({
   const [procedureName, setProcedureName] = useState('');
   const [newNotes, setNewNotes] = useState('');
   const [newCost, setNewCost] = useState('');
+  const [newAdvance, setNewAdvance] = useState('');
+  const [newPaymentMode, setNewPaymentMode] = useState('espèces');
   const [syncWithCarnet, setSyncWithCarnet] = useState<boolean>(true);
   const [submitting, setSubmitting] = useState(false);
 
@@ -643,6 +645,7 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({
       enteredCost = resolveDefaultPrice(newStatus, finalProcedureName, selectedTooth);
     }
     const finalCost = isNaN(enteredCost) ? 0 : enteredCost;
+    const finalAdvance = Math.max(0, parseFloat(newAdvance) || 0);
 
     fetch(`${API_URL}/teeth`, {
       method: 'POST',
@@ -657,6 +660,8 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({
         status: newStatus,
         notes: newNotes,
         cost: finalCost,
+        advance: finalAdvance,
+        paymentMode: newPaymentMode,
         addToCarnet: syncWithCarnet,
       }),
     })
@@ -666,6 +671,8 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({
         setProcedureName('');
         setNewNotes('');
         setNewCost('');
+        setNewAdvance('');
+        setNewPaymentMode('espèces');
         fetchOdontogram();
         if (syncWithCarnet && onUpdateCarnet) {
           onUpdateCarnet();
@@ -1269,22 +1276,56 @@ export const Dental3DViewer: React.FC<Dental3DViewerProps> = ({
                     </button>
                   )}
                 </div>
-                <div className="relative">
-                  <input
-                    type="number"
-                    placeholder={
-                      resolveDefaultPrice(newStatus, procedureName, selectedTooth) > 0
-                        ? `${resolveDefaultPrice(newStatus, procedureName, selectedTooth)}`
-                        : '0.00'
-                    }
-                    value={newCost}
-                    onChange={(e) => setNewCost(e.target.value)}
-                    className="w-full h-10 pl-3 pr-10 rounded-xl text-xs glass-input font-mono font-bold text-emerald-400"
-                  />
-                  <span className="absolute right-3 top-2.5 text-xs font-bold text-slate-500 select-none">
-                    DH
-                  </span>
+
+                <div className="grid grid-cols-2 gap-2 mt-1">
+                  <div className="relative">
+                    <input
+                      type="number"
+                      placeholder={
+                        resolveDefaultPrice(newStatus, procedureName, selectedTooth) > 0
+                          ? `${resolveDefaultPrice(newStatus, procedureName, selectedTooth)}`
+                          : '0.00'
+                      }
+                      value={newCost}
+                      onChange={(e) => setNewCost(e.target.value)}
+                      className="w-full h-10 pl-3 pr-8 rounded-xl text-xs glass-input font-mono font-bold text-emerald-400"
+                    />
+                    <span className="absolute right-2.5 top-2.5 text-xxs font-bold text-slate-500 select-none">
+                      DH
+                    </span>
+                  </div>
+
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="Avance (DH)"
+                      value={newAdvance}
+                      onChange={(e) => setNewAdvance(e.target.value)}
+                      className="w-full h-10 pl-3 pr-8 rounded-xl text-xs glass-input font-mono font-bold text-purple-400"
+                    />
+                    <span className="absolute right-2.5 top-2.5 text-xxs font-bold text-purple-400/80 select-none">
+                      DH
+                    </span>
+                  </div>
                 </div>
+
+                {parseFloat(newAdvance) > 0 && (
+                  <div className="flex items-center justify-between mt-1 px-1">
+                    <span className="text-xxs font-bold text-amber-400">
+                      Reste : {Math.max(0, (parseFloat(newCost) || resolveDefaultPrice(newStatus, procedureName, selectedTooth) || 0) - (parseFloat(newAdvance) || 0))} DH
+                    </span>
+                    <select
+                      value={newPaymentMode}
+                      onChange={(e) => setNewPaymentMode(e.target.value)}
+                      className="h-6 px-1.5 rounded text-[10px] font-bold bg-slate-800 text-purple-300 border border-purple-500/30"
+                    >
+                      <option value="espèces">Espèces</option>
+                      <option value="carte">Carte</option>
+                      <option value="chèque">Chèque</option>
+                    </select>
+                  </div>
+                )}
               </div>
 
               {/* Clinical Notes */}

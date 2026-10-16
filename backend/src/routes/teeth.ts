@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import ToothHistory from '../models/ToothHistory';
 import Patient from '../models/Patient';
 import Treatment from '../models/Treatment';
+import PaymentTransaction from '../models/Payment';
 import DentalAct from '../models/DentalAct';
 import { protect, AuthRequest } from '../middleware/auth';
 import { recordAudit } from '../middleware/security';
@@ -153,7 +154,7 @@ router.get('/patient/:patientId/tooth/:toothNumber', protect, async (req: AuthRe
 // Add a new tooth intervention / change status
 router.post('/', protect, async (req: AuthRequest, res: Response) => {
   try {
-    const { patientId, toothNumber, procedureName, status, notes, cost, invoiceId, date, photosBefore, photosAfter, xrays, addToCarnet } = req.body;
+    const { patientId, toothNumber, procedureName, status, notes, cost, advance, paidAmount, paymentMode, invoiceId, date, photosBefore, photosAfter, xrays, addToCarnet } = req.body;
 
     if (!patientId || !toothNumber || !status) {
       res.status(400).json({ message: 'patientId, toothNumber et status sont requis.' });
@@ -212,6 +213,10 @@ router.post('/', protect, async (req: AuthRequest, res: Response) => {
       }
     }
 
+    const rawAdvance = parseFloat(advance !== undefined ? advance : paidAmount) || 0;
+    const finalAdvance = Math.max(0, Math.min(finalCost, rawAdvance));
+    const finalPaymentMode = paymentMode || 'espèces';
+
     const record = await ToothHistory.create({
       patientId,
       toothNumber: tNum,
@@ -219,6 +224,7 @@ router.post('/', protect, async (req: AuthRequest, res: Response) => {
       status,
       notes,
       cost: finalCost,
+      paidAmount: finalAdvance,
       invoiceId: isValidObjectId(invoiceId) ? invoiceId : undefined,
       date: date ? new Date(date) : new Date(),
       photosBefore: Array.isArray(photosBefore) ? photosBefore : [],
@@ -229,16 +235,29 @@ router.post('/', protect, async (req: AuthRequest, res: Response) => {
     // Optionally synchronize to Carnet Financier (Diftar du Patient)
     if (addToCarnet) {
       try {
-        await Treatment.create({
+        const newTreatment = await Treatment.create({
           patientId,
           date: date ? new Date(date) : new Date(),
           tooth: String(tNum),
           actName: procedureName ? procedureName.trim() : `Acte Clinique - Dent ${tNum} (${status})`,
           cost: finalCost,
+          paidAmount: finalAdvance,
+          paymentMode: finalPaymentMode,
           status: 'Terminé',
           notes: notes || '',
           createdBy: req.user?._id,
         });
+
+        if (finalAdvance > 0) {
+          await PaymentTransaction.create({
+            patientId,
+            treatmentId: newTreatment._id,
+            amount: finalAdvance,
+            paymentMethod: finalPaymentMode,
+            date: newTreatment.date,
+            notes: `Avance Soin: ${newTreatment.actName} (Dent ${tNum})`,
+          });
+        }
       } catch (err) {
         console.error('Error auto-creating treatment from tooth intervention:', err);
       }

@@ -127,11 +127,27 @@ export interface ToothHistory {
   photosAfter?: string[];
   xrays?: string[];
   cost: number;
+  paidAmount?: number;
   invoiceId?: any;
   date: string;
   createdAt: string;
   aiDiagnosis?: AIDiagnosisData;
   measurements?: XRayMeasurement[];
+}
+
+export interface Treatment {
+  _id: string;
+  patientId: string;
+  date: string;
+  tooth?: string;
+  actName: string;
+  category?: string;
+  cost: number;
+  paidAmount?: number;
+  paymentMode?: string;
+  status: 'Terminé' | 'En cours' | 'Planifié';
+  notes?: string;
+  invoiceId?: any;
 }
 
 export interface InvoiceItem {
@@ -164,7 +180,8 @@ export interface Invoice {
 
 export interface PaymentTransaction {
   _id: string;
-  invoiceId: any;
+  invoiceId?: any;
+  treatmentId?: any;
   patientId: string;
   date: string;
   amount: number;

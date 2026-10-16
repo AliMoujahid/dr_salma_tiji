@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { MonitorPlay, Users, Armchair, CheckCircle2, Play, ChevronRight } from 'lucide-react';
 import { API_URL } from '../config/api';
 import { useLiveSync } from '../context/LiveSyncContext';
+import { getLocalAvatar } from '../utils/avatarUtils';
 
 interface WaitingRoomData {
   waiting: any[];
@@ -106,7 +107,14 @@ export const WaitingRoom: React.FC = () => {
                 <div className="flex justify-between items-start">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-white/10 shrink-0">
-                      <img src={a.patientId?.profilePictureUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent((a.patientId?.name || '') + ' ' + (a.patientId?.prenom || ''))}`} alt={`${a.patientId?.name || ''} ${a.patientId?.prenom || ''}`} className="w-full h-full object-cover" />
+                      <img
+                        src={getLocalAvatar(a.patientId?.name, a.patientId?.prenom, a.patientId?.profilePictureUrl)}
+                        alt={`${a.patientId?.name || ''} ${a.patientId?.prenom || ''}`}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.currentTarget.src = getLocalAvatar(a.patientId?.name, a.patientId?.prenom);
+                        }}
+                      />
                     </div>
                     <div>
                       <h4 className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-all">
@@ -157,7 +165,14 @@ export const WaitingRoom: React.FC = () => {
               >
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-white/10 shrink-0">
-                    <img src={a.patientId?.profilePictureUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent((a.patientId?.name || '') + ' ' + (a.patientId?.prenom || ''))}`} alt={`${a.patientId?.name || ''} ${a.patientId?.prenom || ''}`} className="w-full h-full object-cover" />
+                    <img
+                      src={getLocalAvatar(a.patientId?.name, a.patientId?.prenom, a.patientId?.profilePictureUrl)}
+                      alt={`${a.patientId?.name || ''} ${a.patientId?.prenom || ''}`}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.currentTarget.src = getLocalAvatar(a.patientId?.name, a.patientId?.prenom);
+                      }}
+                    />
                   </div>
                   <div>
                     <h4 className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-all">
@@ -205,7 +220,14 @@ export const WaitingRoom: React.FC = () => {
               >
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-white/10 shrink-0">
-                    <img src={a.patientId?.profilePictureUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent((a.patientId?.name || '') + ' ' + (a.patientId?.prenom || ''))}`} alt={`${a.patientId?.name || ''} ${a.patientId?.prenom || ''}`} className="w-full h-full object-cover" />
+                    <img
+                      src={getLocalAvatar(a.patientId?.name, a.patientId?.prenom, a.patientId?.profilePictureUrl)}
+                      alt={`${a.patientId?.name || ''} ${a.patientId?.prenom || ''}`}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.currentTarget.src = getLocalAvatar(a.patientId?.name, a.patientId?.prenom);
+                      }}
+                    />
                   </div>
                   <div>
                     <h4 className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-all">

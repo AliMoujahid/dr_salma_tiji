@@ -57,7 +57,10 @@ router.get('/patient/:patientId/ledger', protect, async (req: AuthRequest, res: 
       date: t.date,
       tooth: t.tooth || '-',
       description: t.actName,
-      amount: t.cost,
+      amount: t.cost, // A Payer
+      paidAmount: t.paidAmount || 0, // Avance versée
+      remainingAmount: Math.max(0, (t.cost || 0) - (t.paidAmount || 0)), // Reste à payer
+      paymentMode: t.paymentMode || 'espèces',
       status: t.status,
       invoiceId: t.invoiceId,
       notes: t.notes,
@@ -79,6 +82,9 @@ router.get('/patient/:patientId/ledger', protect, async (req: AuthRequest, res: 
               tooth: item.tooth || '-',
               description: item.description,
               amount: item.amount || 0,
+              paidAmount: 0,
+              remainingAmount: item.amount || 0,
+              paymentMode: inv.paymentMode || 'espèces',
               status: 'Terminé',
               invoiceId: { _id: inv._id, invoiceNumber: inv.invoiceNumber, date: inv.date },
               notes: `Facture N° ${inv.invoiceNumber}`,
@@ -92,6 +98,7 @@ router.get('/patient/:patientId/ledger', protect, async (req: AuthRequest, res: 
     // Consolidate payments
     const paymentsList = payments.map((p) => ({
       _id: p._id,
+      treatmentId: p.treatmentId,
       type: 'REGLEMENT',
       date: p.date,
       amount: p.amount,
@@ -124,10 +131,10 @@ router.get('/patient/:patientId/ledger', protect, async (req: AuthRequest, res: 
   }
 });
 
-// 3. Add a new treatment for patient
+// 3. Add a new treatment for patient with support for A Payer & Avance
 router.post('/', protect, async (req: AuthRequest, res: Response) => {
   try {
-    const { patientId, date, tooth, actName, cost, category, status, notes } = req.body;
+    const { patientId, date, tooth, actName, cost, advance, paidAmount, paymentMode, category, status, notes } = req.body;
 
     if (!isValidObjectId(patientId)) {
       res.status(400).json({ message: 'Identifiant patient invalide.' });
@@ -145,17 +152,36 @@ router.post('/', protect, async (req: AuthRequest, res: Response) => {
       return;
     }
 
+    const finalCost = Math.max(0, parseFloat(cost) || 0);
+    const rawAdvance = parseFloat(advance !== undefined ? advance : paidAmount) || 0;
+    const finalAdvance = Math.max(0, Math.min(finalCost, rawAdvance));
+    const finalPaymentMode = paymentMode || 'espèces';
+
     const newTreatment = await Treatment.create({
       patientId,
       date: date ? new Date(date) : new Date(),
       tooth: tooth ? String(tooth).trim() : '',
       actName: actName.trim(),
       category: category || 'Soins',
-      cost: Math.max(0, parseFloat(cost) || 0),
+      cost: finalCost,
+      paidAmount: finalAdvance,
+      paymentMode: finalPaymentMode,
       status: status || 'Terminé',
       notes: notes || '',
       createdBy: req.user?._id,
     });
+
+    // If an advance was paid immediately, record matching PaymentTransaction
+    if (finalAdvance > 0) {
+      await PaymentTransaction.create({
+        patientId,
+        treatmentId: newTreatment._id,
+        amount: finalAdvance,
+        paymentMethod: finalPaymentMode,
+        date: newTreatment.date,
+        notes: `Avance Soin: ${newTreatment.actName}${newTreatment.tooth ? ` (Dent ${newTreatment.tooth})` : ''}`,
+      });
+    }
 
     // Also link with ToothHistory if a tooth number is specified
     const toothNumbers = parseToothNumbers(tooth);
@@ -223,6 +249,145 @@ router.put('/:id', protect, async (req: AuthRequest, res: Response) => {
   }
 });
 
+    // 4b. Add an additional advance/payment to an existing treatment
+    router.post('/:id/advance', protect, async (req: AuthRequest, res: Response) => {
+      try {
+        if (!isValidObjectId(req.params.id)) {
+          res.status(400).json({ message: 'Identifiant invalide.' });
+          return;
+        }
+
+        const treatment = await Treatment.findById(req.params.id);
+        if (!treatment) {
+          res.status(404).json({ message: 'Soin introuvable.' });
+          return;
+        }
+
+        const { amount, paymentMethod, date, notes } = req.body;
+        const addAmount = Math.max(0, parseFloat(amount) || 0);
+        if (addAmount <= 0) {
+          res.status(400).json({ message: 'Veuillez saisir un montant supérieur à 0.' });
+          return;
+        }
+
+        const prevPaid = treatment.paidAmount || 0;
+        treatment.paidAmount = prevPaid + addAmount;
+        if (paymentMethod) treatment.paymentMode = paymentMethod;
+        await treatment.save();
+
+        // Create matching payment transaction
+        const payment = await PaymentTransaction.create({
+          patientId: treatment.patientId,
+          treatmentId: treatment._id,
+          amount: addAmount,
+          paymentMethod: paymentMethod || 'espèces',
+          date: date ? new Date(date) : new Date(),
+          notes: notes || `Versement Acompte: ${treatment.actName}${treatment.tooth ? ` (Dent ${treatment.tooth})` : ''}`,
+        });
+
+        res.json({ treatment, payment });
+      } catch (error: any) {
+        res.status(500).json({ message: 'Erreur lors de l\'enregistrement de l\'acompte.', error: error.message });
+      }
+    });
+
+    // 4c. Get all advances / tranches recorded for a treatment
+    router.get('/:id/advances', protect, async (req: AuthRequest, res: Response) => {
+      try {
+        if (!isValidObjectId(req.params.id)) {
+          res.status(400).json({ message: 'Identifiant invalide.' });
+          return;
+        }
+
+        const treatment = await Treatment.findById(req.params.id);
+        if (!treatment) {
+          res.status(404).json({ message: 'Soin introuvable.' });
+          return;
+        }
+
+        let payments = await PaymentTransaction.find({ treatmentId: treatment._id }).sort({ date: -1, createdAt: -1 });
+
+        // If treatment has paidAmount > 0 but no PaymentTransaction exists (e.g. legacy initial advance), create it so it's visible & manageable
+        if ((treatment.paidAmount || 0) > 0 && payments.length === 0) {
+          const initialPayment = await PaymentTransaction.create({
+            patientId: treatment.patientId,
+            treatmentId: treatment._id,
+            amount: treatment.paidAmount,
+            paymentMethod: treatment.paymentMode || 'espèces',
+            date: treatment.date,
+            notes: `Avance initiale: ${treatment.actName}${treatment.tooth ? ` (Dent ${treatment.tooth})` : ''}`,
+          });
+          payments = [initialPayment];
+        }
+
+        res.json({
+          treatment,
+          cost: treatment.cost || 0,
+          paidAmount: treatment.paidAmount || 0,
+          remainingAmount: Math.max(0, (treatment.cost || 0) - (treatment.paidAmount || 0)),
+          payments,
+        });
+      } catch (error: any) {
+        res.status(500).json({ message: 'Erreur lors de la récupération de l\'historique des acomptes.', error: error.message });
+      }
+    });
+
+    // 4d. Delete a specific advance / tranche for a treatment with auto recalculation of remaining
+    router.delete('/:id/advance/:paymentId', protect, async (req: AuthRequest, res: Response) => {
+      try {
+        const { id, paymentId } = req.params;
+        if (!isValidObjectId(id) || !isValidObjectId(paymentId)) {
+          res.status(400).json({ message: 'Identifiants invalides.' });
+          return;
+        }
+
+        const treatment = await Treatment.findById(id);
+        if (!treatment) {
+          res.status(404).json({ message: 'Soin introuvable.' });
+          return;
+        }
+
+        const payment = await PaymentTransaction.findOne({ _id: paymentId, treatmentId: treatment._id });
+        if (!payment) {
+          const anyPayment = await PaymentTransaction.findById(paymentId);
+          if (!anyPayment) {
+            res.status(404).json({ message: 'Versement introuvable.' });
+            return;
+          }
+          await anyPayment.deleteOne();
+        } else {
+          await payment.deleteOne();
+        }
+
+        // Recalculate remaining payments for this treatment
+        const remainingPayments = await PaymentTransaction.find({ treatmentId: treatment._id }).sort({ date: -1, createdAt: -1 });
+        const totalPaid = remainingPayments.reduce((acc, p) => acc + (p.amount || 0), 0);
+        treatment.paidAmount = totalPaid;
+        await treatment.save();
+
+        await recordAudit({
+          userId: req.user?._id,
+          userName: req.user?.name || 'Praticien',
+          action: 'DELETE_PAYMENT',
+          severity: 'WARNING',
+          targetId: treatment._id,
+          targetName: `${treatment.actName}`,
+          details: `Suppression d'un acompte pour "${treatment.actName}". Nouveau total versé: ${totalPaid} DH.`,
+          req,
+        });
+
+        res.json({
+          message: 'Versement supprimé avec succès.',
+          treatment,
+          paidAmount: totalPaid,
+          remainingAmount: Math.max(0, (treatment.cost || 0) - totalPaid),
+          payments: remainingPayments,
+        });
+      } catch (error: any) {
+        res.status(500).json({ message: 'Erreur lors de la suppression de l\'acompte.', error: error.message });
+      }
+    });
+
 // 5. Delete treatment
 router.delete('/:id', protect, async (req: AuthRequest, res: Response) => {
   try {
@@ -250,6 +415,11 @@ router.delete('/:id', protect, async (req: AuthRequest, res: Response) => {
         } catch {}
       }
     }
+
+    // Also remove any payments linked specifically to this treatment
+    try {
+      await PaymentTransaction.deleteMany({ treatmentId: treatment._id });
+    } catch {}
 
     await treatment.deleteOne();
     res.json({ message: 'Soin supprimé du carnet avec succès.' });

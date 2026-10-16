@@ -64,6 +64,19 @@ for (const targetRelease of TARGETS) {
     copyDirRecursive(FRONTEND_DIST, pub);
   }
   console.log('  ✅ Frontend mis à jour (app/public et public).');
+
+  // 3. Copy maintenance tools & reset scripts
+  const scriptsDir = path.join(targetRelease, 'scripts');
+  fs.mkdirSync(scriptsDir, { recursive: true });
+  fs.copyFileSync(
+    path.join(ROOT_DIR, 'scripts', 'vider_base_donnees.js'),
+    path.join(scriptsDir, 'vider_base_donnees.js')
+  );
+  fs.copyFileSync(
+    path.join(ROOT_DIR, 'Vider_Base_De_Donnees_Clinique.bat'),
+    path.join(targetRelease, 'Vider_Base_De_Donnees_Clinique.bat')
+  );
+  console.log('  ✅ Script de remise à zéro de la base synchronisé.');
 }
 
 console.log('\n✨ Synchronisation terminée avec succès !');

@@ -6,7 +6,9 @@ export interface ITreatment extends Document {
   tooth?: string;
   actName: string;
   category?: string;
-  cost: number;
+  cost: number; // A Payer (Prix convenu)
+  paidAmount?: number; // Avance (Montant versé pour cet acte)
+  paymentMode?: string; // Mode de règlement ('espèces' | 'carte' | 'chèque' | 'virement')
   status: 'Terminé' | 'En cours' | 'Planifié';
   notes?: string;
   invoiceId?: mongoose.Types.ObjectId;
@@ -23,6 +25,11 @@ const TreatmentSchema: Schema = new Schema(
     actName: { type: String, required: true, trim: true },
     category: { type: String, default: 'Soins' },
     cost: { type: Number, required: true, default: 0 },
+    paidAmount: { type: Number, default: 0 },
+    paymentMode: {
+      type: String,
+      default: 'espèces',
+    },
     status: {
       type: String,
       enum: ['Terminé', 'En cours', 'Planifié'],

@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 
 import { API_URL, UPLOADS_URL } from '../config/api';
+import { getLocalAvatar } from '../utils/avatarUtils';
 
 interface SidebarProps {
   clinicNameFr?: string;
@@ -70,15 +71,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const isSettingsActive = location.pathname.startsWith('/settings');
 
   const getAvatarSrc = (avatarUrl?: string, name?: string) => {
-    if (!avatarUrl) {
-      return `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name || 'User')}`;
-    }
-    const cleanUrl = avatarUrl.replace(/^\.\.\//, '/').replace(/^uploads\//, '/uploads/');
-    if (cleanUrl.startsWith('/uploads')) {
-      const baseUrl = API_URL.replace('/api', '');
-      return `${baseUrl}${cleanUrl}`;
-    }
-    return avatarUrl;
+    return getLocalAvatar(name, '', avatarUrl);
   };
 
   return (

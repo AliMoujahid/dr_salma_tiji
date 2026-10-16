@@ -36,22 +36,27 @@ export const PatientLedgerPrintLayout: React.FC<PatientLedgerPrintLayoutProps> =
 
   // Merge acts and payments into chronological entries with running balance
   const entries: any[] = [
-    ...acts.map((a) => ({
-      rawDate: a.date,
-      date: formatDate(a.date),
-      tooth: a.tooth && a.tooth !== '-' ? a.tooth : '',
-      description: a.description || a.actName,
-      aPayer: Number(a.amount) || Number(a.cost) || 0,
-      avance: null,
-    })),
-    ...payments.map((p) => ({
-      rawDate: p.date,
-      date: formatDate(p.date),
-      tooth: '',
-      description: `Versement (${p.paymentMethod || 'Espèces'})${p.notes ? ' - ' + p.notes : ''}`,
-      aPayer: null,
-      avance: Number(p.amount) || 0,
-    })),
+    ...acts.map((a) => {
+      const actAdvance = Number(a.paidAmount) || Number(a.advance) || 0;
+      return {
+        rawDate: a.date,
+        date: formatDate(a.date),
+        tooth: a.tooth && a.tooth !== '-' ? a.tooth : '',
+        description: a.description || a.actName,
+        aPayer: Number(a.amount) || Number(a.cost) || 0,
+        avance: actAdvance > 0 ? actAdvance : null,
+      };
+    }),
+    ...payments
+      .filter((p) => !p.treatmentId)
+      .map((p) => ({
+        rawDate: p.date,
+        date: formatDate(p.date),
+        tooth: '',
+        description: `Versement (${p.paymentMethod || 'Espèces'})${p.notes ? ' - ' + p.notes : ''}`,
+        aPayer: null,
+        avance: Number(p.amount) || 0,
+      })),
   ].sort((a, b) => new Date(a.rawDate).getTime() - new Date(b.rawDate).getTime());
 
   let running = 0;
@@ -90,7 +95,10 @@ export const PatientLedgerPrintLayout: React.FC<PatientLedgerPrintLayoutProps> =
               {/* Line 1: Dossier N° + Nom */}
               <div className="flex items-center justify-between mb-0.5">
                 <div className="flex items-center gap-1.5 shrink-0">
-                  <span className="bg-[#5c246e] text-white font-bold text-[10.5px] px-3 py-0.5 rounded-full uppercase tracking-wider shrink-0">
+                  <span
+                    className="bg-[#5c246e] carnet-pill !text-white font-black text-[10.5px] px-3 py-0.5 rounded-full uppercase tracking-wider shrink-0"
+                    style={{ color: '#ffffff', backgroundColor: '#5c246e' }}
+                  >
                     Dossier N° :
                   </span>
                   <span className="font-black text-xs text-[#5c246e] tracking-wider ml-1">
@@ -233,38 +241,56 @@ export const PatientLedgerPrintLayout: React.FC<PatientLedgerPrintLayoutProps> =
               <tr className="border-b-2 border-[#5c246e] bg-white h-10">
                 {/* Date */}
                 <th className="border-r-2 border-[#5c246e] p-1.5 w-[14%]">
-                  <div className="bg-[#5c246e] text-white font-bold text-[11px] py-1 px-3 rounded-full uppercase tracking-wider inline-block min-w-[70px]">
-                    Date
+                  <div
+                    className="bg-[#5c246e] carnet-pill !text-white font-black text-[11px] py-1 px-3 rounded-full uppercase tracking-wider inline-block min-w-[70px]"
+                    style={{ color: '#ffffff', backgroundColor: '#5c246e' }}
+                  >
+                    DATE
                   </div>
                 </th>
                 {/* Dent */}
                 <th className="border-r-2 border-[#5c246e] p-1.5 w-[9%]">
-                  <div className="bg-[#5c246e] text-white font-bold text-[11px] py-1 px-2.5 rounded-full uppercase tracking-wider inline-block min-w-[45px]">
-                    Dent
+                  <div
+                    className="bg-[#5c246e] carnet-pill !text-white font-black text-[11px] py-1 px-2.5 rounded-full uppercase tracking-wider inline-block min-w-[45px]"
+                    style={{ color: '#ffffff', backgroundColor: '#5c246e' }}
+                  >
+                    DENT
                   </div>
                 </th>
                 {/* Acte */}
                 <th className="border-r-2 border-[#5c246e] p-1.5 w-[41%]">
-                  <div className="bg-[#5c246e] text-white font-bold text-[11px] py-1 px-5 rounded-full uppercase tracking-wider inline-block min-w-[130px]">
-                    Acte
+                  <div
+                    className="bg-[#5c246e] carnet-pill !text-white font-black text-[11px] py-1 px-5 rounded-full uppercase tracking-wider inline-block min-w-[130px]"
+                    style={{ color: '#ffffff', backgroundColor: '#5c246e' }}
+                  >
+                    ACTE
                   </div>
                 </th>
                 {/* A payer */}
                 <th className="border-r-2 border-[#5c246e] p-1.5 w-[12%]">
-                  <div className="bg-[#5c246e] text-white font-bold text-[11px] py-1 px-2 rounded-full uppercase tracking-wider inline-block min-w-[65px]">
-                    A payer
+                  <div
+                    className="bg-[#5c246e] carnet-pill !text-white font-black text-[11px] py-1 px-2 rounded-full uppercase tracking-wider inline-block min-w-[65px]"
+                    style={{ color: '#ffffff', backgroundColor: '#5c246e' }}
+                  >
+                    A PAYER
                   </div>
                 </th>
                 {/* Avance */}
                 <th className="border-r-2 border-[#5c246e] p-1.5 w-[12%]">
-                  <div className="bg-[#5c246e] text-white font-bold text-[11px] py-1 px-2 rounded-full uppercase tracking-wider inline-block min-w-[65px]">
-                    Avance
+                  <div
+                    className="bg-[#5c246e] carnet-pill !text-white font-black text-[11px] py-1 px-2 rounded-full uppercase tracking-wider inline-block min-w-[65px]"
+                    style={{ color: '#ffffff', backgroundColor: '#5c246e' }}
+                  >
+                    AVANCE
                   </div>
                 </th>
                 {/* Reste */}
                 <th className="p-1.5 w-[12%]">
-                  <div className="bg-[#5c246e] text-white font-bold text-[11px] py-1 px-2 rounded-full uppercase tracking-wider inline-block min-w-[65px]">
-                    Reste
+                  <div
+                    className="bg-[#5c246e] carnet-pill !text-white font-black text-[11px] py-1 px-2 rounded-full uppercase tracking-wider inline-block min-w-[65px]"
+                    style={{ color: '#ffffff', backgroundColor: '#5c246e' }}
+                  >
+                    RESTE
                   </div>
                 </th>
               </tr>

@@ -21,6 +21,7 @@ export interface IToothHistory extends Document {
   photosAfter: string[];
   xrays: string[];
   cost?: number;
+  paidAmount?: number;
   invoiceId?: mongoose.Types.ObjectId;
   date: Date;
   createdAt: Date;
@@ -55,6 +56,7 @@ const ToothHistorySchema: Schema = new Schema(
     photosAfter: [{ type: String }],
     xrays: [{ type: String }],
     cost: { type: Number, default: 0 },
+    paidAmount: { type: Number, default: 0 },
     invoiceId: { type: Schema.Types.ObjectId, ref: 'Invoice' },
     date: { type: Date, required: true, default: Date.now },
   },

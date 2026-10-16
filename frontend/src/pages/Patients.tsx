@@ -8,6 +8,7 @@ import { formatDate, formatBirthDateWithAge, calculateAge } from '../utils/dateU
 import { CustomDatePicker } from '../components/CustomDatePicker';
 import { API_URL } from '../config/api';
 import { useLiveSync } from '../context/LiveSyncContext';
+import { getLocalAvatar } from '../utils/avatarUtils';
 
 
 
@@ -332,9 +333,12 @@ export const Patients: React.FC = () => {
                   <div className="flex justify-between items-start mb-4">
                     <div className="w-12 h-12 rounded-full overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-white/10 shrink-0">
                       <img
-                        src={patient.profilePictureUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(patient.name + ' ' + (patient.prenom || ''))}`}
+                        src={getLocalAvatar(patient.name, patient.prenom, patient.profilePictureUrl)}
                         alt={`${patient.name} ${patient.prenom || ''}`}
                         className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.currentTarget.src = getLocalAvatar(patient.name, patient.prenom);
+                        }}
                       />
                     </div>
                     <button
@@ -372,8 +376,8 @@ export const Patients: React.FC = () => {
 
                 </div>
 
-                {/* Operations overlay */}
-                <div className="mt-4 pt-3.5 border-t border-slate-100 dark:border-white/5 flex justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-all">
+                {/* Operations overlay - Always visible */}
+                <div className="mt-4 pt-3.5 border-t border-slate-100 dark:border-white/5 flex justify-end gap-1.5">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();

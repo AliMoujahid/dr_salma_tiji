@@ -113,8 +113,23 @@ html:not(.dark) h6:not(.login-page *):not([data-theme="dark"] *) {
   color: #0f172a !important;
 }
 
-html:not(.dark) .text-white:not(.bg-blue-600):not(.bg-blue-500):not(.bg-emerald-600):not(.bg-rose-600):not(.bg-indigo-600):not(.nav-active):not(button.bg-blue-600):not(button.bg-blue-500):not(button.bg-emerald-600):not(button.bg-rose-600):not(.login-page *):not([data-theme="dark"] *) {
+html:not(.dark) .text-white:not(.bg-blue-600):not(.bg-blue-500):not(.bg-emerald-600):not(.bg-rose-600):not(.bg-indigo-600):not(.nav-active):not(button.bg-blue-600):not(button.bg-blue-500):not(button.bg-emerald-600):not(button.bg-rose-600):not(.login-page *):not([data-theme="dark"] *):not(.carnet-pill):not(.carnet-pill *):not(#patient-carnet-template *):not(.print-container *):not([class*="bg-[#5c246e]"] *):not([class*="bg-[#5c246e]"]) {
   color: #0f172a;
+}
+
+/* Explicit rule for carnet & print pills to ALWAYS be crisp white on purple */
+.carnet-pill,
+.carnet-pill *,
+#patient-carnet-template .carnet-pill,
+#patient-carnet-template .carnet-pill *,
+.print-container .carnet-pill,
+.print-container .carnet-pill *,
+html:not(.dark) .carnet-pill,
+html:not(.dark) .carnet-pill *,
+html.dark .carnet-pill,
+html.dark .carnet-pill * {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
 }
 
 /* Fix hover:text-white in light mode on neutral/light elements */
