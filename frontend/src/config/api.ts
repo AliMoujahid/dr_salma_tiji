@@ -18,7 +18,19 @@ export const UPLOADS_URL = `${BASE_URL}/uploads`;
 
 export const getUploadUrl = (path?: string | null): string => {
   if (!path) return '';
-  if (path.startsWith('http://') || path.startsWith('https://')) return path;
-  const cleanPath = path.replace(/^(\.\.\/)+/, '').replace(/^\/?uploads\/?/, '');
+  // Fix accidental duplicate /uploads/uploads/ in full URLs
+  if (path.includes('/uploads/uploads/')) {
+    path = path.replace(/\/uploads\/uploads\//g, '/uploads/');
+  }
+  if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('data:')) {
+    return path;
+  }
+  // Strip any sequences of ../, /uploads/, uploads/, leading slashes and backslashes
+  const cleanPath = path
+    .replace(/^(\.\.[\/\\])+/, '')
+    .replace(/^(\/?uploads[\/\\]+)+/i, '')
+    .replace(/^[\/\\]+/, '')
+    .replace(/\\/g, '/');
   return `${UPLOADS_URL}/${cleanPath}`;
 };
+

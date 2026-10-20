@@ -107,13 +107,72 @@ router.get('/patient/:patientId/ledger', protect, async (req: AuthRequest, res: 
       notes: p.notes,
     }));
 
+    // Separate standalone payments from payments that are advances on existing acts
+    const existingActIds = new Set(actsList.map((a) => a._id.toString()));
+    const standalonePayments = paymentsList.filter(
+      (p) => !p.treatmentId || !existingActIds.has(p.treatmentId.toString())
+    );
+
     // Calculate totals
     const totalActsAmount = actsList.reduce((sum, act) => sum + (Number(act.amount) || 0), 0);
-    const totalPaidAmount = paymentsList.reduce((sum, pay) => sum + (Number(pay.amount) || 0), 0);
+
+    // Resilient total paid amount: sum of all payment transactions + any orphan treatment paidAmount
+    const trackedTreatmentIds = new Set(
+      payments
+        .filter((p) => Boolean(p.treatmentId))
+        .map((p) => String(p.treatmentId))
+    );
+    let orphanTreatmentAdvances = 0;
+    for (const t of treatments) {
+      if ((t.paidAmount || 0) > 0 && !trackedTreatmentIds.has(t._id.toString())) {
+        orphanTreatmentAdvances += Number(t.paidAmount) || 0;
+      }
+    }
+    const totalPaidAmount = paymentsList.reduce((sum, pay) => sum + (Number(pay.amount) || 0), 0) + orphanTreatmentAdvances;
     const remainingBalance = Math.max(0, totalActsAmount - totalPaidAmount);
 
+    // Chronological running balance (oldest to newest)
+    const chronological = [
+      ...actsList.map((a) => ({
+        _id: a._id,
+        kind: 'SOIN',
+        cost: Number(a.amount) || 0,
+        advance: Number(a.paidAmount) || 0,
+        date: a.date,
+      })),
+      ...standalonePayments.map((p) => ({
+        _id: p._id,
+        kind: 'REGLEMENT',
+        cost: 0,
+        advance: Number(p.amount) || 0,
+        date: p.date,
+      })),
+    ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime() || a._id.toString().localeCompare(b._id.toString()));
+
+    let currentRunning = 0;
+    const runningMap: Record<string, number> = {};
+    for (const item of chronological) {
+      if (item.kind === 'SOIN') {
+        currentRunning += item.cost;
+        currentRunning -= item.advance;
+      } else {
+        currentRunning -= item.advance;
+      }
+      runningMap[item._id.toString()] = Math.max(0, currentRunning);
+    }
+
+    const actsWithRunning = actsList.map((a) => ({
+      ...a,
+      runningBalance: runningMap[a._id.toString()] !== undefined ? runningMap[a._id.toString()] : Math.max(0, (a.amount || 0) - (a.paidAmount || 0)),
+    }));
+
+    const paymentsWithRunning = paymentsList.map((p) => ({
+      ...p,
+      runningBalance: runningMap[p._id.toString()] !== undefined ? runningMap[p._id.toString()] : undefined,
+    }));
+
     // Unbilled acts (can be selected to create a new invoice)
-    const unbilledActs = actsList.filter((a) => !a.invoiceId);
+    const unbilledActs = actsWithRunning.filter((a) => !a.invoiceId);
 
     res.json({
       summary: {
@@ -122,8 +181,8 @@ router.get('/patient/:patientId/ledger', protect, async (req: AuthRequest, res: 
         remainingBalance,
         unbilledCount: unbilledActs.length,
       },
-      acts: actsList.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-      payments: paymentsList.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+      acts: actsWithRunning.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+      payments: paymentsWithRunning.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
       unbilledActs,
     });
   } catch (error: any) {

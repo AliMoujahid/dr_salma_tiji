@@ -16,6 +16,7 @@ import { PatientProfile } from './pages/PatientProfile';
 import { Appointments } from './pages/Appointments';
 import { WaitingRoom } from './pages/WaitingRoom';
 import { InvoiceEditor } from './pages/InvoiceEditor';
+import { DevisEditor } from './pages/DevisEditor';
 import { Reports } from './pages/Reports';
 import { Settings } from './pages/Settings';
 import { NotificationManager } from './pages/NotificationManager';
@@ -114,6 +115,7 @@ const AppLayout: React.FC = () => {
             <Route path="/appointments" element={<Appointments />} />
             <Route path="/waiting-room" element={<WaitingRoom />} />
             <Route path="/invoices" element={<InvoiceEditor />} />
+            <Route path="/devis" element={<DevisEditor />} />
             <Route path="/payments" element={<Navigate to="/invoices" replace />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/notifications" element={<NotificationManager />} />

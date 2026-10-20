@@ -7,6 +7,8 @@ import { useToast } from '../context/ToastContext';
 import { InvoicePrintLayout } from '../components/InvoicePrintLayout';
 import { SearchablePatientSelect } from '../components/SearchablePatientSelect';
 import { CustomDatePicker } from '../components/CustomDatePicker';
+import { SearchableActInput } from '../components/SearchableActInput';
+import { QuickCreateDentalActModal } from '../components/QuickCreateDentalActModal';
 import { API_URL } from '../config/api';
 
 
@@ -43,6 +45,44 @@ export const InvoiceEditor: React.FC = () => {
   // Edit / Duplicate ID target
   const [editInvoiceId, setEditInvoiceId] = useState<string | null>(null);
   const [printInvoiceData, setPrintInvoiceData] = useState<Invoice | null>(null);
+
+  // Quick Create Dental Act modal
+  const [showQuickActModal, setShowQuickActModal] = useState(false);
+  const [quickActPrefill, setQuickActPrefill] = useState('');
+  const [targetActRowIndex, setTargetActRowIndex] = useState<number | null>(null);
+
+  const handleOpenQuickActModal = (rowIndex: number | null, prefillName = '') => {
+    setTargetActRowIndex(rowIndex);
+    setQuickActPrefill(prefillName);
+    setShowQuickActModal(true);
+  };
+
+  const handleActCreated = (newAct: DentalAct) => {
+    setDentalActs((prev) => {
+      if (prev.some((a) => a._id === newAct._id)) return prev;
+      return [newAct, ...prev];
+    });
+
+    if (targetActRowIndex !== null && lineItems[targetActRowIndex]) {
+      const updated = [...lineItems];
+      updated[targetActRowIndex].description = newAct.name;
+      updated[targetActRowIndex].amount = newAct.defaultPrice;
+      setLineItems(updated);
+    } else {
+      const lastRow = lineItems[lineItems.length - 1];
+      if (lastRow && !lastRow.description && (!lastRow.amount || lastRow.amount === 0)) {
+        const updated = [...lineItems];
+        updated[lineItems.length - 1].description = newAct.name;
+        updated[lineItems.length - 1].amount = newAct.defaultPrice;
+        setLineItems(updated);
+      } else {
+        setLineItems((prev) => [
+          ...prev,
+          { date: '', tooth: '', description: newAct.name, amount: newAct.defaultPrice },
+        ]);
+      }
+    }
+  };
 
   useEffect(() => {
     fetchInvoices();
@@ -943,14 +983,22 @@ export const InvoiceEditor: React.FC = () => {
                           />
 
                           {/* Description / Acte */}
-                          <input
-                            type="text"
-                            list="dental-acts-datalist"
-                            placeholder="Acte (ex: Couronne zircone...)"
-                            value={item.description}
-                            onChange={(e) => handleLineItemChange(index, 'description', e.target.value)}
-                            className="col-span-6 h-9 px-3 rounded-lg text-xs border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white placeholder-slate-400 shadow-xs focus:outline-none focus:border-blue-500 font-medium truncate"
-                          />
+                          <div className="col-span-6">
+                            <SearchableActInput
+                              value={item.description}
+                              dentalActs={dentalActs}
+                              colorScheme="blue"
+                              placeholder="Rechercher ou saisir un acte (ex: Couronne zircone...)"
+                              onChangeText={(text) => handleLineItemChange(index, 'description', text)}
+                              onSelectAct={(actName, defaultPrice) => {
+                                const updated = [...lineItems];
+                                updated[index].description = actName;
+                                updated[index].amount = defaultPrice;
+                                setLineItems(updated);
+                              }}
+                              onAddNewAct={(prefill) => handleOpenQuickActModal(index, prefill)}
+                            />
+                          </div>
 
                           {/* Montant & Delete */}
                           <div className="col-span-2 flex items-center gap-1.5">
@@ -1155,6 +1203,14 @@ export const InvoiceEditor: React.FC = () => {
 
       </div>
       
+      {/* Quick Create Dental Act Modal */}
+      <QuickCreateDentalActModal
+        isOpen={showQuickActModal}
+        onClose={() => setShowQuickActModal(false)}
+        prefillName={quickActPrefill}
+        onActCreated={handleActCreated}
+        colorScheme="blue"
+      />
     </div>
   );
 };

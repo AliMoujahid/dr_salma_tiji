@@ -1,6 +1,6 @@
 import React from 'react';
 import { Invoice, ClinicConfig } from '../types';
-import { UPLOADS_URL } from '../config/api';
+import { UPLOADS_URL, getUploadUrl } from '../config/api';
 import clinicLogo from '../assets/logo.png';
 
 interface InvoicePrintLayoutProps {
@@ -226,19 +226,15 @@ export const InvoicePrintLayout: React.FC<InvoicePrintLayoutProps> = ({ invoice,
 
                     {/* Center: Logo */}
                     <div className="w-[30%] flex justify-center items-center">
-                      {config.logoUrl ? (
-                        <img
-                          src={`${UPLOADS_URL}${config.logoUrl}`}
-                          alt="Logo"
-                          className="h-16 max-w-[120px] object-contain block mx-auto"
-                        />
-                      ) : (
-                        <img
-                          src={clinicLogo}
-                          alt="Logo"
-                          className="h-16 max-w-[120px] object-contain block mx-auto"
-                        />
-                      )}
+                      <img
+                        src={config.logoUrl ? getUploadUrl(config.logoUrl) : clinicLogo}
+                        alt="Logo"
+                        className="h-16 max-w-[120px] object-contain block mx-auto"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.src = clinicLogo;
+                        }}
+                      />
                     </div>
 
                     {/* Right: Arabic */}

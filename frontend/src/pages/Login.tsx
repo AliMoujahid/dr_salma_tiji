@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Lock, User, Activity, Eye, EyeOff, Sparkles } from 'lucide-react';
 import { AntigravityParticles } from '../components/AntigravityParticles';
-import { API_URL } from '../config/api';
+import { API_URL, getUploadUrl } from '../config/api';
 
 export const Login: React.FC = () => {
   const { login } = useAuth();
@@ -55,13 +55,8 @@ export const Login: React.FC = () => {
   };
 
   const getLogoSrc = () => {
-    if (!clinicConfig?.logoUrl) return null;
-    if (clinicConfig.logoUrl.startsWith('/uploads') || clinicConfig.logoUrl.startsWith('uploads/')) {
-      const baseUrl = API_URL.replace('/api', '');
-      const cleanPath = clinicConfig.logoUrl.startsWith('/') ? clinicConfig.logoUrl : `/${clinicConfig.logoUrl}`;
-      return `${baseUrl}${cleanPath}`;
-    }
-    return clinicConfig.logoUrl;
+    if (!clinicConfig?.logoUrl) return '/logo.png';
+    return getUploadUrl(clinicConfig.logoUrl);
   };
 
   const logoSrc = getLogoSrc();
@@ -81,11 +76,17 @@ export const Login: React.FC = () => {
         {/* Logo and Brand Heading */}
         <div className="flex flex-col items-center gap-3.5 mb-8">
           <div className="w-16 h-16 rounded-2xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center shadow-xl shadow-blue-500/15 overflow-hidden p-2">
-            {logoSrc ? (
-              <img src={logoSrc} alt="Logo Cabinet" className="w-full h-full object-contain" />
-            ) : (
-              <Activity className="w-8 h-8 text-blue-400 animate-pulse" />
-            )}
+            <img
+              src={logoSrc}
+              alt="Logo Cabinet"
+              className="w-full h-full object-contain"
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                if (!target.src.endsWith('/logo.png')) {
+                  target.src = '/logo.png';
+                }
+              }}
+            />
           </div>
           <div className="text-center">
             <h2 className="login-brand-title text-2xl font-extrabold text-white tracking-tight">

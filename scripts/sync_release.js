@@ -77,6 +77,23 @@ for (const targetRelease of TARGETS) {
     path.join(targetRelease, 'Vider_Base_De_Donnees_Clinique.bat')
   );
   console.log('  ✅ Script de remise à zéro de la base synchronisé.');
+
+  // 4. Copier le logo officiel dans tous les dossiers uploads
+  const srcLogo = path.join(ROOT_DIR, 'logo.png');
+  if (fs.existsSync(srcLogo)) {
+    const uploadDirs = [
+      path.join(targetRelease, 'uploads'),
+      path.join(targetRelease, 'uploads', 'Clinic'),
+      path.join(targetRelease, 'app', 'uploads'),
+      path.join(targetRelease, 'app', 'uploads', 'Clinic'),
+    ];
+    for (const uDir of uploadDirs) {
+      fs.mkdirSync(uDir, { recursive: true });
+      fs.copyFileSync(srcLogo, path.join(uDir, 'logo-cabinet.png'));
+      fs.copyFileSync(srcLogo, path.join(uDir, 'logo.png'));
+    }
+    console.log('  ✅ Logos (logo-cabinet.png & logo.png) synchronisés dans uploads.');
+  }
 }
 
 console.log('\n✨ Synchronisation terminée avec succès !');

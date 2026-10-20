@@ -38,6 +38,7 @@ import dentalActsRoutes, { ensureDefaultActs } from './routes/dentalActs';
 import liveSyncRoutes from './routes/liveSync';
 import nanopixRoutes from './routes/nanopix';
 import treatmentRoutes from './routes/treatments';
+import devisRoutes from './routes/devis';
 import { nanopixBridgeService } from './services/nanopixBridgeService';
 import { reminderScheduler } from './services/reminderScheduler';
 import { backupScheduler } from './services/backupScheduler';
@@ -74,9 +75,52 @@ const possibleUploadDirs = [
 for (const dir of possibleUploadDirs) {
   try {
     fs.mkdirSync(dir, { recursive: true });
-    app.use('/uploads', express.static(dir));
+    fs.mkdirSync(path.join(dir, 'Clinic'), { recursive: true });
   } catch { }
 }
+
+// Automatically normalize duplicate /uploads/uploads/ or /uploads/Clinic/ requests
+app.use((req, res, next) => {
+  if (req.url.startsWith('/uploads/uploads/')) {
+    req.url = req.url.replace(/^\/uploads\/uploads\//, '/uploads/');
+  }
+  next();
+});
+
+for (const dir of possibleUploadDirs) {
+  app.use('/uploads', express.static(dir));
+}
+
+// Bulletproof fallback for clinic logo so it never returns 404
+app.get([
+  '/uploads/logo-cabinet.png',
+  '/uploads/logo.png',
+  '/uploads/Clinic/logo-cabinet.png',
+  '/uploads/Clinic/logo.png',
+], (req, res, next) => {
+  const logoCandidates = [
+    path.join(__dirname, '..', 'uploads', 'logo-cabinet.png'),
+    path.join(__dirname, '..', 'uploads', 'logo.png'),
+    path.join(__dirname, '..', 'uploads', 'Clinic', 'logo-cabinet.png'),
+    path.join(__dirname, '..', 'uploads', 'Clinic', 'logo.png'),
+    path.join(process.cwd(), 'uploads', 'logo-cabinet.png'),
+    path.join(process.cwd(), 'uploads', 'logo.png'),
+    path.join(process.cwd(), 'uploads', 'Clinic', 'logo-cabinet.png'),
+    path.join(process.cwd(), 'uploads', 'Clinic', 'logo.png'),
+    path.join(process.cwd(), 'app', 'uploads', 'logo-cabinet.png'),
+    path.join(process.cwd(), 'app', 'uploads', 'logo.png'),
+    path.join(process.cwd(), 'public', 'logo.png'),
+    path.join(process.cwd(), 'logo.png'),
+    path.join(__dirname, '..', '..', 'logo.png'),
+    path.join(__dirname, '..', 'public', 'logo.png'),
+  ];
+  for (const candidate of logoCandidates) {
+    if (fs.existsSync(candidate)) {
+      return res.sendFile(path.resolve(candidate));
+    }
+  }
+  next();
+});
 
 import bcrypt from 'bcryptjs';
 import User from './models/User';
@@ -219,6 +263,8 @@ app.use('/api/dental-acts', dentalActsRoutes);
 app.use('/api/events', liveSyncRoutes);
 app.use('/api/nanopix', nanopixRoutes);
 app.use('/api/treatments', treatmentRoutes);
+app.use('/api/devis', devisRoutes);
+app.use('/api/quotes', devisRoutes);
 
 import { whatsappService } from './services/whatsappService';
 

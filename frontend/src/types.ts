@@ -178,6 +178,32 @@ export interface Invoice {
   updatedAt: string;
 }
 
+export interface DevisItem {
+  date: string;
+  tooth?: string;
+  description: string;
+  amount: number;
+  _id?: string;
+}
+
+export interface Devis {
+  _id: string;
+  devisNumber: string;
+  patientId: Patient;
+  date: string;
+  validUntil?: string;
+  items: DevisItem[];
+  totalAmount: number;
+  discount: number;
+  netAmount: number;
+  status: 'Draft' | 'Sent' | 'Accepted' | 'Rejected' | 'Invoiced';
+  notes?: string;
+  convertedInvoiceId?: any;
+  createdBy: User;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface PaymentTransaction {
   _id: string;
   invoiceId?: any;

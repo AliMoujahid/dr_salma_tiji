@@ -32,6 +32,7 @@ import {
   Zap,
   Activity,
   RefreshCw,
+  Eye,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -39,12 +40,38 @@ import { useLiveSync } from '../context/LiveSyncContext';
 import { BASE_URL, API_URL, getUploadUrl } from '../config/api';
 import { generateNanoPixPDF } from '../utils/nanoPixPdfGenerator';
 
-// --- SAMPLE DEFAULT RADIOGRAPHS (Realistic RVG Dental X-rays in High Definition) ---
-const DEFAULT_RVG_XRAYS: Record<string, string> = {
-  '18': 'https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?auto=format&fit=crop&w=1200&q=80',
-  '16': 'https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?auto=format&fit=crop&w=1200&q=80',
-  '36': 'https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?auto=format&fit=crop&w=1200&q=80',
-  '11': 'https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?auto=format&fit=crop&w=1200&q=80',
+// Helper to generate realistic intraoral dental X-ray data URI for test shots (black background, alveolar bone, tooth root, pulp canal, enamel)
+const createDentalXRayDataUri = (tooth: number = 18): string => {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="400" height="300" style="background:#05070a">
+    <defs>
+      <radialGradient id="boneGrad" cx="50%" cy="50%" r="60%">
+        <stop offset="0%" stop-color="#2a303c" />
+        <stop offset="60%" stop-color="#141822" />
+        <stop offset="100%" stop-color="#05070a" />
+      </radialGradient>
+      <filter id="noise">
+        <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch" />
+        <feColorMatrix type="matrix" values="0 0 0 0 0.4   0 0 0 0 0.4   0 0 0 0 0.4  0 0 0 0.18 0" />
+        <feComposite operator="in" in2="SourceGraphic" />
+      </filter>
+    </defs>
+    <rect width="400" height="300" fill="url(#boneGrad)" />
+    <rect width="400" height="300" filter="url(#noise)" opacity="0.4" />
+    <g transform="translate(140, 40)">
+      <!-- Enamel Crown -->
+      <path d="M 20 50 C 20 20, 100 20, 100 50 C 105 85, 95 100, 80 110 C 60 115, 40 115, 20 100 Z" fill="#e8edf5" opacity="0.92" />
+      <!-- Dentine Body -->
+      <path d="M 25 55 C 25 35, 95 35, 95 55 C 90 120, 85 170, 75 210 C 70 215, 60 215, 55 170 C 50 140, 30 110, 25 55 Z" fill="#b0bccd" opacity="0.75" />
+      <!-- Pulp Chamber & Root Canal -->
+      <path d="M 55 58 C 55 50, 65 50, 65 58 C 65 100, 64 160, 62 205 C 60 205, 58 160, 58 100 Z" fill="#090d14" opacity="0.95" />
+      <!-- Periodontal Ligament -->
+      <path d="M 18 105 C 28 120, 48 150, 53 175 C 58 220, 72 220, 77 212 C 87 172, 92 122, 97 105" fill="none" stroke="#05070a" stroke-width="2" opacity="0.7" />
+    </g>
+    <text x="20" y="30" fill="#00ea00" font-size="11" font-family="monospace" font-weight="bold">RVG NANOPIX • DENT #${tooth}</text>
+    <text x="20" y="46" fill="#8892b0" font-size="9" font-family="monospace">RESOLUTION: 25 lp/mm • HIGH-RES</text>
+    <text x="380" y="285" fill="#55607a" font-size="9" font-family="monospace" text-anchor="end">DIGITAL SENSOR 1</text>
+  </svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 };
 
 interface StudyImage {
@@ -66,6 +93,8 @@ interface NanoPixPatient {
   birthDate: string;
   age: number;
   studies: StudyImage[];
+  phone?: string;
+  cin?: string;
 }
 
 export const NanoPixStudio: React.FC = () => {
@@ -265,107 +294,122 @@ export const NanoPixStudio: React.FC = () => {
     }
   }, [location]);
 
-  // --- PATIENTS DATA ---
-  const [patients, setPatients] = useState<NanoPixPatient[]>([
-    {
-      id: 'p_default_1',
-      chartNo: '20260904_191218',
-      name: 'ALI MOUJAHID',
-      gender: 'Male',
-      birthDate: '2026-09-04',
-      age: 0,
-      studies: [
-        {
-          id: 's_1',
-          tooth: 18,
-          timestamp: '2026-09-04 19:14:29',
-          date: '2026-09-04',
-          url: 'https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?auto=format&fit=crop&w=1200&q=80',
-          exposureMode: 'Endodontic',
-          sensorModel: 'NanoPix 2 (High Res)',
-          notes: 'Contrôle rétro-alvéolaire dent #18',
-        },
-        {
-          id: 's_2',
-          tooth: 16,
-          timestamp: '2026-09-04 19:22:10',
-          date: '2026-09-04',
-          url: 'https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?auto=format&fit=crop&w=1200&q=80',
-          exposureMode: 'Periodontic',
-          sensorModel: 'NanoPix 2 (High Res)',
-          notes: 'Sondage parodontal et niveau osseux #16',
-        },
-      ],
-    },
-    {
-      id: 'p_default_2',
-      chartNo: '20260908_114002',
-      name: 'FATIMA ZAHRA MANSOURI',
-      gender: 'Female',
-      birthDate: '1992-05-14',
-      age: 34,
-      studies: [
-        {
-          id: 's_3',
-          tooth: 36,
-          timestamp: '2026-09-08 11:45:00',
-          date: '2026-09-08',
-          url: 'https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?auto=format&fit=crop&w=1200&q=80',
-          exposureMode: 'Endodontic',
-          sensorModel: 'NanoPix 2 (High Res)',
-          notes: 'Traitement canalaire racine mésiale #36',
-        },
-      ],
-    },
-  ]);
-
-  const [selectedPatientId, setSelectedPatientId] = useState<string>('p_default_1');
-  const [selectedStudyId, setSelectedStudyId] = useState<string>('s_1');
+  // --- PATIENTS DATA (100% Real from Clinic Database) ---
+  const [patients, setPatients] = useState<NanoPixPatient[]>([]);
+  const [selectedPatientId, setSelectedPatientId] = useState<string>('');
+  const [selectedStudyId, setSelectedStudyId] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Load real clinic patients from backend API
-  useEffect(() => {
-    fetch(`${API_URL}/patients?limit=100`, {
+  // Quick Add Patient Modal state
+  const [showAddPatientModal, setShowAddPatientModal] = useState(false);
+  const [newPatientName, setNewPatientName] = useState('');
+  const [newPatientPrenom, setNewPatientPrenom] = useState('');
+  const [newPatientPhone, setNewPatientPhone] = useState('');
+  const [newPatientBirth, setNewPatientBirth] = useState('');
+  const [newPatientGender, setNewPatientGender] = useState<'Male' | 'Female'>('Male');
+  const [isCreatingPatient, setIsCreatingPatient] = useState(false);
+
+  // Load real clinic patients from backend API with query support
+  const fetchClinicPatients = (query: string = '') => {
+    const url = query.trim()
+      ? `${API_URL}/patients?search=${encodeURIComponent(query.trim())}&limit=100`
+      : `${API_URL}/patients?limit=100`;
+
+    fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => res.json())
       .then((data) => {
-        if (data.patients && Array.isArray(data.patients) && data.patients.length > 0) {
+        if (data.patients && Array.isArray(data.patients)) {
           const mapped: NanoPixPatient[] = data.patients.map((p: any, idx: number) => {
-            const birth = p.birthDate ? p.birthDate.split('T')[0] : '1990-01-01';
+            const birth = p.birthDate ? p.birthDate.split('T')[0] : (p.age ? `${new Date().getFullYear() - p.age}-01-01` : '1990-01-01');
             const birthYear = new Date(birth).getFullYear();
-            const age = new Date().getFullYear() - birthYear;
-            const chartNo = `20260904_${191200 + idx}`;
+            const age = p.age || (new Date().getFullYear() - birthYear);
+            const chartNo = p.nationalId || p.cin || (p.createdAt ? p.createdAt.split('T')[0].replace(/-/g, '') : `PAT_${idx + 1}`);
             return {
               id: p._id,
               chartNo,
-              name: p.name,
+              name: `${p.name || ''} ${p.prenom || ''}`.trim() || 'Patient',
               gender: p.gender === 'Female' ? 'Female' : 'Male',
               birthDate: birth,
               age: isNaN(age) ? 30 : age,
-              studies: [
-                {
-                  id: `study_${p._id}_1`,
-                  tooth: 18,
-                  timestamp: '2026-09-04 19:14:29',
-                  date: '2026-09-04',
-                  url: 'https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?auto=format&fit=crop&w=1200&q=80',
-                  exposureMode: 'Endodontic',
-                  sensorModel: 'NanoPix 2',
-                },
-              ],
+              studies: [], // Loaded dynamically from MongoDB
+              phone: p.phone || '',
+              cin: p.nationalId || p.cin || '',
             };
           });
 
-          setPatients((prev) => {
-            const existingIds = new Set(mapped.map((m) => m.id));
-            const filteredPrev = prev.filter((pr) => !existingIds.has(pr.id));
-            return [...mapped, ...filteredPrev];
-          });
+          setPatients(mapped);
+          if (mapped.length > 0) {
+            setSelectedPatientId((prev) => (prev && mapped.some((m) => m.id === prev) ? prev : mapped[0].id));
+          }
+        } else {
+          setPatients([]);
         }
       })
-      .catch(() => console.log('NanoPix using local store.'));
-  }, [token]);
+      .catch((err) => console.error('NanoPix failed to fetch clinic patients:', err));
+  };
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchClinicPatients(searchQuery);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [searchQuery, token]);
+
+  const handleCreatePatient = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPatientName.trim()) {
+      toast.error('Nom Requis', 'Veuillez saisir le nom du patient.');
+      return;
+    }
+    setIsCreatingPatient(true);
+    try {
+      const res = await fetch(`${API_URL}/patients`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: newPatientName.trim().toUpperCase(),
+          prenom: newPatientPrenom.trim(),
+          phone: newPatientPhone.trim(),
+          birthDate: newPatientBirth || '1995-01-01',
+          gender: newPatientGender,
+        }),
+      });
+      const created = await res.json();
+      if (!res.ok) throw new Error(created.message || 'Erreur création patient');
+
+      const birthYear = new Date(created.birthDate || '1995-01-01').getFullYear();
+      const age = new Date().getFullYear() - birthYear;
+      const newNanoPatient: NanoPixPatient = {
+        id: created._id,
+        chartNo: created.nationalId || created.cin || created.createdAt?.split('T')[0]?.replace(/-/g, '') || `PAT_${Date.now()}`,
+        name: `${created.name} ${created.prenom || ''}`.trim(),
+        gender: created.gender || 'Male',
+        birthDate: created.birthDate ? created.birthDate.split('T')[0] : '1995-01-01',
+        age: isNaN(age) ? 30 : age,
+        studies: [],
+        phone: created.phone || '',
+        cin: created.nationalId || created.cin || '',
+      };
+
+      setPatients((prev) => [newNanoPatient, ...prev]);
+      setSelectedPatientId(newNanoPatient.id);
+      setShowAddPatientModal(false);
+      setNewPatientName('');
+      setNewPatientPrenom('');
+      setNewPatientPhone('');
+      setNewPatientBirth('');
+      toast.success('Patient Créé', `${newNanoPatient.name} a été ajouté avec succès.`);
+    } catch (err: any) {
+      toast.error('Erreur', err.message || 'Impossible d\'ajouter ce patient.');
+    } finally {
+      setIsCreatingPatient(false);
+    }
+  };
 
   const selectedPatient = useMemo(() => {
     return patients.find((p) => p.id === selectedPatientId) || patients[0];
@@ -423,37 +467,35 @@ export const NanoPixStudio: React.FC = () => {
 
   // Load real radiographs for selected patient from MERN database
   useEffect(() => {
-    if (!selectedPatientId || selectedPatientId.startsWith('p_default_')) return;
+    if (!selectedPatientId) return;
     fetch(`${API_URL}/nanopix/studies/${selectedPatientId}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => res.json())
       .then((docs) => {
-        if (Array.isArray(docs) && docs.length > 0) {
+        if (Array.isArray(docs)) {
           const realStudies: StudyImage[] = docs.map((d: any) => {
-            const dateStr = d.uploadedAt ? d.uploadedAt.split('T')[0] : '2026-10-11';
-            const toothMatch = d.fileName.match(/Dent_(\d+)/i) || d.fileName.match(/_(\d+)_/i);
+            const dateStr = d.uploadedAt ? d.uploadedAt.split('T')[0] : new Date().toISOString().split('T')[0];
+            const toothMatch = (d.fileName || '').match(/Dent_(\d+)/i) || (d.fileName || '').match(/_(\d+)_/i);
             const toothNum = toothMatch ? parseInt(toothMatch[1], 10) : 18;
             return {
               id: d._id,
               tooth: toothNum,
-              timestamp: new Date(d.uploadedAt).toLocaleString('fr-FR'),
+              timestamp: new Date(d.uploadedAt || Date.now()).toLocaleString('fr-FR'),
               date: dateStr,
               url: getUploadUrl(d.filePath),
               exposureMode: 'Endodontic',
-              sensorModel: 'Eighteeth NanoPix 1 (Size 1 - EN1)',
-              notes: `Radio RVG Numérique (${d.fileName})`,
+              sensorModel: d.sensorModel || 'Eighteeth NanoPix 1 (Size 1 - EN1)',
+              notes: `Radio RVG Numérique (${d.fileName || 'cliché'})`,
             };
           });
 
           setPatients((prev) =>
             prev.map((p) => {
               if (p.id === selectedPatientId) {
-                const realIds = new Set(realStudies.map((rs) => rs.id));
-                const filtered = p.studies.filter((s) => !realIds.has(s.id) && !s.id.startsWith('study_'));
                 return {
                   ...p,
-                  studies: [...realStudies, ...filtered],
+                  studies: realStudies,
                 };
               }
               return p;
@@ -462,6 +504,8 @@ export const NanoPixStudio: React.FC = () => {
 
           if (realStudies.length > 0) {
             setSelectedStudyId(realStudies[0].id);
+          } else {
+            setSelectedStudyId('');
           }
         }
       })
@@ -595,7 +639,7 @@ export const NanoPixStudio: React.FC = () => {
         tooth: selectedTooth,
         timestamp: `${dateStr} ${timeStr}`,
         date: dateStr,
-        url: DEFAULT_RVG_XRAYS[String(selectedTooth)] || DEFAULT_RVG_XRAYS['18'],
+        url: createDentalXRayDataUri(selectedTooth),
         exposureMode: imageProcessingMode,
         sensorModel: 'Eighteeth NanoPix 1 (Simulation)',
         notes: `Cliché RVG Démo IO ${selectedTooth} (${imageProcessingMode})`,
@@ -824,9 +868,10 @@ export const NanoPixStudio: React.FC = () => {
             <div className="flex items-center gap-1.5">
               {/* Button 1: Add Patient */}
               <button
-                onClick={() => toast.info('Nouveau Patient', 'Création d\'un nouveau dossier patient.')}
+                type="button"
+                onClick={() => setShowAddPatientModal(true)}
                 className="w-7 h-7 bg-[#142340] hover:bg-[#1d335c] rounded border border-[#2a4a80] text-cyan-300 flex items-center justify-center cursor-pointer shadow transition-colors"
-                title="Ajouter Patient"
+                title="Ajouter Nouveau Patient"
               >
                 <svg viewBox="0 0 24 24" className="w-4 h-4 fill-none stroke-current stroke-2">
                   <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
@@ -1257,17 +1302,23 @@ export const NanoPixStudio: React.FC = () => {
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search..."
-                    className="flex-1 bg-[#0e172a] border border-[#2a4370] rounded px-2.5 py-1 text-xs text-white focus:outline-none focus:border-blue-400"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') fetchClinicPatients(searchQuery);
+                    }}
+                    placeholder="Rechercher par nom, prénom, tél..."
+                    className="flex-1 bg-[#0e172a] border border-[#2a4370] rounded px-2.5 py-1 text-xs text-white focus:outline-none focus:border-blue-400 placeholder:text-slate-500"
                   />
                   <button
-                    onClick={() => toast.info('Ajouter un filtre', 'Filtre de recherche avancé.')}
-                    className="px-2.5 py-1 bg-[#142340] hover:bg-[#1d335c] rounded text-white text-xs border border-[#2a4370] cursor-pointer font-bold"
+                    type="button"
+                    onClick={() => setShowAddPatientModal(true)}
+                    className="px-2.5 py-1 bg-[#142340] hover:bg-[#1d335c] rounded text-white text-xs border border-[#2a4370] cursor-pointer font-bold flex items-center justify-center"
+                    title="Ajouter un Patient"
                   >
                     +
                   </button>
                   <button
-                    onClick={() => toast.info('Recherche', `Recherche de patients : ${searchQuery || 'Tous'}`)}
+                    type="button"
+                    onClick={() => fetchClinicPatients(searchQuery)}
                     className="px-3.5 py-1 bg-[#1864cc] hover:bg-blue-600 rounded text-white text-xs font-semibold cursor-pointer shadow"
                   >
                     Search
@@ -1346,7 +1397,16 @@ export const NanoPixStudio: React.FC = () => {
                     </thead>
                     <tbody className="divide-y divide-[#182845]">
                       {patients
-                        .filter((p) => p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.chartNo.includes(searchQuery))
+                        .filter((p) => {
+                          if (!searchQuery.trim()) return true;
+                          const q = searchQuery.toLowerCase().trim();
+                          return (
+                            p.name.toLowerCase().includes(q) ||
+                            p.chartNo.toLowerCase().includes(q) ||
+                            (p.cin && p.cin.toLowerCase().includes(q)) ||
+                            (p.phone && p.phone.includes(q))
+                          );
+                        })
                         .map((p) => {
                           const isSelected = p.id === selectedPatientId;
                           return (
@@ -1672,10 +1732,10 @@ export const NanoPixStudio: React.FC = () => {
                     </div>
                     <span className="text-xs font-bold text-white">Traitement du cliché...</span>
                   </div>
-                ) : (
+                ) : selectedStudy ? (
                   <div className="max-h-[35vh] aspect-[4/3] w-auto max-w-[420px] bg-black rounded-xl border border-[#1a2b4a] overflow-hidden relative flex items-center justify-center shadow-2xl">
                     <img
-                      src={selectedStudy?.url || DEFAULT_RVG_XRAYS['18']}
+                      src={selectedStudy.url}
                       alt="X-ray Live"
                       style={{
                         filter: `
@@ -1689,6 +1749,24 @@ export const NanoPixStudio: React.FC = () => {
                     <div className="absolute top-2 left-2 bg-black/80 px-2 py-0.5 rounded text-[9px] font-mono text-cyan-400 border border-white/15">
                       IO {selectedTooth} • {selectedPatient?.name}
                     </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center text-slate-500 gap-3 p-6 text-center max-w-sm">
+                    <div className="w-14 h-14 rounded-2xl bg-[#0e172a] border border-[#1a2b4a] flex items-center justify-center">
+                      <Radio className="w-7 h-7 text-cyan-400/60" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-slate-300">Prêt pour l'acquisition RVG</p>
+                      <p className="text-[11px] text-slate-400 mt-1">
+                        Sélectionnez la dent ci-dessous et cliquez sur "Armer le Capteur" pour démarrer la capture Eighteeth NanoPix.
+                      </p>
+                    </div>
+                    <button
+                      onClick={handleTriggerAcquisition}
+                      className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-bold cursor-pointer shadow transition-all"
+                    >
+                      Armer le Capteur
+                    </button>
                   </div>
                 )}
               </div>
@@ -1806,49 +1884,69 @@ export const NanoPixStudio: React.FC = () => {
               }}
               onMouseLeave={() => setLoupePos(null)}
             >
-              <div
-                style={{
-                  transform: `scale(${zoomLevel}) rotate(${rotationAngle}deg) scaleX(${flipH ? -1 : 1}) scaleY(${flipV ? -1 : 1})`,
-                  transition: 'transform 0.1s ease-out',
-                }}
-                className="max-w-3xl max-h-[75vh] relative"
-              >
-                <img
-                  src={selectedStudy?.url || DEFAULT_RVG_XRAYS['18']}
-                  alt="Viewer"
+              {selectedStudy ? (
+                <div
                   style={{
-                    filter: `
-                      brightness(${100 + brightness}%)
-                      contrast(${100 + contrast + smartContrastLevel * 10}%)
-                      ${isInverted ? 'invert(1)' : ''}
-                    `,
+                    transform: `scale(${zoomLevel}) rotate(${rotationAngle}deg) scaleX(${flipH ? -1 : 1}) scaleY(${flipV ? -1 : 1})`,
+                    transition: 'transform 0.1s ease-out',
                   }}
-                  className="rounded-lg object-contain max-h-[70vh] shadow-2xl"
-                />
+                  className="max-w-3xl max-h-[75vh] relative"
+                >
+                  <img
+                    src={selectedStudy.url}
+                    alt="Viewer"
+                    style={{
+                      filter: `
+                        brightness(${100 + brightness}%)
+                        contrast(${100 + contrast + smartContrastLevel * 10}%)
+                        ${isInverted ? 'invert(1)' : ''}
+                      `,
+                    }}
+                    className="rounded-lg object-contain max-h-[70vh] shadow-2xl"
+                  />
 
-                <div className="absolute top-2 left-2 text-[11px] font-mono font-bold text-slate-200 drop-shadow-md">
-                  {selectedStudy?.timestamp || '2026-09-04 19:14:29'} IO {selectedStudy?.tooth || 18}
+                  <div className="absolute top-2 left-2 text-[11px] font-mono font-bold text-slate-200 drop-shadow-md">
+                    {selectedStudy.timestamp} IO {selectedStudy.tooth}
+                  </div>
+
+                  {viewerTool === 'ruler' && rulerPoints && (
+                    <svg className="absolute inset-0 w-full h-full pointer-events-none">
+                      <line x1={rulerPoints.x1} y1={rulerPoints.y1} x2={rulerPoints.x2} y2={rulerPoints.y2} stroke="#00f0ff" strokeWidth="2" strokeDasharray="4 2" />
+                      <circle cx={rulerPoints.x1} cy={rulerPoints.y1} r="4" fill="#00f0ff" />
+                      <circle cx={rulerPoints.x2} cy={rulerPoints.y2} r="4" fill="#00f0ff" />
+                      <rect x={(rulerPoints.x1 + rulerPoints.x2) / 2 + 10} y={(rulerPoints.y1 + rulerPoints.y2) / 2 - 10} width="60" height="20" rx="4" fill="#050914" stroke="#00f0ff" strokeWidth="1" />
+                      <text x={(rulerPoints.x1 + rulerPoints.x2) / 2 + 40} y={(rulerPoints.y1 + rulerPoints.y2) / 2 + 4} fill="#00f0ff" fontSize="10" fontWeight="bold" textAnchor="middle" fontFamily="monospace">
+                        {rulerDistanceMm} mm
+                      </text>
+                    </svg>
+                  )}
                 </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center text-slate-500 gap-3 p-8 text-center max-w-sm">
+                  <div className="w-14 h-14 rounded-2xl bg-[#0e172a] border border-[#1a2b4a] flex items-center justify-center">
+                    <Eye className="w-7 h-7 text-cyan-400/50" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-slate-300">Aucun cliché sélectionné</p>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Sélectionnez une radiographie dans l'onglet "Patient" ou prenez un cliché via l'onglet "Acquisition".
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setActiveTab('Acquisition')}
+                    className="px-4 py-1.5 bg-[#1864cc] hover:bg-blue-600 text-white rounded text-xs font-semibold cursor-pointer shadow transition-all"
+                  >
+                    Aller à l'Acquisition
+                  </button>
+                </div>
+              )}
 
-                {viewerTool === 'ruler' && rulerPoints && (
-                  <svg className="absolute inset-0 w-full h-full pointer-events-none">
-                    <line x1={rulerPoints.x1} y1={rulerPoints.y1} x2={rulerPoints.x2} y2={rulerPoints.y2} stroke="#00f0ff" strokeWidth="2" strokeDasharray="4 2" />
-                    <circle cx={rulerPoints.x1} cy={rulerPoints.y1} r="4" fill="#00f0ff" />
-                    <circle cx={rulerPoints.x2} cy={rulerPoints.y2} r="4" fill="#00f0ff" />
-                    <rect x={(rulerPoints.x1 + rulerPoints.x2) / 2 + 10} y={(rulerPoints.y1 + rulerPoints.y2) / 2 - 10} width="60" height="20" rx="4" fill="#050914" stroke="#00f0ff" strokeWidth="1" />
-                    <text x={(rulerPoints.x1 + rulerPoints.x2) / 2 + 40} y={(rulerPoints.y1 + rulerPoints.y2) / 2 + 4} fill="#00f0ff" fontSize="10" fontWeight="bold" textAnchor="middle" fontFamily="monospace">
-                      {rulerDistanceMm} mm
-                    </text>
-                  </svg>
-                )}
-              </div>
-
-              {viewerTool === 'loupe' && loupePos && (
+              {viewerTool === 'loupe' && loupePos && selectedStudy && (
                 <div
                   style={{
                     left: loupePos.x - 60,
                     top: loupePos.y - 60,
-                    backgroundImage: `url(${selectedStudy?.url || DEFAULT_RVG_XRAYS['18']})`,
+                    backgroundImage: `url(${selectedStudy.url})`,
                     backgroundSize: '700px 500px',
                     backgroundPosition: `-${loupePos.x * 1.6}px -${loupePos.y * 1.6}px`,
                   }}
@@ -3500,6 +3598,119 @@ export const NanoPixStudio: React.FC = () => {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Add Patient Modal */}
+      {showAddPatientModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/80 backdrop-blur-xs select-none">
+          <div className="bg-[#0e172a] border border-[#2a4370] rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col">
+            <div className="flex justify-between items-center px-5 py-3.5 border-b border-[#1c2e4f] bg-[#070b16]">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-blue-600/20 text-blue-400 border border-blue-500/30">
+                  <Plus className="w-4 h-4" />
+                </div>
+                <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+                  Nouveau Dossier Patient
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddPatientModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreatePatient} className="p-5 flex flex-col gap-3.5">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-300 block mb-1">
+                    Nom de famille *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    autoFocus
+                    placeholder="ex: BENALI"
+                    value={newPatientName}
+                    onChange={(e) => setNewPatientName(e.target.value)}
+                    className="w-full px-3 py-1.5 rounded-lg bg-[#070b16] border border-[#2a4370] text-xs text-white uppercase focus:outline-none focus:border-blue-400"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-300 block mb-1">
+                    Prénom
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="ex: Karim"
+                    value={newPatientPrenom}
+                    onChange={(e) => setNewPatientPrenom(e.target.value)}
+                    className="w-full px-3 py-1.5 rounded-lg bg-[#070b16] border border-[#2a4370] text-xs text-white focus:outline-none focus:border-blue-400"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-300 block mb-1">
+                    Téléphone
+                  </label>
+                  <input
+                    type="tel"
+                    placeholder="06..."
+                    value={newPatientPhone}
+                    onChange={(e) => setNewPatientPhone(e.target.value)}
+                    className="w-full px-3 py-1.5 rounded-lg bg-[#070b16] border border-[#2a4370] text-xs text-white focus:outline-none focus:border-blue-400 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-300 block mb-1">
+                    Sexe
+                  </label>
+                  <select
+                    value={newPatientGender}
+                    onChange={(e: any) => setNewPatientGender(e.target.value)}
+                    className="w-full px-3 py-1.5 rounded-lg bg-[#070b16] border border-[#2a4370] text-xs text-white focus:outline-none focus:border-blue-400"
+                  >
+                    <option value="Male">Homme (Male)</option>
+                    <option value="Female">Femme (Female)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-300 block mb-1">
+                  Date de Naissance
+                </label>
+                <input
+                  type="date"
+                  value={newPatientBirth}
+                  onChange={(e) => setNewPatientBirth(e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-lg bg-[#070b16] border border-[#2a4370] text-xs text-white focus:outline-none focus:border-blue-400"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-[#1c2e4f] mt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowAddPatientModal(false)}
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-300 cursor-pointer"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCreatingPatient}
+                  className="px-4 py-1.5 rounded-lg bg-[#1864cc] hover:bg-blue-600 text-xs font-bold text-white cursor-pointer shadow transition-all flex items-center gap-1.5"
+                >
+                  {isCreatingPatient ? 'Enregistrement...' : 'Enregistrer le Patient'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

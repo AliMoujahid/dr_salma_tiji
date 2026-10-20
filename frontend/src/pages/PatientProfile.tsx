@@ -1,16 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { DentalChart } from '../components/DentalChart';
 import { Dental3DViewer } from '../components/Dental3DViewer';
-import { API_URL, UPLOADS_URL } from '../config/api';
+import { API_URL, UPLOADS_URL, getUploadUrl } from '../config/api';
 import { useLiveSync } from '../context/LiveSyncContext';
 import {
   User,
   Heart,
   Calendar,
   FileText,
+  FileSpreadsheet,
   CreditCard,
   Image as ImageIcon,
   History,
@@ -96,6 +97,50 @@ export const PatientProfile: React.FC = () => {
     payments: any[];
     unbilledActs: any[];
   } | null>(null);
+
+  // Consolidate acts and standalone payments with clean per-operation Reste
+  const journalEntries = useMemo(() => {
+    if (!ledgerData) return [];
+    const acts = ledgerData.acts || [];
+    const payments = ledgerData.payments || [];
+
+    // Filter payments: only include standalone payments (not advances already attached to an existing act)
+    const existingActIds = new Set(acts.map((a: any) => a._id?.toString()));
+    const standalonePayments = payments.filter(
+      (p: any) => !p.treatmentId || !existingActIds.has(p.treatmentId?.toString())
+    );
+
+    // Build entries
+    const entries = [
+      ...acts.map((a: any) => {
+        const cost = Number(a.amount) || Number(a.cost) || 0;
+        const advance = Number(a.paidAmount) || Number(a.advance) || 0;
+        return {
+          ...a,
+          kind: 'SOIN' as const,
+          rawDate: a.date,
+          cost,
+          advance,
+          reste: Math.max(0, cost - advance),
+        };
+      }),
+      ...standalonePayments.map((p: any) => {
+        const amount = Number(p.amount) || 0;
+        return {
+          ...p,
+          kind: 'PAYMENT' as const,
+          rawDate: p.date,
+          cost: 0,
+          advance: amount,
+          reste: null,
+        };
+      }),
+    ];
+
+    // Return sorted descending (newest on top) for the UI table
+    return entries.sort((a, b) => new Date(b.rawDate).getTime() - new Date(a.rawDate).getTime() || String(b._id).localeCompare(String(a._id)));
+  }, [ledgerData]);
+
   const [selectedActsForInvoice, setSelectedActsForInvoice] = useState<string[]>([]);
   const [dentalActs, setDentalActs] = useState<DentalAct[]>([]);
   const [clinicConfig, setClinicConfig] = useState<ClinicConfig | null>(null);
@@ -276,8 +321,7 @@ export const PatientProfile: React.FC = () => {
 
   const getDocUrl = (pathStr: string) => {
     if (!pathStr) return '';
-    const cleanPath = pathStr.startsWith('/') ? pathStr : '/' + pathStr;
-    return `${UPLOADS_URL}${cleanPath}`;
+    return getUploadUrl(pathStr);
   };
 
   useEffect(() => {
@@ -939,7 +983,16 @@ export const PatientProfile: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => navigate('/devis', { state: { patientId: patient._id, patientName: `${patient.name}${patient.prenom ? ' ' + patient.prenom : ''}` } })}
+            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 font-semibold text-xs border border-purple-200 dark:border-purple-800 cursor-pointer shadow-xs transition-all"
+            title="Créer un devis estimatif pour ce patient"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+            <span>Nouveau Devis</span>
+          </button>
+
           <button
             onClick={() => navigate('/invoices', { state: { patientId: patient._id, patientName: `${patient.name}${patient.prenom ? ' ' + patient.prenom : ''}` } })}
             className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs cursor-pointer shadow-md shadow-blue-600/20 transition-all"
@@ -1521,11 +1574,11 @@ export const PatientProfile: React.FC = () => {
                   ) : null}
                 </div>
                 <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                  {((ledgerData?.acts?.length || 0) + (ledgerData?.payments?.length || 0))} opération(s)
+                  {journalEntries.length} opération(s)
                 </span>
               </div>
 
-              {(!ledgerData || ((ledgerData.acts.length === 0) && (ledgerData.payments.length === 0))) ? (
+              {journalEntries.length === 0 ? (
                 <div className="p-12 text-center text-slate-400 text-xs">
                   Aucun soin ou paiement enregistré dans le carnet pour ce patient.
                 </div>
@@ -1539,225 +1592,218 @@ export const PatientProfile: React.FC = () => {
                         <th className="py-3.5 px-3 w-28 text-center">Opération</th>
                         <th className="py-3.5 px-2.5 w-16 text-center">Dent</th>
                         <th className="py-3.5 px-4">Désignation</th>
-                        <th className="py-3.5 px-3 text-right w-28">A Payer</th>
-                        <th className="py-3.5 px-3 text-right w-28 text-purple-600 dark:text-purple-400">Avance</th>
-                        <th className="py-3.5 px-3 text-right w-28 text-amber-600 dark:text-amber-400">Reste</th>
+                        <th className="py-3.5 px-3 text-right w-24">A Payer</th>
+                        <th className="py-3.5 px-3 text-right w-24 text-purple-600 dark:text-purple-400">Avance</th>
+                        <th className="py-3.5 px-3 text-right w-24 text-amber-600 dark:text-amber-400">Reste</th>
                         <th className="py-3.5 px-3 text-center w-36">Facturation</th>
                         <th className="py-3.5 px-3 w-28 text-center">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-                      {[
-                        ...ledgerData.acts.map((a) => ({ ...a, kind: 'SOIN' })),
-                        ...ledgerData.payments.map((p) => ({ ...p, kind: 'PAYMENT' })),
-                      ]
-                        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                        .map((entry: any) => {
-                          const isSoin = entry.kind === 'SOIN';
-                          const isSelected = selectedActsForInvoice.includes(entry._id);
-                          const actCost = Number(entry.amount) || 0;
-                          const actPaid = Number(entry.paidAmount) || 0;
-                          const actRemaining = entry.remainingAmount !== undefined
-                            ? Number(entry.remainingAmount)
-                            : Math.max(0, actCost - actPaid);
+                      {journalEntries.map((entry: any) => {
+                        const isSoin = entry.kind === 'SOIN';
+                        const isSelected = selectedActsForInvoice.includes(entry._id);
+                        const actCost = entry.cost || 0;
+                        const actPaid = entry.advance || 0;
+                        const actRemaining = entry.reste !== null && entry.reste !== undefined ? entry.reste : 0;
 
-                          return (
-                            <tr
-                              key={entry._id}
-                              className={`hover:bg-slate-50/80 dark:hover:bg-white/5 transition-colors ${
-                                isSelected ? 'bg-blue-50/60 dark:bg-blue-900/15' : ''
-                              }`}
-                            >
-                              {/* Sélec */}
-                              <td className="py-3.5 px-3 text-center">
-                                {isSoin && !entry.invoiceId ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleToggleActSelect(entry._id)}
-                                    title={isSelected ? 'Désélectionner' : 'Sélectionner pour facturer'}
-                                    className={`mx-auto w-5 h-5 rounded-md flex items-center justify-center transition-all cursor-pointer ${
-                                      isSelected
-                                        ? 'bg-blue-600 text-white shadow-xs'
-                                        : 'border-2 border-slate-300 dark:border-slate-600 hover:border-blue-500 bg-white dark:bg-slate-800'
-                                    }`}
-                                  >
-                                    {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-                                  </button>
-                                ) : isSoin ? (
-                                  <span
-                                    title="Déjà inclus dans une facture"
-                                    className="inline-flex items-center justify-center w-5 h-5 rounded-md bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 border border-purple-200/50 dark:border-purple-500/20"
-                                  >
-                                    <Check className="w-3 h-3 stroke-[2.5]" />
-                                  </span>
-                                ) : (
-                                  <span className="text-slate-300 dark:text-slate-600 text-xs">—</span>
-                                )}
-                              </td>
-
-                              {/* Date */}
-                              <td className="py-3.5 px-3 text-center">
-                                <span className="text-slate-700 dark:text-slate-200 font-semibold text-xs tabular-nums">
-                                  {formatDate(entry.date)}
+                        return (
+                          <tr
+                            key={entry._id}
+                            className={`hover:bg-slate-50/80 dark:hover:bg-white/5 transition-colors ${
+                              isSelected ? 'bg-blue-50/60 dark:bg-blue-900/15' : ''
+                            }`}
+                          >
+                            {/* Sélec */}
+                            <td className="py-3.5 px-3 text-center">
+                              {isSoin && !entry.invoiceId ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleActSelect(entry._id)}
+                                  title={isSelected ? 'Désélectionner' : 'Sélectionner pour facturer'}
+                                  className={`mx-auto w-5 h-5 rounded-md flex items-center justify-center transition-all cursor-pointer ${
+                                    isSelected
+                                      ? 'bg-blue-600 text-white shadow-xs'
+                                      : 'border-2 border-slate-300 dark:border-slate-600 hover:border-blue-500 bg-white dark:bg-slate-800'
+                                  }`}
+                                >
+                                  {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                                </button>
+                              ) : isSoin ? (
+                                <span
+                                  title="Déjà inclus dans une facture"
+                                  className="inline-flex items-center justify-center w-5 h-5 rounded-md bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 border border-purple-200/50 dark:border-purple-500/20"
+                                >
+                                  <Check className="w-3 h-3 stroke-[2.5]" />
                                 </span>
-                              </td>
+                              ) : (
+                                <span className="text-slate-300 dark:text-slate-600 text-xs">—</span>
+                              )}
+                            </td>
 
-                              {/* Opération Badge */}
-                              <td className="py-3.5 px-3 text-center">
-                                {isSoin ? (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-200/80 dark:border-blue-500/20 whitespace-nowrap">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0"></span>
-                                    Soin
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200/80 dark:border-emerald-500/20 whitespace-nowrap">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
-                                    Règlement
-                                  </span>
-                                )}
-                              </td>
+                            {/* Date */}
+                            <td className="py-3.5 px-3 text-center">
+                              <span className="text-slate-700 dark:text-slate-200 font-semibold text-xs tabular-nums">
+                                {formatDate(entry.date || entry.rawDate)}
+                              </span>
+                            </td>
 
-                              {/* Dent */}
-                              <td className="py-3.5 px-2.5 text-center">
-                                {isSoin && entry.tooth && entry.tooth !== '-' ? (
-                                  <span className="inline-flex items-center justify-center min-w-7 h-6 px-1.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold text-xs border border-slate-200 dark:border-white/10 shadow-2xs">
-                                    {entry.tooth}
+                            {/* Opération Badge */}
+                            <td className="py-3.5 px-3 text-center">
+                              {isSoin ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-200/80 dark:border-blue-500/20 whitespace-nowrap">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0"></span>
+                                  Soin
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200/80 dark:border-emerald-500/20 whitespace-nowrap">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
+                                  Règlement
+                                </span>
+                              )}
+                            </td>
+
+                            {/* Dent */}
+                            <td className="py-3.5 px-2.5 text-center">
+                              {isSoin && entry.tooth && entry.tooth !== '-' ? (
+                                <span className="inline-flex items-center justify-center min-w-7 h-6 px-1.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold text-xs border border-slate-200 dark:border-white/10 shadow-2xs">
+                                  {entry.tooth}
+                                </span>
+                              ) : (
+                                <span className="text-slate-300 dark:text-slate-600 text-xs">—</span>
+                              )}
+                            </td>
+
+                            {/* Désignation */}
+                            <td className="py-3.5 px-4">
+                              <div className="flex flex-col">
+                                <span className="font-semibold text-slate-900 dark:text-slate-100 text-xs leading-snug">
+                                  {isSoin ? (entry.description || entry.actName) : `Versement reçu (${entry.paymentMethod || 'Espèces'})`}
+                                </span>
+                                {entry.notes && !entry.notes.startsWith('Facture N°') ? (
+                                  <span className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 leading-tight">
+                                    {entry.notes}
+                                  </span>
+                                ) : null}
+                              </div>
+                            </td>
+
+                            {/* A Payer */}
+                            <td className="py-3.5 px-3 text-right">
+                              {isSoin ? (
+                                <span className="text-slate-900 dark:text-white font-bold text-xs tabular-nums">
+                                  {actCost.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} <span className="text-[10px] text-slate-400">DH</span>
+                                </span>
+                              ) : (
+                                <span className="text-slate-300 dark:text-slate-600 text-xs">—</span>
+                              )}
+                            </td>
+
+                            {/* Avance */}
+                            <td className="py-3.5 px-3 text-right">
+                              {isSoin ? (
+                                actPaid > 0 ? (
+                                  <span className="text-purple-600 dark:text-purple-400 font-extrabold text-xs tabular-nums">
+                                    {actPaid.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} <span className="text-[10px] text-purple-400">DH</span>
                                   </span>
                                 ) : (
                                   <span className="text-slate-300 dark:text-slate-600 text-xs">—</span>
-                                )}
-                              </td>
+                                )
+                              ) : (
+                                <span className="text-emerald-600 dark:text-emerald-400 font-extrabold text-xs tabular-nums">
+                                  +{(Number(entry.advance) || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} <span className="text-[10px] text-emerald-500/70">DH</span>
+                                </span>
+                              )}
+                            </td>
 
-                              {/* Désignation */}
-                              <td className="py-3.5 px-4">
-                                <div className="flex flex-col">
-                                  <span className="font-semibold text-slate-900 dark:text-slate-100 text-xs leading-snug">
-                                    {isSoin ? entry.description : `Versement reçu (${entry.paymentMethod || 'Espèces'})`}
-                                  </span>
-                                  {entry.notes && !entry.notes.startsWith('Facture N°') ? (
-                                    <span className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 leading-tight">
-                                      {entry.notes}
-                                    </span>
-                                  ) : null}
-                                </div>
-                              </td>
-
-                              {/* A Payer */}
-                              <td className="py-3.5 px-3 text-right">
-                                {isSoin ? (
-                                  <span className="text-slate-900 dark:text-white font-bold text-xs tabular-nums">
-                                    {actCost.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} <span className="text-[10px] text-slate-400">DH</span>
+                            {/* Reste */}
+                            <td className="py-3.5 px-3 text-right">
+                              {isSoin ? (
+                                actRemaining > 0 ? (
+                                  <span className="inline-flex items-center gap-0.5 font-bold text-xs text-amber-600 dark:text-amber-400 tabular-nums">
+                                    {actRemaining.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} <span className="text-[10px] text-amber-400/80">DH</span>
                                   </span>
                                 ) : (
-                                  <span className="text-slate-300 dark:text-slate-600 text-xs">—</span>
-                                )}
-                              </td>
-
-                              {/* Avance */}
-                              <td className="py-3.5 px-3 text-right">
-                                {isSoin ? (
-                                  actPaid > 0 ? (
-                                    <span className="text-purple-600 dark:text-purple-400 font-extrabold text-xs tabular-nums">
-                                      {actPaid.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} <span className="text-[10px] text-purple-400">DH</span>
-                                    </span>
-                                  ) : (
-                                    <span className="text-slate-300 dark:text-slate-600 text-xs">—</span>
-                                  )
-                                ) : (
-                                  <span className="text-emerald-600 dark:text-emerald-400 font-extrabold text-xs tabular-nums">
-                                    +{(Number(entry.amount) || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} <span className="text-[10px] text-emerald-500/70">DH</span>
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-500/20">
+                                    Soldé ✓
                                   </span>
-                                )}
-                              </td>
+                                )
+                              ) : (
+                                <span className="text-slate-300 dark:text-slate-600 text-xs">—</span>
+                              )}
+                            </td>
 
-                              {/* Reste */}
-                              <td className="py-3.5 px-3 text-right">
-                                {isSoin ? (
-                                  actRemaining > 0 ? (
-                                    <span className="inline-flex items-center gap-0.5 font-black text-xs text-amber-600 dark:text-amber-400 tabular-nums">
-                                      {actRemaining.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} <span className="text-[10px] text-amber-400/80">DH</span>
-                                    </span>
-                                  ) : (
-                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-500/20">
-                                      Réglé ✓
-                                    </span>
-                                  )
-                                ) : (
-                                  <span className="text-slate-300 dark:text-slate-600 text-xs">—</span>
-                                )}
-                              </td>
+                            {/* Facturation */}
+                            <td className="py-3.5 px-3 text-center">
+                              {entry.invoiceId ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const invId = entry.invoiceId._id || entry.invoiceId;
+                                    const found = invoices.find((i) => i._id === invId);
+                                    if (found) {
+                                      setPreviewInvoiceData(found);
+                                    } else {
+                                      navigate('/invoices', {
+                                        state: { editInvoiceId: invId, returnPatientId: id, returnTab: 'Ledger' },
+                                      });
+                                    }
+                                  }}
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-50 hover:bg-purple-100 dark:bg-purple-900/25 dark:hover:bg-purple-900/40 text-purple-700 dark:text-purple-300 border border-purple-200/80 dark:border-purple-500/30 whitespace-nowrap cursor-pointer transition-all shadow-xs"
+                                  title="Cliquer pour voir et imprimer cette facture"
+                                >
+                                  <FileText className="w-3 h-3 text-purple-600 dark:text-purple-400 shrink-0" />
+                                  <span>Facturé N° {entry.invoiceId.invoiceNumber || entry.invoiceId}</span>
+                                  <Eye className="w-2.5 h-2.5 ml-0.5 opacity-70" />
+                                </button>
+                              ) : isSoin ? (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-50 dark:bg-amber-950/25 text-amber-700 dark:text-amber-400 border border-amber-200/80 dark:border-amber-500/20 whitespace-nowrap">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                  À facturer
+                                </span>
+                              ) : (
+                                <span className="text-slate-300 dark:text-slate-600 text-xs">—</span>
+                              )}
+                            </td>
 
-                              {/* Facturation */}
-                              <td className="py-3.5 px-3 text-center">
-                                {entry.invoiceId ? (
+                            {/* Actions */}
+                            <td className="py-3.5 px-3 text-center">
+                              <div className="flex items-center justify-center gap-1">
+                                {isSoin && entry.source === 'TREATMENT' && actRemaining > 0 && (
                                   <button
                                     type="button"
-                                    onClick={() => {
-                                      const invId = entry.invoiceId._id || entry.invoiceId;
-                                      const found = invoices.find((i) => i._id === invId);
-                                      if (found) {
-                                        setPreviewInvoiceData(found);
-                                      } else {
-                                        navigate('/invoices', {
-                                          state: { editInvoiceId: invId, returnPatientId: id, returnTab: 'Ledger' },
-                                        });
-                                      }
-                                    }}
-                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-50 hover:bg-purple-100 dark:bg-purple-900/25 dark:hover:bg-purple-900/40 text-purple-700 dark:text-purple-300 border border-purple-200/80 dark:border-purple-500/30 whitespace-nowrap cursor-pointer transition-all shadow-xs"
-                                    title="Cliquer pour voir et imprimer cette facture"
+                                    onClick={() => handleOpenActAdvanceModal(entry)}
+                                    className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/30 dark:hover:bg-purple-900/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 text-[11px] font-bold transition-all cursor-pointer shadow-2xs"
+                                    title="Verser un acompte sur ce soin"
                                   >
-                                    <FileText className="w-3 h-3 text-purple-600 dark:text-purple-400 shrink-0" />
-                                    <span>Facturé N° {entry.invoiceId.invoiceNumber || entry.invoiceId}</span>
-                                    <Eye className="w-2.5 h-2.5 ml-0.5 opacity-70" />
+                                    <Plus className="w-3 h-3 stroke-[3]" />
+                                    <span>Acompte</span>
                                   </button>
-                                ) : isSoin ? (
-                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-50 dark:bg-amber-950/25 text-amber-700 dark:text-amber-400 border border-amber-200/80 dark:border-amber-500/20 whitespace-nowrap">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                                    À facturer
-                                  </span>
-                                ) : (
-                                  <span className="text-slate-300 dark:text-slate-600 text-xs">—</span>
                                 )}
-                              </td>
-
-                              {/* Actions */}
-                              <td className="py-3.5 px-3 text-center">
-                                <div className="flex items-center justify-center gap-1">
-                                  {isSoin && entry.source === 'TREATMENT' && actRemaining > 0 && (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleOpenActAdvanceModal(entry)}
-                                      className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/30 dark:hover:bg-purple-900/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 text-[11px] font-bold transition-all cursor-pointer shadow-2xs"
-                                      title="Verser un acompte sur ce soin"
-                                    >
-                                      <Plus className="w-3 h-3 stroke-[3]" />
-                                      <span>Acompte</span>
-                                    </button>
-                                  )}
-                                  {isSoin && entry.source === 'TREATMENT' ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDeleteTreatment(entry._id)}
-                                      className="p-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-lg transition-all cursor-pointer"
-                                      title="Supprimer ce soin du carnet"
-                                    >
-                                      <Trash2 className="w-4 h-4" />
-                                    </button>
-                                  ) : !isSoin ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDeletePayment(entry._id)}
-                                      className="p-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-lg transition-all cursor-pointer"
-                                      title="Annuler ce versement"
-                                    >
-                                      <Trash2 className="w-4 h-4" />
-                                    </button>
-                                  ) : null}
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
+                                {isSoin && entry.source === 'TREATMENT' ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteTreatment(entry._id)}
+                                    className="p-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-lg transition-all cursor-pointer"
+                                    title="Supprimer ce soin du carnet"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                ) : !isSoin ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeletePayment(entry._id)}
+                                    className="p-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-lg transition-all cursor-pointer"
+                                    title="Annuler ce versement"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                ) : null}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

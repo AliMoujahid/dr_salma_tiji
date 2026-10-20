@@ -4,7 +4,7 @@ import { useToast } from '../context/ToastContext';
 import { Settings as SettingsIcon, Save, UploadCloud, Database, Download, CheckCircle2, User, Camera, Key, Lock, Clock, RefreshCw, Users, UserPlus, Trash2, Edit2, Shield, Sparkles, Building2, AlertTriangle, Printer, Phone, MapPin, Mail, Globe, Stethoscope, Layers, FileText } from 'lucide-react';
 import { ClinicConfig } from '../types';
 import { DentalActsManager } from '../components/DentalActsManager';
-import { API_URL } from '../config/api';
+import { API_URL, getUploadUrl } from '../config/api';
 import { getLocalAvatar } from '../utils/avatarUtils';
 
 export const Settings: React.FC = () => {
@@ -368,12 +368,7 @@ export const Settings: React.FC = () => {
 
   const getFullAssetUrl = (url?: string) => {
     if (!url) return '';
-    if (url.startsWith('/uploads') || url.startsWith('uploads/')) {
-      const baseUrl = API_URL.replace('/api', '');
-      const cleanPath = url.startsWith('/') ? url : `/${url}`;
-      return `${baseUrl}${cleanPath}`;
-    }
-    return url;
+    return getUploadUrl(url);
   };
 
   const fetchClinicConfig = () => {
@@ -924,6 +919,12 @@ export const Settings: React.FC = () => {
                           src={getFullAssetUrl(config.logoUrl)}
                           alt="Logo"
                           className="w-16 h-16 object-contain"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            if (!target.src.endsWith('/logo.png')) {
+                              target.src = '/logo.png';
+                            }
+                          }}
                         />
                       ) : (
                         <div className="w-14 h-14 rounded-full border border-dashed border-slate-300 flex items-center justify-center text-slate-400 text-xxs font-bold text-center p-1">

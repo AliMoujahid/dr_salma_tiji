@@ -7,6 +7,7 @@ import {
   Calendar,
   Layers,
   FileText,
+  FileSpreadsheet,
   CreditCard,
   BarChart3,
   MessageSquare,
@@ -22,7 +23,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 
-import { API_URL, UPLOADS_URL } from '../config/api';
+import { API_URL, UPLOADS_URL, getUploadUrl } from '../config/api';
 import { getLocalAvatar } from '../utils/avatarUtils';
 
 interface SidebarProps {
@@ -57,6 +58,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { name: 'Rendez-vous', path: '/appointments', icon: Calendar },
     { name: 'Salle d\'attente', path: '/waiting-room', icon: MonitorPlay },
     { name: 'Facturation & Paiements', path: '/invoices', icon: FileText },
+    { name: 'Devis & Estimations', path: '/devis', icon: FileSpreadsheet },
     { name: 'Rapports & Stats', path: '/reports', icon: BarChart3 },
     { name: 'Notifications & Rappels', path: '/notifications', icon: MessageSquare },
     { 
@@ -104,13 +106,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="flex flex-col gap-6 overflow-y-auto no-scrollbar">
           <div className={`flex items-center gap-3 ${isCollapsed ? 'md:justify-center' : ''}`}>
             <div className="w-11 h-11 bg-white rounded-xl flex items-center justify-center border border-white/10 overflow-hidden shadow-lg p-1 shrink-0">
-              {clinicLogo ? (
-                <img src={`${UPLOADS_URL}${clinicLogo}`} alt="Logo" className="w-full h-full object-contain" />
-              ) : (
-                <img src="/logo.png" alt="Logo" className="w-full h-full object-contain" onError={(e) => {
-                  (e.target as HTMLImageElement).src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24' fill='none' stroke='%233b82f6' stroke-width='2'><path d='M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5'></path></svg>";
-                }} />
-              )}
+              <img
+                src={clinicLogo ? getUploadUrl(clinicLogo) : '/logo.png'}
+                alt="Logo"
+                className="w-full h-full object-contain"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  if (!target.src.endsWith('/logo.png')) {
+                    target.src = '/logo.png';
+                  } else {
+                    target.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24' fill='none' stroke='%233b82f6' stroke-width='2'><path d='M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5'></path></svg>";
+                  }
+                }}
+              />
             </div>
             <div className={`transition-all duration-200 ${isCollapsed ? 'md:hidden' : 'block'}`}>
               <span className="text-[10px] uppercase font-extrabold tracking-widest text-indigo-400">Cabinet Dentaire</span>

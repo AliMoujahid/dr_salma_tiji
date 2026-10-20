@@ -193,6 +193,7 @@ async function runReset() {
     'payments',
     'paymenttransactions',
     'invoices',
+    'devis',
     'appointments',
     'documents',
     'notificationlogs',
@@ -240,6 +241,35 @@ async function runReset() {
   const clinicCollection = db.collection('clinicconfigs');
   await clinicCollection.deleteMany({});
 
+  // Garantir que le logo du cabinet est physiquement présent dans uploads
+  const logoCandidates = [
+    path.join(__dirname, '..', 'logo.png'),
+    path.join(__dirname, '..', 'public', 'logo.png'),
+    path.join(__dirname, '..', 'app', 'public', 'logo.png'),
+    path.join(process.cwd(), 'logo.png'),
+    path.join(process.cwd(), 'public', 'logo.png'),
+  ];
+  let srcLogo = logoCandidates.find((c) => fs.existsSync(c));
+  if (srcLogo) {
+    const uploadTargets = [
+      path.join(process.cwd(), 'uploads'),
+      path.join(process.cwd(), 'uploads', 'Clinic'),
+      path.join(process.cwd(), 'app', 'uploads'),
+      path.join(process.cwd(), 'app', 'uploads', 'Clinic'),
+      path.join(__dirname, '..', 'uploads'),
+      path.join(__dirname, '..', 'uploads', 'Clinic'),
+      path.join(__dirname, '..', 'app', 'uploads'),
+      path.join(__dirname, '..', 'app', 'uploads', 'Clinic'),
+    ];
+    for (const targetDir of uploadTargets) {
+      try {
+        fs.mkdirSync(targetDir, { recursive: true });
+        fs.copyFileSync(srcLogo, path.join(targetDir, 'logo-cabinet.png'));
+        fs.copyFileSync(srcLogo, path.join(targetDir, 'logo.png'));
+      } catch {}
+    }
+  }
+
   await clinicCollection.insertOne({
     cabinetFr: 'Cabinet Dentaire Dr. Salma Tijini',
     cabinetAr: 'عيادة الدكتورة سلمى التيجيني لطب وجراحة الأسنان',
@@ -253,7 +283,7 @@ async function runReset() {
     createdAt: new Date(),
     updatedAt: new Date(),
   });
-  console.log('   ✅ Cabinet Dr. Salma Tijini configuré (Skhirat).');
+  console.log('   ✅ Cabinet Dr. Salma Tijini configuré (Skhirat) avec logo.');
 
   // 3. Catalogue des Actes Dentaires
   console.log('\n🦷 Vérification du Catalogue des Actes Dentaires...');
