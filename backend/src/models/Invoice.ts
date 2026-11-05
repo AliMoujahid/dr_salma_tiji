@@ -1,6 +1,8 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IInvoiceItem {
+  _id?: any;
+  treatmentId?: mongoose.Types.ObjectId | string;
   date: string; // JJ/MM format or DD/MM/YYYY
   tooth?: string; // tooth number or empty
   description: string;
@@ -33,6 +35,7 @@ const InvoiceSchema: Schema = new Schema(
     date: { type: Date, required: true, default: Date.now },
     items: [
       {
+        treatmentId: { type: Schema.Types.ObjectId, ref: 'Treatment' },
         date: { type: String, required: true },
         tooth: { type: String },
         description: { type: String, required: true },

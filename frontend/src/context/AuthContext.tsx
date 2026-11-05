@@ -11,6 +11,8 @@ interface AuthContextType {
   updateUser: (updatedData: Partial<User>) => void;
   isAuthenticated: boolean;
   isAdmin: boolean;
+  isDoctor: boolean;
+  isDoctorOrAdmin: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -83,7 +85,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
-  const isAdmin = user?.role === 'ADMIN';
+  const role = (user?.role || '').toUpperCase();
+  const isAdmin = role === 'ADMIN';
+  const isDoctor = role === 'DOCTOR';
+  const isDoctorOrAdmin = isAdmin || isDoctor;
 
   return (
     <AuthContext.Provider
@@ -96,6 +101,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updateUser,
         isAuthenticated: !!token,
         isAdmin,
+        isDoctor,
+        isDoctorOrAdmin,
       }}
     >
       {children}

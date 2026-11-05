@@ -11,6 +11,9 @@ const router = Router();
 // Get dashboard statistics overview
 router.get('/dashboard-stats', protect, async (req: AuthRequest, res: Response) => {
   try {
+    const userRole = (req.user?.role || '').toUpperCase();
+    const isDoctorOrAdmin = userRole === 'ADMIN' || userRole === 'DOCTOR';
+
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
 
@@ -25,30 +28,64 @@ router.get('/dashboard-stats', protect, async (req: AuthRequest, res: Response) 
     const appointmentsTodayCount = await Appointment.countDocuments({
       dateTime: { $gte: startOfToday, $lte: endOfToday },
     });
-    
-    // Revenue calculations
-    const paymentsToday = await PaymentTransaction.find({
-      date: { $gte: startOfToday, $lte: endOfToday },
-    });
-    const revenueToday = paymentsToday.reduce((sum, p) => sum + p.amount, 0);
 
-    // Invoices balances
-    const invoices = await Invoice.find();
+    // Waiting room & Completed stats for reception / assistant
+    const waitingRoomCount = await Appointment.countDocuments({
+      dateTime: { $gte: startOfToday, $lte: endOfToday },
+      status: { $in: ['Confirmed', 'Scheduled', 'In Treatment'] },
+    });
+
+    const completedTodayCount = await Appointment.countDocuments({
+      dateTime: { $gte: startOfToday, $lte: endOfToday },
+      status: 'Completed',
+    });
+    
+    // Revenue calculations (only computed for Admin & Doctor)
+    let revenueToday = 0;
     let totalInvoiced = 0;
     let totalCollected = 0;
-    
-    invoices.forEach((inv) => {
-      totalInvoiced += inv.netAmount;
-      totalCollected += inv.paidAmount;
-    });
+    let outstandingBalance = 0;
 
-    const outstandingBalance = Math.max(0, totalInvoiced - totalCollected);
+    if (isDoctorOrAdmin) {
+      const paymentsToday = await PaymentTransaction.find({
+        date: { $gte: startOfToday, $lte: endOfToday },
+      });
+      revenueToday = paymentsToday.reduce((sum, p) => sum + p.amount, 0);
+
+      // Invoices balances
+      const invoices = await Invoice.find();
+      invoices.forEach((inv) => {
+        totalInvoiced += inv.netAmount;
+        totalCollected += inv.paidAmount;
+      });
+
+      // Also account for payments recorded in PaymentTransaction
+      const allPayments = await PaymentTransaction.find();
+      const allPaymentsTotal = allPayments.reduce((sum, p) => sum + p.amount, 0);
+      if (allPaymentsTotal > totalCollected) {
+        totalCollected = allPaymentsTotal;
+      }
+
+      outstandingBalance = Math.max(0, totalInvoiced - totalCollected);
+    }
 
     // Recent 5 invoices
-    const recentInvoices = await Invoice.find()
+    const rawRecentInvoices = await Invoice.find()
       .populate('patientId', 'name')
       .sort({ date: -1, createdAt: -1 })
       .limit(5);
+
+    const recentInvoices = rawRecentInvoices.map((inv) => {
+      if (isDoctorOrAdmin) return inv;
+      return {
+        _id: inv._id,
+        invoiceNumber: inv.invoiceNumber,
+        date: inv.date,
+        patientId: inv.patientId,
+        paymentStatus: inv.paymentStatus,
+        paymentMode: inv.paymentMode,
+      };
+    });
 
     // Recent 5 appointments
     const upcomingAppointments = await Appointment.find({ dateTime: { $gte: new Date() } })
@@ -57,9 +94,12 @@ router.get('/dashboard-stats', protect, async (req: AuthRequest, res: Response) 
       .limit(5);
 
     res.json({
+      canViewFinancials: isDoctorOrAdmin,
       totalPatients,
       archivedPatients,
       appointmentsTodayCount,
+      waitingRoomCount,
+      completedTodayCount,
       revenueToday,
       totalInvoiced,
       totalCollected,
@@ -75,12 +115,8 @@ router.get('/dashboard-stats', protect, async (req: AuthRequest, res: Response) 
 // Get financial monthly / yearly aggregation reports
 router.get('/financials', protect, async (req: AuthRequest, res: Response) => {
   try {
-    const currentYear = new Date().getFullYear();
-    const startOfYear = new Date(currentYear, 0, 1, 0, 0, 0, 0);
-
-    const payments = await PaymentTransaction.find({
-      date: { $gte: startOfYear },
-    });
+    const userRole = (req.user?.role || '').toUpperCase();
+    const isDoctorOrAdmin = userRole === 'ADMIN' || userRole === 'DOCTOR';
 
     const monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'];
     const monthlyRevenue = monthNames.map((month) => ({
@@ -88,15 +124,24 @@ router.get('/financials', protect, async (req: AuthRequest, res: Response) => {
       revenue: 0,
     }));
 
-    payments.forEach((payment) => {
-      const pDate = new Date(payment.date);
-      if (pDate.getFullYear() === currentYear) {
-        const monthIndex = pDate.getMonth();
-        if (monthIndex >= 0 && monthIndex < 12) {
-          monthlyRevenue[monthIndex].revenue += payment.amount;
+    if (isDoctorOrAdmin) {
+      const currentYear = new Date().getFullYear();
+      const startOfYear = new Date(currentYear, 0, 1, 0, 0, 0, 0);
+
+      const payments = await PaymentTransaction.find({
+        date: { $gte: startOfYear },
+      });
+
+      payments.forEach((payment) => {
+        const pDate = new Date(payment.date);
+        if (pDate.getFullYear() === currentYear) {
+          const monthIndex = pDate.getMonth();
+          if (monthIndex >= 0 && monthIndex < 12) {
+            monthlyRevenue[monthIndex].revenue += payment.amount;
+          }
         }
-      }
-    });
+      });
+    }
 
     // Translation dictionary for clinical conditions
     const treatmentLabels: Record<string, string> = {

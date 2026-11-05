@@ -67,30 +67,100 @@ router.get('/patient/:patientId/ledger', protect, async (req: AuthRequest, res: 
       source: 'TREATMENT',
     }))];
 
-    // If there are invoices with items, ensure they appear in the ledger if not already recorded
+    // Reconcile each invoice: ensure all invoice items are represented in the ledger without omission or duplication
     for (const inv of invoices) {
-      if (Array.isArray(inv.items)) {
-        for (const item of inv.items) {
-          const alreadyExists = actsList.some(
-            (a) => a.invoiceId && (a.invoiceId._id?.toString() === inv._id.toString() || a.invoiceId.toString() === inv._id.toString()) && a.description === item.description
-          );
-          if (!alreadyExists) {
-            actsList.push({
-              _id: `inv_item_${inv._id}_${item.description}_${item.amount}`,
-              type: 'SOIN',
-              date: inv.date,
-              tooth: item.tooth || '-',
-              description: item.description,
-              amount: item.amount || 0,
-              paidAmount: 0,
-              remainingAmount: item.amount || 0,
-              paymentMode: inv.paymentMode || 'espèces',
-              status: 'Terminé',
-              invoiceId: { _id: inv._id, invoiceNumber: inv.invoiceNumber, date: inv.date },
-              notes: `Facture N° ${inv.invoiceNumber}`,
-              source: 'INVOICE',
-            });
+      if (!Array.isArray(inv.items) || inv.items.length === 0) continue;
+
+      // Find all acts already in actsList that are linked to this invoice
+      const actsLinkedToInv = actsList.filter((a) => {
+        if (!a.invoiceId) return false;
+        const linkedId = a.invoiceId._id ? a.invoiceId._id.toString() : a.invoiceId.toString();
+        return linkedId === inv._id.toString();
+      });
+
+      // Track which linked acts have already been matched with an invoice item (1-to-1 pairing)
+      const matchedActIds = new Set<string>();
+
+      for (let idx = 0; idx < inv.items.length; idx++) {
+        const item = inv.items[idx];
+        const itemDesc = (item.description || '').trim().toLowerCase();
+        const itemTooth = (item.tooth || '').trim();
+        const itemAmount = Number(item.amount) || 0;
+
+        // Direct match if treatmentId is recorded on the invoice item
+        let matchingAct = item.treatmentId
+          ? actsLinkedToInv.find(
+              (a) => !matchedActIds.has(a._id.toString()) && a._id.toString() === item.treatmentId?.toString()
+            )
+          : null;
+
+        // Try exact match with an un-paired act linked to this invoice (same desc, amount, and tooth)
+        if (!matchingAct) {
+          matchingAct = actsLinkedToInv.find((a) => {
+            if (matchedActIds.has(a._id.toString())) return false;
+            const sameDesc = (a.description || '').trim().toLowerCase() === itemDesc;
+            const sameAmount = Math.abs((Number(a.amount) || 0) - itemAmount) < 0.01;
+            const sameTooth = !itemTooth || itemTooth === '-' || (a.tooth || '').trim() === itemTooth;
+            return sameDesc && sameAmount && sameTooth;
+          });
+        }
+
+        // Fallback match: same description and same amount
+        if (!matchingAct) {
+          matchingAct = actsLinkedToInv.find((a) => {
+            if (matchedActIds.has(a._id.toString())) return false;
+            const sameDesc = (a.description || '').trim().toLowerCase() === itemDesc;
+            const sameAmount = Math.abs((Number(a.amount) || 0) - itemAmount) < 0.01;
+            return sameDesc && sameAmount;
+          });
+        }
+
+        // Secondary fallback: any un-paired act linked to this invoice with the same amount
+        if (!matchingAct) {
+          matchingAct = actsLinkedToInv.find((a) => {
+            if (matchedActIds.has(a._id.toString())) return false;
+            return Math.abs((Number(a.amount) || 0) - itemAmount) < 0.01;
+          });
+        }
+
+        if (matchingAct) {
+          // This invoice item is already accounted for by an existing Treatment in actsList
+          matchedActIds.add(matchingAct._id.toString());
+        } else {
+          // This invoice item is NOT represented by any existing treatment (e.g. added in InvoiceEditor)!
+          // It MUST appear in the Carnet as an act belonging to this invoice.
+          let itemDate: Date = inv.date;
+          if (item.date) {
+            const parts = item.date.split('/');
+            if (parts.length >= 2) {
+              const d = parseInt(parts[0], 10);
+              const m = parseInt(parts[1], 10) - 1;
+              const y = parts[2] ? parseInt(parts[2], 10) : new Date(inv.date).getFullYear();
+              const parsed = new Date(y, m, d);
+              if (!isNaN(parsed.getTime())) {
+                itemDate = parsed;
+              }
+            }
           }
+
+          const isInvPaid = inv.paymentStatus === 'Paid';
+          const itemAdvance = isInvPaid ? itemAmount : Math.max(0, Number(item.advance) || 0);
+
+          actsList.push({
+            _id: `inv_item_${inv._id}_${(item as any)._id ? (item as any)._id.toString() : idx}`,
+            type: 'SOIN',
+            date: itemDate,
+            tooth: item.tooth || '-',
+            description: item.description,
+            amount: itemAmount,
+            paidAmount: itemAdvance,
+            remainingAmount: Math.max(0, itemAmount - itemAdvance),
+            paymentMode: inv.paymentMode || 'espèces',
+            status: 'Terminé',
+            invoiceId: { _id: inv._id, invoiceNumber: inv.invoiceNumber, date: inv.date },
+            notes: `Facture N° ${inv.invoiceNumber}`,
+            source: 'INVOICE',
+          });
         }
       }
     }

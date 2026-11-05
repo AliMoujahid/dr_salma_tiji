@@ -25,9 +25,12 @@ import { useLiveSync } from '../context/LiveSyncContext';
 import { getLocalAvatar } from '../utils/avatarUtils';
 
 interface Stats {
+  canViewFinancials?: boolean;
   totalPatients: number;
   archivedPatients?: number;
   appointmentsTodayCount: number;
+  waitingRoomCount?: number;
+  completedTodayCount?: number;
   revenueToday: number;
   totalInvoiced: number;
   totalCollected: number;
@@ -37,11 +40,16 @@ interface Stats {
 }
 
 export const Dashboard: React.FC = () => {
-  const { token, user } = useAuth();
+  const { token, user, isDoctorOrAdmin } = useAuth();
   const navigate = useNavigate();
   const [stats, setStats] = useState<Stats | null>(null);
   const [financials, setFinancials] = useState<any>({ monthlyRevenue: [], commonTreatments: [] });
+  const [waitingRoomData, setWaitingRoomData] = useState<any>({ waiting: [], inTreatment: [], finished: [] });
   const [loading, setLoading] = useState(true);
+
+  const canViewFinancials = stats?.canViewFinancials !== undefined
+    ? stats.canViewFinancials
+    : (isDoctorOrAdmin || user?.role === 'ADMIN' || user?.role === 'DOCTOR');
 
   const fetchDashboardData = async () => {
     try {
@@ -54,6 +62,12 @@ export const Dashboard: React.FC = () => {
       const finRes = await fetch(`${API_URL}/reports/financials`, { headers });
       const finData = await finRes.json();
       setFinancials(finData);
+
+      const wrRes = await fetch(`${API_URL}/appointments/waiting-room`, { headers });
+      if (wrRes.ok) {
+        const wrData = await wrRes.json();
+        setWaitingRoomData(wrData);
+      }
     } catch (err) {
       console.error('Error fetching dashboard details:', err);
     } finally {
@@ -165,60 +179,172 @@ export const Dashboard: React.FC = () => {
   const maxRevenue = financials.monthlyRevenue.reduce((max: number, m: any) => Math.max(max, m.revenue), 0) || 1;
   const totalAnnualRevenue = financials.monthlyRevenue.reduce((sum: number, m: any) => sum + m.revenue, 0);
 
-  const kpis = [
-    {
-      id: 'patients',
-      name: 'Patients Actifs',
-      value: stats.totalPatients.toLocaleString('fr-FR'),
-      subtext: `${stats.archivedPatients || 0} archivés`,
-      icon: Users,
-      gradient: 'from-cyan-500/20 via-blue-500/10 to-transparent',
-      borderGlow: 'hover:border-cyan-500/30',
-      iconBg: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
-      badge: '+12% ce mois',
-      badgeColor: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20',
-      onClick: () => navigate('/patients'),
-    },
-    {
-      id: 'appointments',
-      name: "Rendez-vous Aujourd'hui",
-      value: stats.appointmentsTodayCount.toString(),
-      subtext: stats.upcomingAppointments?.length > 0 ? `${stats.upcomingAppointments.length} en attente` : 'Planning fluide',
-      icon: CalendarDays,
-      gradient: 'from-violet-500/20 via-indigo-500/10 to-transparent',
-      borderGlow: 'hover:border-violet-500/30',
-      iconBg: 'bg-violet-500/10 text-violet-400 border-violet-500/20',
-      badge: 'Planning',
-      badgeColor: 'text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-500/10 border-violet-200 dark:border-violet-500/20',
-      onClick: () => navigate('/appointments'),
-    },
-    {
-      id: 'revenue',
-      name: 'Recettes du Jour',
-      value: `${stats.revenueToday.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} DH`,
-      subtext: `Total encaissé : ${stats.totalCollected.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} DH`,
-      icon: DollarSign,
-      gradient: 'from-emerald-500/20 via-teal-500/10 to-transparent',
-      borderGlow: 'hover:border-emerald-500/30',
-      iconBg: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-      badge: 'Encaissé',
-      badgeColor: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20',
-      onClick: () => navigate('/invoices'),
-    },
-    {
-      id: 'outstanding',
-      name: 'Restes à Recouvrer',
-      value: `${stats.outstandingBalance.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} DH`,
-      subtext: 'Factures en attente de solde',
-      icon: Clock,
-      gradient: 'from-amber-500/20 via-rose-500/10 to-transparent',
-      borderGlow: 'hover:border-amber-500/30',
-      iconBg: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-      badge: 'À régulariser',
-      badgeColor: 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/20',
-      onClick: () => navigate('/invoices'),
-    },
-  ];
+  const kpis = canViewFinancials
+    ? [
+        {
+          id: 'patients',
+          name: 'Patients Actifs',
+          value: stats.totalPatients.toLocaleString('fr-FR'),
+          subtext: `${stats.archivedPatients || 0} archivés`,
+          icon: Users,
+          gradient: 'from-cyan-500/20 via-blue-500/10 to-transparent',
+          borderGlow: 'hover:border-cyan-500/30',
+          iconBg: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
+          badge: '+12% ce mois',
+          badgeColor: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20',
+          onClick: () => navigate('/patients'),
+        },
+        {
+          id: 'appointments',
+          name: "Rendez-vous Aujourd'hui",
+          value: stats.appointmentsTodayCount.toString(),
+          subtext: stats.upcomingAppointments?.length > 0 ? `${stats.upcomingAppointments.length} en attente` : 'Planning fluide',
+          icon: CalendarDays,
+          gradient: 'from-violet-500/20 via-indigo-500/10 to-transparent',
+          borderGlow: 'hover:border-violet-500/30',
+          iconBg: 'bg-violet-500/10 text-violet-400 border-violet-500/20',
+          badge: 'Planning',
+          badgeColor: 'text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-500/10 border-violet-200 dark:border-violet-500/20',
+          onClick: () => navigate('/appointments'),
+        },
+        {
+          id: 'revenue',
+          name: 'Recettes du Jour',
+          value: `${stats.revenueToday.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} DH`,
+          subtext: `Total encaissé : ${stats.totalCollected.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} DH`,
+          icon: DollarSign,
+          gradient: 'from-emerald-500/20 via-teal-500/10 to-transparent',
+          borderGlow: 'hover:border-emerald-500/30',
+          iconBg: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+          badge: 'Encaissé',
+          badgeColor: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20',
+          onClick: () => navigate('/invoices'),
+        },
+        {
+          id: 'outstanding',
+          name: 'Restes à Recouvrer',
+          value: `${stats.outstandingBalance.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} DH`,
+          subtext: 'Factures en attente de solde',
+          icon: Clock,
+          gradient: 'from-amber-500/20 via-rose-500/10 to-transparent',
+          borderGlow: 'hover:border-amber-500/30',
+          iconBg: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+          badge: 'À régulariser',
+          badgeColor: 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/20',
+          onClick: () => navigate('/invoices'),
+        },
+      ]
+    : [
+        {
+          id: 'patients',
+          name: 'Patients Actifs',
+          value: stats.totalPatients.toLocaleString('fr-FR'),
+          subtext: `${stats.archivedPatients || 0} archivés`,
+          icon: Users,
+          gradient: 'from-cyan-500/20 via-blue-500/10 to-transparent',
+          borderGlow: 'hover:border-cyan-500/30',
+          iconBg: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
+          badge: 'Dossiers',
+          badgeColor: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20',
+          onClick: () => navigate('/patients'),
+        },
+        {
+          id: 'appointments',
+          name: "Rendez-vous Aujourd'hui",
+          value: stats.appointmentsTodayCount.toString(),
+          subtext: stats.upcomingAppointments?.length > 0 ? `${stats.upcomingAppointments.length} à venir` : 'Planning fluide',
+          icon: CalendarDays,
+          gradient: 'from-violet-500/20 via-indigo-500/10 to-transparent',
+          borderGlow: 'hover:border-violet-500/30',
+          iconBg: 'bg-violet-500/10 text-violet-400 border-violet-500/20',
+          badge: 'Planning',
+          badgeColor: 'text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-500/10 border-violet-200 dark:border-violet-500/20',
+          onClick: () => navigate('/appointments'),
+        },
+      ];
+
+  const renderAppointmentsCard = (colSpanClass: string) => (
+    <motion.div
+      variants={itemVariants}
+      className={`${colSpanClass} rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/8 p-6 md:p-7 shadow-sm hover:shadow-md flex flex-col gap-5`}
+    >
+      <div className="flex justify-between items-center border-b border-slate-100 dark:border-white/5 pb-4">
+        <div className="flex items-center gap-2.5">
+          <span className="p-1.5 rounded-lg bg-blue-50 text-blue-600 border border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20">
+            <CalendarDays className="w-4 h-4" />
+          </span>
+          <div>
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">Rendez-vous du Jour</h3>
+            <p className="text-xxs text-slate-500 dark:text-slate-400">Flux des consultations programmées</p>
+          </div>
+        </div>
+        <button
+          onClick={() => navigate('/appointments')}
+          className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:text-blue-500 flex items-center gap-1 transition-colors cursor-pointer"
+        >
+          <span>Voir Agenda</span>
+          <ChevronRight className="w-4 h-4" />
+        </button>
+      </div>
+
+      <div className="flex flex-col gap-3 max-h-[340px] overflow-y-auto no-scrollbar">
+        {stats.upcomingAppointments.length === 0 ? (
+          <div className="text-center py-12 flex flex-col items-center gap-2">
+            <CheckCircle2 className="w-10 h-10 text-emerald-500/40" />
+            <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">Aucun rendez-vous restant pour aujourd'hui.</p>
+            <p className="text-xxs text-slate-400 dark:text-slate-500">Tous les patients programmés ont été consultés.</p>
+          </div>
+        ) : (
+          stats.upcomingAppointments.map((appt) => {
+            const timeStr = new Date(appt.dateTime).toLocaleTimeString('fr-FR', {
+              hour: '2-digit',
+              minute: '2-digit',
+            });
+
+            return (
+              <motion.div
+                key={appt._id}
+                whileHover={{ scale: 1.01 }}
+                onClick={() => navigate(`/patients/${appt.patientId?._id}`)}
+                className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 hover:bg-slate-100 dark:bg-white/3 dark:hover:bg-white/6 border border-slate-200/60 dark:border-white/6 hover:border-blue-300 dark:hover:border-blue-500/30 transition-all cursor-pointer group"
+              >
+                <div className="flex items-center gap-3.5">
+                  <div className="w-11 h-11 rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-white/10 shrink-0 shadow-xs relative">
+                    <img
+                      src={getLocalAvatar(appt.patientId?.name, appt.patientId?.prenom, appt.patientId?.profilePictureUrl)}
+                      alt={`${appt.patientId?.name || ''} ${appt.patientId?.prenom || ''}`}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.currentTarget.src = getLocalAvatar(appt.patientId?.name, appt.patientId?.prenom);
+                      }}
+                    />
+                    <span className="absolute bottom-0.5 right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900"></span>
+                  </div>
+                  <div className="flex flex-col">
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                      <span className="uppercase">{appt.patientId?.name || 'Patient'}</span>{appt.patientId?.prenom ? ` ${appt.patientId.prenom}` : ''}
+                    </h4>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[200px]">
+                      {appt.notes || 'Consultation dentaire courante'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex flex-col items-end gap-1">
+                  <span className="text-xs font-extrabold text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 px-2.5 py-0.5 rounded-lg border border-blue-200 dark:border-blue-500/20 font-mono">
+                    {timeStr}
+                  </span>
+                  <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
+                    {appt.duration || 30} min
+                  </span>
+                </div>
+              </motion.div>
+            );
+          })
+        )}
+      </div>
+    </motion.div>
+  );
 
   return (
     <motion.div
@@ -248,7 +374,9 @@ export const Dashboard: React.FC = () => {
             <Sparkles className="w-5 h-5 text-amber-500" />
           </h1>
           <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400 mt-1 font-normal">
-            Supervision clinique, gestion des consultations et état financier en direct.
+            {canViewFinancials
+              ? 'Supervision clinique, gestion des consultations et état financier en direct.'
+              : 'Accueil des patients, gestion des rendez-vous et flux de consultation.'}
           </p>
         </div>
 
@@ -275,18 +403,35 @@ export const Dashboard: React.FC = () => {
             <Armchair className="w-4 h-4 text-indigo-500" />
             <span>Salle d'Attente</span>
           </button>
-          <button
-            onClick={() => navigate('/invoices')}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-bold text-white transition-all shadow-md shadow-blue-500/20 hover:scale-102 active:scale-98 cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Nouvelle Facture</span>
-          </button>
+          {canViewFinancials ? (
+            <button
+              onClick={() => navigate('/invoices')}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-bold text-white transition-all shadow-md shadow-blue-500/20 hover:scale-102 active:scale-98 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Nouvelle Facture</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => navigate('/appointments')}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-bold text-white transition-all shadow-md shadow-blue-500/20 hover:scale-102 active:scale-98 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Nouveau RDV</span>
+            </button>
+          )}
         </div>
       </motion.div>
 
       {/* KPI METRIC CARDS */}
-      <motion.div variants={itemVariants} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      <motion.div
+        variants={itemVariants}
+        className={`grid gap-5 ${
+          canViewFinancials
+            ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'
+            : 'grid-cols-1 sm:grid-cols-2'
+        }`}
+      >
         {kpis.map((kpi) => (
           <motion.div
             key={kpi.id}
@@ -322,115 +467,119 @@ export const Dashboard: React.FC = () => {
       {/* ANALYTICS & CHARTS ROW */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
         
-        {/* REVENUE BAR CHART CARD */}
-        <motion.div
-          variants={itemVariants}
-          className="lg:col-span-2 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/8 p-6 md:p-7 shadow-sm hover:shadow-md flex flex-col justify-between gap-6 relative overflow-hidden"
-        >
-          <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="p-1.5 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-500/20">
-                  <TrendingUp className="w-4 h-4" />
-                </span>
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">
-                  Recettes & Chiffre d'Affaires
-                </h3>
-              </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                Total annuel encaissé : <strong className="text-emerald-600 dark:text-emerald-400 font-mono">{totalAnnualRevenue.toLocaleString('fr-FR')} DH</strong>
-              </p>
-            </div>
-
-            {/* Sub-badge info */}
-            <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-950/40 border border-slate-200 dark:border-white/5 px-3 py-1.5 rounded-xl self-start sm:self-auto">
-              <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
-              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 font-mono">Année {new Date().getFullYear()}</span>
-            </div>
-          </div>
-
-          {/* Bar Chart Canvas with Gridlines */}
-          <div className="relative h-56 w-full pt-4 flex flex-col justify-between">
-            {/* Background Grid lines */}
-            <div className="absolute inset-0 top-4 bottom-7 flex flex-col justify-between pointer-events-none opacity-40">
-              <div className="border-b border-dashed border-slate-200 dark:border-white/10 w-full"></div>
-              <div className="border-b border-dashed border-slate-200 dark:border-white/10 w-full"></div>
-              <div className="border-b border-dashed border-slate-200 dark:border-white/10 w-full"></div>
-            </div>
-
-            {/* Bars Column */}
-            <div className="flex-1 w-full flex items-end justify-between gap-1.5 sm:gap-3 md:gap-4 relative z-10">
-              {financials.monthlyRevenue.map((item: any, i: number) => {
-                const heightPct = maxRevenue > 0 ? Math.max(8, (item.revenue / maxRevenue) * 100) : 8;
-                const isCurrentMonth = new Date().getMonth() === i;
-                const hasRevenue = item.revenue > 0;
-
-                return (
-                  <div key={i} className="flex-1 h-full flex flex-col justify-end items-center group/bar cursor-pointer relative">
-                    {/* Floating tooltip */}
-                    <div className="absolute -top-10 scale-0 group-hover/bar:scale-100 transition-all duration-200 pointer-events-none z-30 whitespace-nowrap">
-                      <div className="flex flex-col items-center">
-                        <span className="text-[10px] font-bold text-white bg-slate-900 dark:bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-700 shadow-xl font-mono">
-                          {item.revenue.toLocaleString('fr-FR')} DH
-                        </span>
-                        <div className="w-1.5 h-1.5 bg-slate-900 rotate-45 -mt-0.5"></div>
-                      </div>
-                    </div>
-
-                    {/* Bar Column */}
-                    <div className="w-full flex justify-center items-end h-full">
-                      <div
-                        style={{ height: `${heightPct}%` }}
-                        className={`w-full max-w-[28px] rounded-t-xl transition-all duration-500 group-hover/bar:scale-y-105 origin-bottom relative overflow-hidden ${
-                          isCurrentMonth
-                            ? 'bg-gradient-to-t from-blue-600 via-indigo-500 to-cyan-400 shadow-md shadow-indigo-500/25 ring-2 ring-cyan-400/40'
-                            : hasRevenue
-                            ? 'bg-gradient-to-t from-blue-700 via-indigo-600 to-blue-400 dark:from-indigo-900/80 dark:via-blue-600/70 dark:to-cyan-400/80 hover:from-blue-500 hover:to-cyan-400'
-                            : 'bg-slate-200 dark:bg-slate-800/60'
-                        }`}
-                      >
-                        {/* Glow highlight on top of bar */}
-                        {hasRevenue && (
-                          <div className="absolute top-0 inset-x-0 h-1.5 bg-white/50 rounded-t-xl"></div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* X-Axis Labels */}
-            <div className="flex w-full justify-between items-center pt-2 border-t border-slate-200/80 dark:border-white/10 mt-1">
-              {financials.monthlyRevenue.map((item: any, i: number) => {
-                const isCurrentMonth = new Date().getMonth() === i;
-                return (
-                  <span
-                    key={i}
-                    className={`flex-1 text-center text-[10px] font-bold tracking-tight ${
-                      isCurrentMonth
-                        ? 'text-blue-600 dark:text-cyan-400 font-extrabold underline underline-offset-4 decoration-cyan-400'
-                        : 'text-slate-500 dark:text-slate-400 group-hover/bar:text-slate-900 dark:group-hover/bar:text-slate-200'
-                    }`}
-                  >
-                    {item.month}
+        {/* REVENUE BAR CHART CARD - ONLY FOR ADMIN & DOCTOR */}
+        {canViewFinancials ? (
+          <motion.div
+            variants={itemVariants}
+            className="lg:col-span-2 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/8 p-6 md:p-7 shadow-sm hover:shadow-md flex flex-col justify-between gap-6 relative overflow-hidden"
+          >
+            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="p-1.5 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-500/20">
+                    <TrendingUp className="w-4 h-4" />
                   </span>
-                );
-              })}
-            </div>
-          </div>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">
+                    Recettes & Chiffre d'Affaires
+                  </h3>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  Total annuel encaissé : <strong className="text-emerald-600 dark:text-emerald-400 font-mono">{totalAnnualRevenue.toLocaleString('fr-FR')} DH</strong>
+                </p>
+              </div>
 
-          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 pt-1">
-            <span className="text-[11px]">Moyenne mensuelle: ~{(totalAnnualRevenue / 12).toFixed(0)} DH</span>
-            <button
-              onClick={() => navigate('/reports')}
-              className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:text-blue-500 flex items-center gap-1 transition-colors cursor-pointer"
-            >
-              <span>Rapport Financier Complet</span>
-              <ArrowUpRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </motion.div>
+              {/* Sub-badge info */}
+              <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-950/40 border border-slate-200 dark:border-white/5 px-3 py-1.5 rounded-xl self-start sm:self-auto">
+                <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+                <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 font-mono">Année {new Date().getFullYear()}</span>
+              </div>
+            </div>
+
+            {/* Bar Chart Canvas with Gridlines */}
+            <div className="relative h-56 w-full pt-4 flex flex-col justify-between">
+              {/* Background Grid lines */}
+              <div className="absolute inset-0 top-4 bottom-7 flex flex-col justify-between pointer-events-none opacity-40">
+                <div className="border-b border-dashed border-slate-200 dark:border-white/10 w-full"></div>
+                <div className="border-b border-dashed border-slate-200 dark:border-white/10 w-full"></div>
+                <div className="border-b border-dashed border-slate-200 dark:border-white/10 w-full"></div>
+              </div>
+
+              {/* Bars Column */}
+              <div className="flex-1 w-full flex items-end justify-between gap-1.5 sm:gap-3 md:gap-4 relative z-10">
+                {financials.monthlyRevenue.map((item: any, i: number) => {
+                  const heightPct = maxRevenue > 0 ? Math.max(8, (item.revenue / maxRevenue) * 100) : 8;
+                  const isCurrentMonth = new Date().getMonth() === i;
+                  const hasRevenue = item.revenue > 0;
+
+                  return (
+                    <div key={i} className="flex-1 h-full flex flex-col justify-end items-center group/bar cursor-pointer relative">
+                      {/* Floating tooltip */}
+                      <div className="absolute -top-10 scale-0 group-hover/bar:scale-100 transition-all duration-200 pointer-events-none z-30 whitespace-nowrap">
+                        <div className="flex flex-col items-center">
+                          <span className="text-[10px] font-bold text-white bg-slate-900 dark:bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-700 shadow-xl font-mono">
+                            {item.revenue.toLocaleString('fr-FR')} DH
+                          </span>
+                          <div className="w-1.5 h-1.5 bg-slate-900 rotate-45 -mt-0.5"></div>
+                        </div>
+                      </div>
+
+                      {/* Bar Column */}
+                      <div className="w-full flex justify-center items-end h-full">
+                        <div
+                          style={{ height: `${heightPct}%` }}
+                          className={`w-full max-w-[28px] rounded-t-xl transition-all duration-500 group-hover/bar:scale-y-105 origin-bottom relative overflow-hidden ${
+                            isCurrentMonth
+                              ? 'bg-gradient-to-t from-blue-600 via-indigo-500 to-cyan-400 shadow-md shadow-indigo-500/25 ring-2 ring-cyan-400/40'
+                              : hasRevenue
+                              ? 'bg-gradient-to-t from-blue-700 via-indigo-600 to-blue-400 dark:from-indigo-900/80 dark:via-blue-600/70 dark:to-cyan-400/80 hover:from-blue-500 hover:to-cyan-400'
+                              : 'bg-slate-200 dark:bg-slate-800/60'
+                          }`}
+                        >
+                          {/* Glow highlight on top of bar */}
+                          {hasRevenue && (
+                            <div className="absolute top-0 inset-x-0 h-1.5 bg-white/50 rounded-t-xl"></div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* X-Axis Labels */}
+              <div className="flex w-full justify-between items-center pt-2 border-t border-slate-200/80 dark:border-white/10 mt-1">
+                {financials.monthlyRevenue.map((item: any, i: number) => {
+                  const isCurrentMonth = new Date().getMonth() === i;
+                  return (
+                    <span
+                      key={i}
+                      className={`flex-1 text-center text-[10px] font-bold tracking-tight ${
+                        isCurrentMonth
+                          ? 'text-blue-600 dark:text-cyan-400 font-extrabold underline underline-offset-4 decoration-cyan-400'
+                          : 'text-slate-500 dark:text-slate-400 group-hover/bar:text-slate-900 dark:group-hover/bar:text-slate-200'
+                      }`}
+                    >
+                      {item.month}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 pt-1">
+              <span className="text-[11px]">Moyenne mensuelle: ~{(totalAnnualRevenue / 12).toFixed(0)} DH</span>
+              <button
+                onClick={() => navigate('/reports')}
+                className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:text-blue-500 flex items-center gap-1 transition-colors cursor-pointer"
+              >
+                <span>Rapport Financier Complet</span>
+                <ArrowUpRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </motion.div>
+        ) : (
+          renderAppointmentsCard('lg:col-span-2')
+        )}
 
         {/* COMMON DENTAL TREATMENTS CARD */}
         <motion.div
@@ -500,170 +649,90 @@ export const Dashboard: React.FC = () => {
 
       </div>
 
-      {/* TODAY'S SCHEDULE & RECENT INVOICES */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        
-        {/* TODAY'S APPOINTMENTS AGENDA */}
-        <motion.div
-          variants={itemVariants}
-          className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/8 p-6 md:p-7 shadow-sm hover:shadow-md flex flex-col gap-5"
-        >
-          <div className="flex justify-between items-center border-b border-slate-100 dark:border-white/5 pb-4">
-            <div className="flex items-center gap-2.5">
-              <span className="p-1.5 rounded-lg bg-blue-50 text-blue-600 border border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20">
-                <CalendarDays className="w-4 h-4" />
-              </span>
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">Rendez-vous du Jour</h3>
-                <p className="text-xxs text-slate-500 dark:text-slate-400">Flux des consultations programmées</p>
+      {/* TODAY'S SCHEDULE & RECENT INVOICES (ONLY FOR ADMIN & DOCTOR) */}
+      {canViewFinancials && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {renderAppointmentsCard('')}
+
+          {/* RECENT INVOICES & PAYMENTS */}
+          <motion.div
+            variants={itemVariants}
+            className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/8 p-6 md:p-7 shadow-sm hover:shadow-md flex flex-col gap-5"
+          >
+            <div className="flex justify-between items-center border-b border-slate-100 dark:border-white/5 pb-4">
+              <div className="flex items-center gap-2.5">
+                <span className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20">
+                  <CreditCard className="w-4 h-4" />
+                </span>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">Facturation Récente</h3>
+                  <p className="text-xxs text-slate-500 dark:text-slate-400">Derniers règlements et devis émis</p>
+                </div>
               </div>
+              <button
+                onClick={() => navigate('/invoices')}
+                className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-500 flex items-center gap-1 transition-colors cursor-pointer"
+              >
+                <span>Gestion Factures</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
             </div>
-            <button
-              onClick={() => navigate('/appointments')}
-              className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:text-blue-500 flex items-center gap-1 transition-colors cursor-pointer"
-            >
-              <span>Voir Agenda</span>
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
 
-          <div className="flex flex-col gap-3 max-h-[340px] overflow-y-auto no-scrollbar">
-            {stats.upcomingAppointments.length === 0 ? (
-              <div className="text-center py-12 flex flex-col items-center gap-2">
-                <CheckCircle2 className="w-10 h-10 text-emerald-500/40" />
-                <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">Aucun rendez-vous restant pour aujourd'hui.</p>
-                <p className="text-xxs text-slate-400 dark:text-slate-500">Tous les patients programmés ont été consultés.</p>
-              </div>
-            ) : (
-              stats.upcomingAppointments.map((appt) => {
-                const timeStr = new Date(appt.dateTime).toLocaleTimeString('fr-FR', {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                });
-
-                return (
+            <div className="flex flex-col gap-3 max-h-[340px] overflow-y-auto no-scrollbar">
+              {stats.recentInvoices.length === 0 ? (
+                <div className="text-center py-12 flex flex-col items-center gap-2">
+                  <FileText className="w-10 h-10 text-slate-300 dark:text-slate-600" />
+                  <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">Aucune facture enregistrée récemment.</p>
+                </div>
+              ) : (
+                stats.recentInvoices.map((inv) => (
                   <motion.div
-                    key={appt._id}
+                    key={inv._id}
                     whileHover={{ scale: 1.01 }}
-                    onClick={() => navigate(`/patients/${appt.patientId?._id}`)}
-                    className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 hover:bg-slate-100 dark:bg-white/3 dark:hover:bg-white/6 border border-slate-200/60 dark:border-white/6 hover:border-blue-300 dark:hover:border-blue-500/30 transition-all cursor-pointer group"
+                    onClick={() => navigate('/invoices')}
+                    className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 hover:bg-slate-100 dark:bg-white/3 dark:hover:bg-white/6 border border-slate-200/60 dark:border-white/6 hover:border-emerald-300 dark:hover:border-emerald-500/30 transition-all cursor-pointer group"
                   >
                     <div className="flex items-center gap-3.5">
-                      <div className="w-11 h-11 rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-white/10 shrink-0 shadow-xs relative">
-                        <img
-                          src={getLocalAvatar(appt.patientId?.name, appt.patientId?.prenom, appt.patientId?.profilePictureUrl)}
-                          alt={`${appt.patientId?.name || ''} ${appt.patientId?.prenom || ''}`}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            e.currentTarget.src = getLocalAvatar(appt.patientId?.name, appt.patientId?.prenom);
-                          }}
-                        />
-                        <span className="absolute bottom-0.5 right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900"></span>
+                      <div className="p-2.5 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-200 dark:bg-emerald-500/10 dark:border-emerald-500/20 dark:text-emerald-400 shadow-inner group-hover:scale-105 transition-transform">
+                        <FileText className="w-5 h-5" />
                       </div>
-                      <div className="flex flex-col">
-                        <h4 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                          <span className="uppercase">{appt.patientId?.name || 'Patient'}</span>{appt.patientId?.prenom ? ` ${appt.patientId.prenom}` : ''}
+                      <div>
+                        <h4 className="text-xs font-extrabold text-slate-900 dark:text-white font-mono tracking-wider group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+                          FACT-{inv.invoiceNumber}
                         </h4>
-                        <span className="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[200px]">
-                          {appt.notes || 'Consultation dentaire courante'}
-                        </span>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                          <span className="uppercase">{inv.patientId?.name || 'Patient'}</span>{inv.patientId?.prenom ? ` ${inv.patientId.prenom}` : ''}
+                        </p>
                       </div>
                     </div>
 
                     <div className="flex flex-col items-end gap-1">
-                      <span className="text-xs font-extrabold text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 px-2.5 py-0.5 rounded-lg border border-blue-200 dark:border-blue-500/20 font-mono">
-                        {timeStr}
+                      <span className="text-xs md:text-sm font-extrabold text-slate-900 dark:text-white font-mono">
+                        {inv.netAmount?.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DH
                       </span>
-                      <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
-                        {appt.duration || 30} min
+                      <span
+                        className={`text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+                          inv.paymentStatus === 'Paid'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20'
+                            : inv.paymentStatus === 'Partially Paid'
+                            ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20'
+                            : 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/20'
+                        }`}
+                      >
+                        {inv.paymentStatus === 'Paid'
+                          ? 'Payé'
+                          : inv.paymentStatus === 'Partially Paid'
+                          ? 'Partiel'
+                          : 'Impayé'}
                       </span>
                     </div>
                   </motion.div>
-                );
-              })
-            )}
-          </div>
-        </motion.div>
-
-        {/* RECENT INVOICES & PAYMENTS */}
-        <motion.div
-          variants={itemVariants}
-          className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/8 p-6 md:p-7 shadow-sm hover:shadow-md flex flex-col gap-5"
-        >
-          <div className="flex justify-between items-center border-b border-slate-100 dark:border-white/5 pb-4">
-            <div className="flex items-center gap-2.5">
-              <span className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20">
-                <CreditCard className="w-4 h-4" />
-              </span>
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">Facturation Récente</h3>
-                <p className="text-xxs text-slate-500 dark:text-slate-400">Derniers règlements et devis émis</p>
-              </div>
+                ))
+              )}
             </div>
-            <button
-              onClick={() => navigate('/invoices')}
-              className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-500 flex items-center gap-1 transition-colors cursor-pointer"
-            >
-              <span>Gestion Factures</span>
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-
-          <div className="flex flex-col gap-3 max-h-[340px] overflow-y-auto no-scrollbar">
-            {stats.recentInvoices.length === 0 ? (
-              <div className="text-center py-12 flex flex-col items-center gap-2">
-                <FileText className="w-10 h-10 text-slate-300 dark:text-slate-600" />
-                <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">Aucune facture enregistrée récemment.</p>
-              </div>
-            ) : (
-              stats.recentInvoices.map((inv) => (
-                <motion.div
-                  key={inv._id}
-                  whileHover={{ scale: 1.01 }}
-                  onClick={() => navigate('/invoices')}
-                  className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 hover:bg-slate-100 dark:bg-white/3 dark:hover:bg-white/6 border border-slate-200/60 dark:border-white/6 hover:border-emerald-300 dark:hover:border-emerald-500/30 transition-all cursor-pointer group"
-                >
-                  <div className="flex items-center gap-3.5">
-                    <div className="p-2.5 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-200 dark:bg-emerald-500/10 dark:border-emerald-500/20 dark:text-emerald-400 shadow-inner group-hover:scale-105 transition-transform">
-                      <FileText className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h4 className="text-xs font-extrabold text-slate-900 dark:text-white font-mono tracking-wider group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
-                        FACT-{inv.invoiceNumber}
-                      </h4>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                        <span className="uppercase">{inv.patientId?.name || 'Patient'}</span>{inv.patientId?.prenom ? ` ${inv.patientId.prenom}` : ''}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col items-end gap-1">
-                    <span className="text-xs md:text-sm font-extrabold text-slate-900 dark:text-white font-mono">
-                      {inv.netAmount?.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DH
-                    </span>
-                    <span
-                      className={`text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
-                        inv.paymentStatus === 'Paid'
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20'
-                          : inv.paymentStatus === 'Partially Paid'
-                          ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20'
-                          : 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/20'
-                      }`}
-                    >
-                      {inv.paymentStatus === 'Paid'
-                        ? 'Payé'
-                        : inv.paymentStatus === 'Partially Paid'
-                        ? 'Partiel'
-                        : 'Impayé'}
-                    </span>
-                  </div>
-                </motion.div>
-              ))
-            )}
-          </div>
-        </motion.div>
-
-      </div>
+          </motion.div>
+        </div>
+      )}
 
     </motion.div>
   );

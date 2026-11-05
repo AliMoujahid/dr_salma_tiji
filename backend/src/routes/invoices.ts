@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import Invoice from '../models/Invoice';
 import Patient from '../models/Patient';
 import PaymentTransaction from '../models/Payment';
+import Treatment from '../models/Treatment';
 import { protect, AuthRequest } from '../middleware/auth';
 import { recordAudit } from '../middleware/security';
 
@@ -189,6 +190,28 @@ router.post('/', protect, async (req: AuthRequest, res: Response) => {
       }
     }
 
+    // Link any existing treatments in the carnet to this invoice
+    const idsToLink = new Set<string>();
+    if (Array.isArray(req.body.treatmentIds)) {
+      req.body.treatmentIds.forEach((tid: any) => {
+        if (isValidObjectId(tid)) idsToLink.add(tid.toString());
+      });
+    }
+    if (Array.isArray(items)) {
+      items.forEach((it: any) => {
+        if (it.treatmentId && isValidObjectId(it.treatmentId)) {
+          idsToLink.add(it.treatmentId.toString());
+        }
+      });
+    }
+
+    if (idsToLink.size > 0) {
+      await Treatment.updateMany(
+        { _id: { $in: Array.from(idsToLink) } },
+        { $set: { invoiceId: newInvoice._id } }
+      );
+    }
+
     await recordAudit({
       userId: req.user?._id,
       userName: req.user?.name || 'Praticien',
@@ -275,6 +298,28 @@ router.put('/:id', protect, async (req: AuthRequest, res: Response) => {
 
     await invoice.save();
 
+    // Sync any treatment IDs to this updated invoice
+    const idsToLink = new Set<string>();
+    if (Array.isArray(req.body.treatmentIds)) {
+      req.body.treatmentIds.forEach((tid: any) => {
+        if (isValidObjectId(tid)) idsToLink.add(tid.toString());
+      });
+    }
+    if (Array.isArray(items)) {
+      items.forEach((it: any) => {
+        if (it.treatmentId && isValidObjectId(it.treatmentId)) {
+          idsToLink.add(it.treatmentId.toString());
+        }
+      });
+    }
+
+    if (idsToLink.size > 0) {
+      await Treatment.updateMany(
+        { _id: { $in: Array.from(idsToLink) } },
+        { $set: { invoiceId: invoice._id } }
+      );
+    }
+
     await recordAudit({
       userId: req.user?._id,
       userName: req.user?.name || 'Praticien',
@@ -309,6 +354,12 @@ router.delete('/:id', protect, async (req: AuthRequest, res: Response) => {
       res.status(404).json({ message: 'Facture introuvable.' });
       return;
     }
+
+    // Release any treatments previously linked to this invoice back to unbilled
+    await Treatment.updateMany(
+      { invoiceId: req.params.id },
+      { $unset: { invoiceId: 1 } }
+    );
 
     await recordAudit({
       userId: req.user?._id,

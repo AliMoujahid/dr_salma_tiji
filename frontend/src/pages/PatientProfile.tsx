@@ -46,10 +46,11 @@ import {
   Edit,
   AlertTriangle,
 } from 'lucide-react';
-import { Patient, Invoice, PaymentTransaction, Appointment, Document, DentalAct, ClinicConfig } from '../types';
+import { Patient, Invoice, PaymentTransaction, Appointment, Document, DentalAct, ClinicConfig, Devis } from '../types';
 import { formatDate, formatDateTime, formatBirthDateWithAge, formatRelativeDateTime } from '../utils/dateUtils';
 import { PatientLedgerPrintLayout } from '../components/PatientLedgerPrintLayout';
 import { InvoicePrintLayout } from '../components/InvoicePrintLayout';
+import { DevisPrintLayout } from '../components/DevisPrintLayout';
 import { SearchableActSelect } from '../components/SearchableActSelect';
 import { DENTAL_CATEGORIES } from '../components/DentalActsManager';
 import { parseToothNumbers, getToothLabel } from '../utils/dentalUtils';
@@ -82,6 +83,10 @@ export const PatientProfile: React.FC = () => {
 
   // Sub-data states
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [devisList, setDevisList] = useState<Devis[]>([]);
+  const [previewDevisData, setPreviewDevisData] = useState<Devis | null>(null);
+  const [devisPreviewScale, setDevisPreviewScale] = useState<number>(0.72);
+  const [convertingDevisId, setConvertingDevisId] = useState<string | null>(null);
   const [payments, setPayments] = useState<PaymentTransaction[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
@@ -360,8 +365,9 @@ export const PatientProfile: React.FC = () => {
       setPatient(patData);
 
       // Fetch Sub-resources concurrently
-      const [invRes, payRes, appRes, docRes, ledgerRes, actsRes, cfgRes] = await Promise.all([
+      const [invRes, devisRes, payRes, appRes, docRes, ledgerRes, actsRes, cfgRes] = await Promise.all([
         fetch(`${API_URL}/invoices?patientId=${id}`, { headers }),
+        fetch(`${API_URL}/devis?patientId=${id}`, { headers }),
         fetch(`${API_URL}/payments/patient/${id}`, { headers }),
         fetch(`${API_URL}/appointments?start=${new Date(Date.now() - 31536000000).toISOString()}&end=${new Date(Date.now() + 31536000000).toISOString()}`, { headers }),
         fetch(`${API_URL}/documents/patient/${id}`, { headers }),
@@ -371,6 +377,7 @@ export const PatientProfile: React.FC = () => {
       ]);
 
       const invData = await invRes.json();
+      const devisData = await devisRes.json();
       const payData = await payRes.json();
       const appData = await appRes.json();
       const docData = await docRes.json();
@@ -379,6 +386,7 @@ export const PatientProfile: React.FC = () => {
       const cfgData = await cfgRes.json();
 
       setInvoices(invData.invoices || []);
+      setDevisList(devisData.devis || (Array.isArray(devisData) ? devisData : []));
       setPayments(payData || []);
       setAppointments(appData.filter((a: any) => (a.patientId?._id || a.patientId) === id));
       setDocuments(docData || []);
@@ -706,6 +714,134 @@ export const PatientProfile: React.FC = () => {
     });
   };
 
+  const handleDevisSelectedActs = () => {
+    const fullPatientName = patient ? `${patient.name}${patient.prenom ? ' ' + patient.prenom : ''}` : '';
+    if (!ledgerData || selectedActsForInvoice.length === 0) {
+      navigate('/devis', {
+        state: {
+          patientId: patient?._id,
+          patientName: fullPatientName,
+          returnPatientId: id,
+          returnTab: 'Devis',
+        },
+      });
+      return;
+    }
+    const chosenActs = ledgerData.acts.filter((a) => selectedActsForInvoice.includes(a._id));
+    navigate('/devis', {
+      state: {
+        patientId: patient?._id,
+        patientName: fullPatientName,
+        prefilledItems: chosenActs,
+        returnPatientId: id,
+        returnTab: 'Devis',
+      },
+    });
+  };
+
+  const handleDeleteDevis = async (devisId: string, devisNumber: string) => {
+    const confirmed = await confirm({
+      title: 'Supprimer ce devis ?',
+      message: `Êtes-vous sûr de vouloir supprimer définitivement le Devis N° ${devisNumber} ?`,
+      variant: 'danger',
+      confirmText: 'Supprimer',
+      cancelText: 'Annuler',
+    });
+    if (!confirmed) return;
+
+    try {
+      const res = await fetch(`${API_URL}/devis/${devisId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Impossible de supprimer le devis');
+      }
+      setDevisList((prev) => prev.filter((d) => d._id !== devisId));
+      if (previewDevisData?._id === devisId) setPreviewDevisData(null);
+      toast.success('Devis supprimé', `Le Devis N° ${devisNumber} a été supprimé.`);
+    } catch (err: any) {
+      console.error('Delete devis error:', err);
+      toast.error('Erreur', err.message || 'Échec de la suppression du devis.');
+    }
+  };
+
+  const handleConvertDevisToInvoice = async (devis: Devis) => {
+    const confirmed = await confirm({
+      title: 'Transformer en Facture ?',
+      message: `Voulez-vous transformer le Devis N° ${devis.devisNumber} (${(devis.netAmount || 0).toFixed(2)} DH) en Facture officielle ? Les actes seront automatiquement repris.`,
+      variant: 'info',
+      confirmText: 'Transformer en Facture',
+      cancelText: 'Annuler',
+    });
+    if (!confirmed) return;
+
+    setConvertingDevisId(devis._id);
+    try {
+      const res = await fetch(`${API_URL}/devis/${devis._id}/convert-to-invoice`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Échec de la conversion');
+      }
+      const data = await res.json();
+      toast.success('Devis Transformé !', data.message || `Facture N° ${data.invoice?.invoiceNumber} créée.`);
+
+      // Update devis status locally
+      setDevisList((prev) =>
+        prev.map((d) => (d._id === devis._id ? { ...d, status: 'Invoiced' as const } : d))
+      );
+      // Append new invoice
+      if (data.invoice) {
+        setInvoices((prev) => [data.invoice, ...prev]);
+      }
+    } catch (err: any) {
+      console.error('Convert devis error:', err);
+      toast.error('Erreur de conversion', err.message || 'Impossible de convertir ce devis.');
+    } finally {
+      setConvertingDevisId(null);
+    }
+  };
+
+  const getDevisStatusBadge = (st: string) => {
+    switch (st) {
+      case 'Accepted':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xxs font-extrabold bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20">
+            Accepté
+          </span>
+        );
+      case 'Invoiced':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xxs font-extrabold bg-purple-50 dark:bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-500/20">
+            Facturé
+          </span>
+        );
+      case 'Sent':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xxs font-extrabold bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-500/20">
+            En attente
+          </span>
+        );
+      case 'Rejected':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xxs font-extrabold bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20">
+            Refusé
+          </span>
+        );
+      case 'Draft':
+      default:
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xxs font-extrabold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+            Brouillon
+          </span>
+        );
+    }
+  };
+
   const handleUpdateApptStatus = async (apptId: string, newStatus: string) => {
     try {
       const res = await fetch(`${API_URL}/appointments/${apptId}`, {
@@ -909,6 +1045,7 @@ export const PatientProfile: React.FC = () => {
     { name: 'Chart', label: 'Odontogramme', icon: Bookmark },
     { name: 'Medical', label: 'Dossier Médical', icon: User },
     { name: 'Invoices', label: 'Factures', icon: FileText },
+    { name: 'Devis', label: 'Devis', icon: FileSpreadsheet },
     { name: 'Appointments', label: 'Rendez-vous', icon: Calendar },
     { name: 'Files', label: 'Documents & Radios', icon: ImageIcon },
   ];
@@ -917,7 +1054,12 @@ export const PatientProfile: React.FC = () => {
     <div className="flex-1 p-6 md:p-8 flex flex-col gap-6 overflow-y-auto no-scrollbar max-h-[calc(100vh-80px)] select-none print:block print:p-0 print:max-h-none print:overflow-visible">
       {/* Offscreen Print Component (Rendered strictly when printing) */}
       <div className="hidden print:block">
-        {previewInvoiceData && clinicConfig ? (
+        {previewDevisData && clinicConfig ? (
+          <DevisPrintLayout
+            devis={previewDevisData}
+            config={clinicConfig}
+          />
+        ) : previewInvoiceData && clinicConfig ? (
           <InvoicePrintLayout
             invoice={previewInvoiceData}
             config={clinicConfig}
@@ -985,7 +1127,16 @@ export const PatientProfile: React.FC = () => {
 
         <div className="flex items-center gap-2">
           <button
-            onClick={() => navigate('/devis', { state: { patientId: patient._id, patientName: `${patient.name}${patient.prenom ? ' ' + patient.prenom : ''}` } })}
+            onClick={() =>
+              navigate('/devis', {
+                state: {
+                  patientId: patient._id,
+                  patientName: `${patient.name}${patient.prenom ? ' ' + patient.prenom : ''}`,
+                  returnPatientId: id,
+                  returnTab: 'Devis',
+                },
+              })
+            }
             className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 font-semibold text-xs border border-purple-200 dark:border-purple-800 cursor-pointer shadow-xs transition-all"
             title="Créer un devis estimatif pour ce patient"
           >
@@ -1423,6 +1574,179 @@ export const PatientProfile: React.FC = () => {
           </div>
         )}
 
+        {/* DEVIS & ESTIMATIONS PANEL */}
+        {activeTab === 'Devis' && (
+          <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 shadow-sm flex flex-col gap-4">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-3 border-b border-slate-100 dark:border-white/5">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-purple-50 text-purple-600 dark:bg-purple-600/10 dark:text-purple-400 rounded-xl border border-purple-200 dark:border-purple-500/20">
+                  <FileSpreadsheet className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">
+                    Devis & Estimations du Patient
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Plans de traitement prévisionnels et devis chiffrés pour ce patient.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() =>
+                  navigate('/devis', {
+                    state: {
+                      patientId: patient?._id,
+                      patientName: `${patient?.name}${patient?.prenom ? ' ' + patient.prenom : ''}`,
+                      returnPatientId: id,
+                      returnTab: 'Devis',
+                    },
+                  })
+                }
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-md shadow-purple-600/20 cursor-pointer transition-all"
+              >
+                <Plus className="w-4 h-4 stroke-[2.5]" />
+                <span>Nouveau Devis</span>
+              </button>
+            </div>
+
+            {devisList.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                <div className="w-14 h-14 rounded-2xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center mb-3 border border-purple-200/60 dark:border-purple-800/60">
+                  <FileSpreadsheet className="w-7 h-7" />
+                </div>
+                <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                  Aucun devis enregistré pour ce patient
+                </h4>
+                <p className="text-xs text-slate-400 max-w-md mt-1 mb-4">
+                  Établissez un plan de traitement estimatif avec les soins dentaires et tarifs prévisionnels.
+                </p>
+                <button
+                  onClick={() =>
+                    navigate('/devis', {
+                      state: {
+                        patientId: patient?._id,
+                        patientName: `${patient?.name}${patient?.prenom ? ' ' + patient.prenom : ''}`,
+                        returnPatientId: id,
+                        returnTab: 'Devis',
+                      },
+                    })
+                  }
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-xs cursor-pointer transition-all"
+                >
+                  <Plus className="w-4 h-4 stroke-[2.5]" />
+                  <span>Créer le premier devis</span>
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {devisList.map((dev) => (
+                  <div
+                    key={dev._id}
+                    onClick={() => setPreviewDevisData(dev)}
+                    className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 bg-slate-50 hover:bg-slate-100/90 dark:bg-white/5 dark:hover:bg-white/10 border border-slate-200/60 dark:border-white/5 rounded-xl transition-all select-none cursor-pointer group"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="p-2.5 bg-purple-50 text-purple-600 dark:bg-purple-600/10 dark:text-purple-400 rounded-xl border border-purple-200 dark:border-purple-500/20 group-hover:scale-105 transition-transform">
+                        <FileSpreadsheet className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="text-xs font-bold text-slate-900 dark:text-white font-mono">
+                            DEVIS N° {dev.devisNumber}
+                          </h4>
+                          <span className="text-[10px] text-purple-600 dark:text-purple-400 font-semibold group-hover:underline">
+                            (Cliquer pour afficher / imprimer)
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xxs text-slate-500 dark:text-slate-400 mt-1">
+                          <span>
+                            Date : <strong className="text-slate-700 dark:text-slate-300 font-mono">{formatDate(dev.date)}</strong>
+                          </span>
+                          {dev.validUntil && (
+                            <span>
+                              • Valable jusqu'au : <strong className="text-slate-700 dark:text-slate-300 font-mono">{formatDate(dev.validUntil)}</strong>
+                            </span>
+                          )}
+                          <span>• {dev.items?.length || 0} acte(s) estimé(s)</span>
+                          {dev.discount > 0 && (
+                            <span className="text-amber-600 font-semibold">• Remise : {dev.discount} DH</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-4 flex-wrap md:flex-nowrap justify-between md:justify-end" onClick={(e) => e.stopPropagation()}>
+                      <div className="text-right flex flex-col items-end gap-1">
+                        <span className="text-xs font-bold text-slate-900 dark:text-white font-mono">
+                          {(dev.netAmount || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DH
+                        </span>
+                        {getDevisStatusBadge(dev.status)}
+                      </div>
+
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {dev.status !== 'Invoiced' && (
+                          <button
+                            type="button"
+                            disabled={convertingDevisId === dev._id}
+                            onClick={() => handleConvertDevisToInvoice(dev)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs cursor-pointer shadow-xs transition-all disabled:opacity-50"
+                            title="Transformer ce devis en Facture officielle"
+                          >
+                            {convertingDevisId === dev._id ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Receipt className="w-3.5 h-3.5" />
+                            )}
+                            <span>Facturer</span>
+                          </button>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => setPreviewDevisData(dev)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-50 hover:bg-purple-100 dark:bg-purple-600/10 dark:hover:bg-purple-600/20 text-purple-600 dark:text-purple-400 font-semibold text-xs border border-purple-200 dark:border-purple-500/20 transition-all cursor-pointer shadow-xs"
+                          title="Aperçu & Impression A4 de ce devis"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>Aperçu A4 / Imprimer</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            navigate('/devis', {
+                              state: {
+                                editDevisId: dev._id,
+                                returnPatientId: id,
+                                returnTab: 'Devis',
+                              },
+                            })
+                          }
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-100 dark:bg-white/5 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer transition-all shadow-xs"
+                          title="Modifier directement ce devis dans l'éditeur"
+                        >
+                          <Edit className="w-3.5 h-3.5" />
+                          <span className="text-xs font-semibold">Modifier</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteDevis(dev._id, dev.devisNumber)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-transparent hover:border-rose-200 dark:hover:border-rose-900/40 transition-colors cursor-pointer"
+                          title="Supprimer ce devis"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* CARNET FINANCIER & DIFTAR DU PATIENT */}
         {activeTab === 'Ledger' && (
           <div className="flex flex-col gap-5">
@@ -1517,12 +1841,12 @@ export const PatientProfile: React.FC = () => {
                 </button>
               </div>
 
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2.5 flex-wrap">
                 <button
                   onClick={handleInvoiceSelectedActs}
                   className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                     selectedActsForInvoice.length > 0
-                      ? 'bg-purple-600 hover:bg-purple-500 text-white shadow-md shadow-purple-600/25 ring-2 ring-purple-400/40'
+                      ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-600/25 ring-2 ring-blue-400/40'
                       : 'bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300'
                   }`}
                 >
@@ -1531,6 +1855,23 @@ export const PatientProfile: React.FC = () => {
                     {selectedActsForInvoice.length > 0
                       ? `Facturer la sélection (${selectedActsForInvoice.length})`
                       : 'Créer une Facture'}
+                  </span>
+                </button>
+
+                <button
+                  onClick={handleDevisSelectedActs}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    selectedActsForInvoice.length > 0
+                      ? 'bg-purple-600 hover:bg-purple-500 text-white shadow-md shadow-purple-600/25 ring-2 ring-purple-400/40'
+                      : 'bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/30 dark:hover:bg-purple-900/40 border border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-300'
+                  }`}
+                  title="Créer un devis estimatif avec ces actes"
+                >
+                  <FileSpreadsheet className="w-4 h-4" />
+                  <span>
+                    {selectedActsForInvoice.length > 0
+                      ? `Devis de la sélection (${selectedActsForInvoice.length})`
+                      : 'Créer un Devis'}
                   </span>
                 </button>
 
@@ -1606,6 +1947,7 @@ export const PatientProfile: React.FC = () => {
                         const actCost = entry.cost || 0;
                         const actPaid = entry.advance || 0;
                         const actRemaining = entry.reste !== null && entry.reste !== undefined ? entry.reste : 0;
+                        const linkedInvoice = entry.invoiceId ? invoices.find((i) => i._id === (entry.invoiceId._id || entry.invoiceId)) : null;
 
                         return (
                           <tr
@@ -1750,7 +2092,7 @@ export const PatientProfile: React.FC = () => {
                                     }
                                   }}
                                   className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-50 hover:bg-purple-100 dark:bg-purple-900/25 dark:hover:bg-purple-900/40 text-purple-700 dark:text-purple-300 border border-purple-200/80 dark:border-purple-500/30 whitespace-nowrap cursor-pointer transition-all shadow-xs"
-                                  title="Cliquer pour voir et imprimer cette facture"
+                                  title={`Facture N° ${entry.invoiceId.invoiceNumber || entry.invoiceId}${linkedInvoice ? ` • Total Facture: ${linkedInvoice.netAmount.toFixed(2)} DH` : ''} - Cliquer pour voir et imprimer`}
                                 >
                                   <FileText className="w-3 h-3 text-purple-600 dark:text-purple-400 shrink-0" />
                                   <span>Facturé N° {entry.invoiceId.invoiceNumber || entry.invoiceId}</span>
@@ -3172,6 +3514,146 @@ export const PatientProfile: React.FC = () => {
                 >
                   <InvoicePrintLayout
                     invoice={previewInvoiceData}
+                    config={clinicConfig}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Aperçu du Devis A4 avant impression */}
+      {previewDevisData && clinicConfig && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-xs select-none">
+          <div className="w-full max-w-5xl max-h-[96vh] bg-slate-900 border border-slate-700/60 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header Toolbar */}
+            <div className="p-3.5 px-5 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 flex items-center justify-between gap-3 shrink-0 flex-wrap">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="p-2 rounded-xl bg-purple-50 dark:bg-purple-600/10 text-purple-600 dark:text-purple-400 shrink-0">
+                  <FileSpreadsheet className="w-5 h-5" />
+                </div>
+                <div className="truncate">
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate">
+                    Aperçu Devis Estimatif N° {previewDevisData.devisNumber}
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                    Patient : {patient?.name} {patient?.prenom || ''} • Total Estimé : {(previewDevisData.netAmount || 0).toFixed(2)} DH
+                  </p>
+                </div>
+              </div>
+
+              {/* PDF Zoom & Fit Toolbar */}
+              <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setDevisPreviewScale((prev) => Math.max(0.45, Number((prev - 0.08).toFixed(2))))}
+                  className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-white dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                  title="Zoom Arrière (-)"
+                >
+                  <ZoomOut className="w-4 h-4" />
+                </button>
+
+                <span className="text-xs font-mono font-bold text-slate-700 dark:text-slate-300 min-w-[45px] text-center">
+                  {Math.round(devisPreviewScale * 100)}%
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() => setDevisPreviewScale((prev) => Math.min(1.4, Number((prev + 0.08).toFixed(2))))}
+                  className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-white dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                  title="Zoom Avant (+)"
+                >
+                  <ZoomIn className="w-4 h-4" />
+                </button>
+
+                <div className="h-4 w-px bg-slate-300 dark:bg-white/10 mx-1"></div>
+
+                <button
+                  type="button"
+                  onClick={() => setDevisPreviewScale(0.72)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                    devisPreviewScale === 0.72
+                      ? 'bg-white dark:bg-slate-700 text-purple-600 dark:text-purple-400 shadow-2xs font-bold'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                  title="Afficher la page entière"
+                >
+                  Page Entière
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setDevisPreviewScale(1.0)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                    devisPreviewScale === 1.0
+                      ? 'bg-white dark:bg-slate-700 text-purple-600 dark:text-purple-400 shadow-2xs font-bold'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                  title="Afficher en taille réelle 100%"
+                >
+                  100%
+                </button>
+              </div>
+
+              {/* Actions: Edit, Print and Close */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() =>
+                    navigate('/devis', {
+                      state: {
+                        editDevisId: previewDevisData._id,
+                        returnPatientId: id,
+                        returnTab: 'Devis',
+                      },
+                    })
+                  }
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/15 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                  title="Ouvrir dans l'éditeur pour modifier"
+                >
+                  <Edit className="w-3.5 h-3.5" />
+                  <span>Modifier</span>
+                </button>
+
+                <button
+                  onClick={() => window.print()}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold shadow-md shadow-purple-600/25 transition-all cursor-pointer"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Imprimer le Devis (A4)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setPreviewDevisData(null)}
+                  className="p-2 rounded-xl bg-slate-800/90 hover:bg-rose-600 text-white hover:text-white border border-white/20 hover:border-rose-400 transition-all cursor-pointer shadow-md flex items-center justify-center shrink-0 group"
+                  title="Fermer l'aperçu"
+                >
+                  <X className="w-5 h-5 stroke-[2.5] text-white transition-transform group-hover:rotate-90 duration-200" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body: Scaled Full-Page A4 Sheet View */}
+            <div className="flex-1 overflow-auto p-4 md:p-6 flex justify-center items-start bg-slate-950/70">
+              <div
+                style={{
+                  width: `${760 * devisPreviewScale}px`,
+                  height: `${1060 * devisPreviewScale}px`,
+                }}
+                className="relative shrink-0 shadow-2xl transition-all duration-150 my-auto"
+              >
+                <div
+                  style={{
+                    transform: `scale(${devisPreviewScale})`,
+                    transformOrigin: 'top left',
+                    width: '760px',
+                    height: '1060px',
+                  }}
+                  className="absolute top-0 left-0 bg-white rounded-sm overflow-hidden border border-slate-300 shadow-2xl"
+                >
+                  <DevisPrintLayout
+                    devis={previewDevisData}
                     config={clinicConfig}
                   />
                 </div>

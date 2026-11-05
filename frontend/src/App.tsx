@@ -53,7 +53,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
 // Layout Shell wrapping sidebar, header and page content
 const AppLayout: React.FC = () => {
-  const { token } = useAuth();
+  const { token, isDoctorOrAdmin } = useAuth();
   const [config, setConfig] = useState<ClinicConfig | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
@@ -117,10 +117,10 @@ const AppLayout: React.FC = () => {
             <Route path="/invoices" element={<InvoiceEditor />} />
             <Route path="/devis" element={<DevisEditor />} />
             <Route path="/payments" element={<Navigate to="/invoices" replace />} />
-            <Route path="/reports" element={<Reports />} />
+            <Route path="/reports" element={isDoctorOrAdmin ? <Reports /> : <Navigate to="/" replace />} />
             <Route path="/notifications" element={<NotificationManager />} />
             <Route path="/nanopix" element={<NanoPixStudio />} />
-            <Route path="/settings" element={<Settings />} />
+            <Route path="/settings" element={isDoctorOrAdmin ? <Settings /> : <Navigate to="/" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>

@@ -216,14 +216,18 @@ export const InvoiceEditor: React.FC = () => {
           tooth: act.tooth && act.tooth !== '-' ? act.tooth : '',
           description: act.description || act.actName || '',
           amount: Number(act.amount) || Number(act.cost) || 0,
+          treatmentId: act._id || act.treatmentId,
         };
       });
       setLineItems(items);
       const gross = items.reduce((s, it) => s + it.amount, 0);
-      setPaidAmount(String(gross));
+      const totalAdvances = prefilledActs.reduce((s, it) => s + (Number(it.paidAmount) || Number(it.advance) || 0), 0);
+      setPaidAmount(String(totalAdvances));
+      setPaymentStatus(totalAdvances >= gross && gross > 0 ? 'Paid' : totalAdvances > 0 ? 'Partially Paid' : 'Unpaid');
     } else {
       setLineItems([{ date: `${day}/${month}`, tooth: '', description: '', amount: 0 }]);
       setPaidAmount('0');
+      setPaymentStatus('Unpaid');
     }
     setViewMode('edit');
   };
@@ -412,8 +416,9 @@ export const InvoiceEditor: React.FC = () => {
           tooth: it.tooth || '',
           description: it.description,
           amount: amt,
-          advance: amt,
-          remaining: 0,
+          advance: it.advance !== undefined ? Number(it.advance) : amt,
+          remaining: Math.max(0, amt - (it.advance !== undefined ? Number(it.advance) : amt)),
+          treatmentId: it.treatmentId || undefined,
         };
       });
 
@@ -429,10 +434,13 @@ export const InvoiceEditor: React.FC = () => {
       autoStatus = 'Unpaid';
     }
 
+    const treatmentIds = validItems.map((it) => it.treatmentId).filter(Boolean);
+
     const payload = {
       patientId: selectedPatientId,
       date: invoiceDate,
       items: validItems,
+      treatmentIds,
       discount: parseFloat(discount) || 0,
       paymentMode,
       paymentStatus: autoStatus,
@@ -453,8 +461,15 @@ export const InvoiceEditor: React.FC = () => {
       .then((res) => res.json())
       .then(() => {
         toast.success('Facture enregistrée', 'Les actes, avances et restes ont été mis à jour avec succès.');
-        setViewMode('list');
-        fetchInvoices();
+        const stateObj = location.state as any;
+        if (stateObj?.returnPatientId) {
+          navigate(`/patients/${stateObj.returnPatientId}`, {
+            state: { activeTab: stateObj?.returnTab || 'Invoices' },
+          });
+        } else {
+          setViewMode('list');
+          fetchInvoices();
+        }
       })
       .catch((err) => {
         console.error('Error saving invoice:', err);

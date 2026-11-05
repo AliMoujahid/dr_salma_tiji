@@ -43,7 +43,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onClose,
   onToggleCollapse 
 }) => {
-  const { user, logout } = useAuth();
+  const { user, logout, isDoctorOrAdmin } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -59,7 +59,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { name: 'Salle d\'attente', path: '/waiting-room', icon: MonitorPlay },
     { name: 'Facturation & Paiements', path: '/invoices', icon: FileText },
     { name: 'Devis & Estimations', path: '/devis', icon: FileSpreadsheet },
-    { name: 'Rapports & Stats', path: '/reports', icon: BarChart3 },
+    ...(isDoctorOrAdmin ? [{ name: 'Rapports & Stats', path: '/reports', icon: BarChart3 }] : []),
     { name: 'Notifications & Rappels', path: '/notifications', icon: MessageSquare },
     { 
       name: 'Imagerie RVG NanoPix', 
@@ -164,24 +164,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Bottom Section: Configuration, User Profile, Collapse & Logout */}
         <div className="flex flex-col gap-2.5 border-t border-white/5 pt-3 mt-auto">
-          {/* Configuration Link placed above Profile */}
-          <NavLink
-            to="/settings"
-            onClick={onClose}
-            title={isCollapsed ? 'Configuration' : undefined}
-            className={`flex items-center justify-between py-2.5 rounded-xl font-medium text-sm transition-all duration-200 ${
-              isCollapsed ? 'md:justify-center md:px-0 px-3.5' : 'px-3.5'
-            } ${
-              isSettingsActive
-                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/25 translate-x-1'
-                : 'text-slate-400 hover:bg-white/5 hover:text-white'
-            }`}
-          >
-            <div className={`flex items-center gap-3 ${isCollapsed ? 'md:justify-center' : ''}`}>
-              <Settings className="w-5 h-5 shrink-0 text-slate-400" />
-              <span className={`${isCollapsed ? 'md:hidden' : 'inline'}`}>Configuration</span>
-            </div>
-          </NavLink>
+          {/* Configuration Link placed above Profile - Only for Admin & Doctor */}
+          {isDoctorOrAdmin && (
+            <NavLink
+              to="/settings"
+              onClick={onClose}
+              title={isCollapsed ? 'Configuration' : undefined}
+              className={`flex items-center justify-between py-2.5 rounded-xl font-medium text-sm transition-all duration-200 ${
+                isCollapsed ? 'md:justify-center md:px-0 px-3.5' : 'px-3.5'
+              } ${
+                isSettingsActive
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/25 translate-x-1'
+                  : 'text-slate-400 hover:bg-white/5 hover:text-white'
+              }`}
+            >
+              <div className={`flex items-center gap-3 ${isCollapsed ? 'md:justify-center' : ''}`}>
+                <Settings className="w-5 h-5 shrink-0 text-slate-400" />
+                <span className={`${isCollapsed ? 'md:hidden' : 'inline'}`}>Configuration</span>
+              </div>
+            </NavLink>
+          )}
 
           {/* User profile card */}
           {user && (

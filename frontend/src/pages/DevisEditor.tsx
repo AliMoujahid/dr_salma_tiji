@@ -35,7 +35,7 @@ import { QuickCreateDentalActModal } from '../components/QuickCreateDentalActMod
 import { API_URL } from '../config/api';
 
 export const DevisEditor: React.FC = () => {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const { toast } = useToast();
   const location = useLocation();
   const navigate = useNavigate();
@@ -357,7 +357,14 @@ export const DevisEditor: React.FC = () => {
       );
 
       fetchDevis();
-      setViewMode('list');
+      const stateObj = location.state as any;
+      if (stateObj?.returnPatientId) {
+        navigate(`/patients/${stateObj.returnPatientId}`, {
+          state: { activeTab: stateObj?.returnTab || 'Devis' },
+        });
+      } else {
+        setViewMode('list');
+      }
     } catch (err: any) {
       console.error('Save devis error:', err);
       toast.error('Erreur', err.message || 'Impossible d\'enregistrer le devis.');
@@ -519,19 +526,50 @@ export const DevisEditor: React.FC = () => {
     }
   };
 
+  const dummyPrintDevis: Devis = {
+    _id: editDevisId || 'draft',
+    devisNumber: devisNumber || 'DEV-BROUILLON',
+    patientId: (patients.find((p) => p._id === selectedPatientId) || { name: 'Patient', prenom: '' }) as any,
+    date: devisDate || new Date().toISOString(),
+    validUntil: validUntil || undefined,
+    status: status || 'Draft',
+    items: lineItems.map((li) => ({
+      date: li.date || '',
+      tooth: li.tooth || '',
+      description: li.description || '',
+      amount: parseFloat(li.amount as any) || 0,
+    })),
+    totalAmount: calculateGrossTotal(),
+    discount: parseFloat(discount) || 0,
+    netAmount: calculateNetTotal(),
+    notes,
+    createdBy: user as any,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
   return (
-    <div className="flex-1 flex flex-col h-full bg-[var(--bg-app)] overflow-y-auto no-scrollbar p-4 md:p-6 select-none">
-      {/* Top Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-        <div>
-          <div className="flex items-center gap-2">
-            <div className="p-2.5 rounded-xl bg-purple-600/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
-              <FileSpreadsheet className="w-5 h-5" />
-            </div>
-            <div>
-              <h1 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
-                Devis & Propositions Thérapeutiques
-              </h1>
+    <div className="flex-1 flex flex-col h-full bg-[var(--bg-app)] overflow-y-auto no-scrollbar p-4 md:p-6 select-none print:block print:p-0 print:max-h-none print:overflow-visible">
+      {/* Offscreen Print Component (Rendered strictly when printing) */}
+      <div className="hidden print:block">
+        {config && (
+          <DevisPrintLayout devis={previewDevisData || dummyPrintDevis} config={config} />
+        )}
+      </div>
+
+      {/* Screen Views (Hidden during printing) */}
+      <div className="print:hidden flex flex-col h-full">
+        {/* Top Header */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+          <div>
+            <div className="flex items-center gap-2">
+              <div className="p-2.5 rounded-xl bg-purple-600/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                <FileSpreadsheet className="w-5 h-5" />
+              </div>
+              <div>
+                <h1 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+                  Devis & Propositions Thérapeutiques
+                </h1>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 Édition, gestion et transformation des devis dentaires estimatifs pour les patients.
               </p>
@@ -542,20 +580,45 @@ export const DevisEditor: React.FC = () => {
         <div className="flex items-center gap-2.5">
           {viewMode === 'edit' ? (
             <button
-              onClick={() => setViewMode('list')}
+              onClick={() => {
+                const stateObj = location.state as any;
+                if (stateObj?.returnPatientId) {
+                  navigate(`/patients/${stateObj.returnPatientId}`, {
+                    state: { activeTab: stateObj?.returnTab || 'Devis' },
+                  });
+                } else {
+                  setViewMode('list');
+                }
+              }}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 text-xs font-bold transition-all cursor-pointer border border-slate-200 dark:border-white/10"
             >
               <ArrowLeft className="w-4 h-4" />
-              <span>Retour à la liste</span>
+              <span>{location.state?.returnPatientId ? 'Retour au Dossier Patient' : 'Retour à la liste'}</span>
             </button>
           ) : (
-            <button
-              onClick={() => handleNewDevis()}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition-all shadow-md shadow-purple-600/20 cursor-pointer"
-            >
-              <Plus className="w-4 h-4 stroke-[2.5]" />
-              <span>Nouveau Devis</span>
-            </button>
+            <div className="flex items-center gap-2">
+              {location.state?.returnPatientId && (
+                <button
+                  onClick={() => {
+                    const stateObj = location.state as any;
+                    navigate(`/patients/${stateObj.returnPatientId}`, {
+                      state: { activeTab: stateObj?.returnTab || 'Devis' },
+                    });
+                  }}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 text-xs font-bold transition-all cursor-pointer border border-slate-200 dark:border-white/10"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>Retour au Patient</span>
+                </button>
+              )}
+              <button
+                onClick={() => handleNewDevis()}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition-all shadow-md shadow-purple-600/20 cursor-pointer"
+              >
+                <Plus className="w-4 h-4 stroke-[2.5]" />
+                <span>Nouveau Devis</span>
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -984,10 +1047,19 @@ export const DevisEditor: React.FC = () => {
               <div className="flex items-center gap-3">
                 <button
                   type="button"
-                  onClick={() => setViewMode('list')}
+                  onClick={() => {
+                    const stateObj = location.state as any;
+                    if (stateObj?.returnPatientId) {
+                      navigate(`/patients/${stateObj.returnPatientId}`, {
+                        state: { activeTab: stateObj?.returnTab || 'Devis' },
+                      });
+                    } else {
+                      setViewMode('list');
+                    }
+                  }}
                   className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 text-xs font-bold cursor-pointer"
                 >
-                  Annuler
+                  {location.state?.returnPatientId ? '← Retour au Patient' : 'Annuler'}
                 </button>
                 {editDevisId && (
                   <button
@@ -1119,10 +1191,11 @@ export const DevisEditor: React.FC = () => {
           </div>
         </div>
       )}
+      </div>
 
       {/* --- MODAL: A4 PRINT & PREVIEW MODAL --- */}
       {previewDevisData && config && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-xs select-none">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-xs select-none print:hidden">
           <div className="bg-slate-900 border border-white/10 rounded-2xl w-full max-w-4xl max-h-[96vh] flex flex-col shadow-2xl overflow-hidden">
             {/* Header bar */}
             <div className="flex justify-between items-center px-6 py-4 border-b border-white/10 bg-slate-950/60 flex-wrap gap-3">
@@ -1170,10 +1243,12 @@ export const DevisEditor: React.FC = () => {
 
                 {/* Close */}
                 <button
+                  type="button"
                   onClick={() => setPreviewDevisData(null)}
-                  className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-xl cursor-pointer"
+                  className="p-2 rounded-xl bg-slate-800/90 hover:bg-rose-600 text-white hover:text-white border border-white/20 hover:border-rose-400 transition-all cursor-pointer shadow-md flex items-center justify-center shrink-0 group"
+                  title="Fermer l'aperçu"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="w-5 h-5 stroke-[2.5] text-white transition-transform group-hover:rotate-90 duration-200" />
                 </button>
               </div>
             </div>
