@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Plus, UserPlus, Heart, Trash2, Archive, UserCheck, Eye, Calendar } from 'lucide-react';
-import { Patient } from '../types';
+import { Search, Plus, UserPlus, Heart, Trash2, Archive, UserCheck, Eye, Calendar, Download, FileSpreadsheet } from 'lucide-react';
+import { Patient, ClinicConfig } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { formatDate, formatBirthDateWithAge, calculateAge } from '../utils/dateUtils';
@@ -9,6 +9,7 @@ import { CustomDatePicker } from '../components/CustomDatePicker';
 import { API_URL } from '../config/api';
 import { useLiveSync } from '../context/LiveSyncContext';
 import { getLocalAvatar } from '../utils/avatarUtils';
+import { EmptyCarnetModal } from '../components/EmptyCarnetModal';
 
 
 
@@ -39,6 +40,19 @@ export const Patients: React.FC = () => {
   // Modal Trigger States
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editPatientId, setEditPatientId] = useState<string | null>(null);
+  const [showEmptyCarnetModal, setShowEmptyCarnetModal] = useState(false);
+  const [clinicConfig, setClinicConfig] = useState<ClinicConfig | null>(null);
+
+  useEffect(() => {
+    fetch(`${API_URL}/clinic/config`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && typeof data === 'object') setClinicConfig(data);
+      })
+      .catch(() => {});
+  }, [token]);
 
   // Form Fields State
   const [name, setName] = useState('');
@@ -245,7 +259,8 @@ export const Patients: React.FC = () => {
     return age;
   };
 
-  return (    <div className="flex-1 p-6 md:p-8 flex flex-col gap-6 overflow-y-auto no-scrollbar max-h-[calc(100vh-80px)] select-none">
+  return (
+    <div className="flex-1 p-6 md:p-8 flex flex-col gap-6 overflow-y-auto no-scrollbar max-h-[calc(100vh-80px)] select-none print:hidden">
       
       {/* Title & Add button */}
       <div className="flex justify-between items-center">
@@ -253,13 +268,25 @@ export const Patients: React.FC = () => {
           <h2 className="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Fichier Patients</h2>
           <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400 mt-1">Créez, modifiez, archivez et explorez les dossiers de vos patients.</p>
         </div>
-        <button
-          onClick={handleOpenCreateModal}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 font-semibold text-xs text-white transition-all shadow-md shadow-blue-600/20 cursor-pointer"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Ajouter un Patient</span>
-        </button>
+        <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={() => setShowEmptyCarnetModal(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/30 dark:hover:bg-purple-900/40 border border-purple-200 dark:border-purple-800 text-[#5c246e] dark:text-purple-300 font-bold text-xs transition-all shadow-xs cursor-pointer"
+            title="Télécharger ou imprimer un carnet financier vierge sans données"
+          >
+            <Download className="w-4 h-4" />
+            <span>Carnet Vierge (A4)</span>
+          </button>
+
+          <button
+            onClick={handleOpenCreateModal}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 font-semibold text-xs text-white transition-all shadow-md shadow-blue-600/20 cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Ajouter un Patient</span>
+          </button>
+        </div>
       </div>
 
       {/* Search & filters bar */}
@@ -681,6 +708,12 @@ export const Patients: React.FC = () => {
           </div>
         </div>
       )}
+      {/* Modal: Carnet Financier Vierge */}
+      <EmptyCarnetModal
+        isOpen={showEmptyCarnetModal}
+        onClose={() => setShowEmptyCarnetModal(false)}
+        config={clinicConfig}
+      />
     </div>
   );
 };

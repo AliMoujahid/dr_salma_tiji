@@ -18,11 +18,14 @@ import {
   ShieldCheck,
   AlertCircle,
   TrendingUp,
+  Download,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { DentalAct } from '../types';
+import { DentalAct, ClinicConfig } from '../types';
 import { API_URL } from '../config/api';
+import { EmptyCarnetModal } from './EmptyCarnetModal';
 
 export const DENTAL_CATEGORIES = [
   'Consultation & Bilan',
@@ -56,10 +59,24 @@ export const DentalActsManager: React.FC = () => {
   const [formDescription, setFormDescription] = useState('');
   const [formIsFavorite, setFormIsFavorite] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [showEmptyCarnetModal, setShowEmptyCarnetModal] = useState(false);
+  const [clinicConfig, setClinicConfig] = useState<ClinicConfig | null>(null);
 
   useEffect(() => {
     fetchActs();
+    fetchClinicConfig();
   }, []);
+
+  const fetchClinicConfig = () => {
+    fetch(`${API_URL}/clinic/config`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && typeof data === 'object') setClinicConfig(data);
+      })
+      .catch(() => {});
+  };
 
   const fetchActs = () => {
     setLoading(true);
@@ -229,7 +246,7 @@ export const DentalActsManager: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 print:hidden">
       
       {/* 1. Header & Summary Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -305,6 +322,16 @@ export const DentalActsManager: React.FC = () => {
           >
             <RefreshCw className="w-3.5 h-3.5" />
             <span>Tarifs d'Origine</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowEmptyCarnetModal(true)}
+            className="px-3.5 py-2 rounded-xl border border-purple-200 dark:border-purple-800 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/40 dark:hover:bg-purple-900/50 text-[#5c246e] dark:text-purple-300 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+            title="Télécharger ou imprimer un carnet financier vierge sans données"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Carnet Financier Vierge</span>
           </button>
 
           <button
@@ -532,6 +559,13 @@ export const DentalActsManager: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Modal: Carnet Financier Vierge */}
+      <EmptyCarnetModal
+        isOpen={showEmptyCarnetModal}
+        onClose={() => setShowEmptyCarnetModal(false)}
+        config={clinicConfig}
+      />
 
     </div>
   );

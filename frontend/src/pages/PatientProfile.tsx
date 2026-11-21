@@ -55,6 +55,9 @@ import { SearchableActSelect } from '../components/SearchableActSelect';
 import { DENTAL_CATEGORIES } from '../components/DentalActsManager';
 import { parseToothNumbers, getToothLabel } from '../utils/dentalUtils';
 import { getLocalAvatar } from '../utils/avatarUtils';
+import { EmptyCarnetModal } from '../components/EmptyCarnetModal';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 
 export const PatientProfile: React.FC = () => {
@@ -153,6 +156,44 @@ export const PatientProfile: React.FC = () => {
   // Add Treatment Modal state
   const [showCarnetPreview, setShowCarnetPreview] = useState(false);
   const [carnetPreviewScale, setCarnetPreviewScale] = useState<number>(0.70);
+  const [showEmptyCarnetModal, setShowEmptyCarnetModal] = useState(false);
+  const [isPrintingEmptyCarnet, setIsPrintingEmptyCarnet] = useState(false);
+  const [carnetPreviewMode, setCarnetPreviewMode] = useState<'patient' | 'empty'>('patient');
+  const [isGeneratingCarnetPdf, setIsGeneratingCarnetPdf] = useState(false);
+
+  const handlePrintCarnet = (isDownload = false) => {
+    const originalTitle = document.title;
+    if (carnetPreviewMode === 'empty') {
+      document.title = 'Carnet_Financier_Vierge_Cabinet_Tijini';
+      setIsPrintingEmptyCarnet(true);
+    } else {
+      document.title = `Carnet_Patient_${patient?.name || ''}_${patient?.prenom || ''}`.trim();
+      setIsPrintingEmptyCarnet(false);
+    }
+
+    if (isDownload) {
+      toast.info(
+        'Enregistrement PDF',
+        'La destination est sur "Enregistrer au format PDF". Cliquez sur "Enregistrer" pour sauvegarder le carnet.'
+      );
+    }
+
+    const cleanup = () => {
+      setIsPrintingEmptyCarnet(false);
+      document.title = originalTitle;
+      window.removeEventListener('afterprint', cleanup);
+    };
+    window.addEventListener('afterprint', cleanup);
+
+    setTimeout(() => {
+      window.print();
+      setTimeout(cleanup, 2000);
+    }, 120);
+  };
+
+  const handleDownloadCarnetPdf = () => {
+    handlePrintCarnet(true);
+  };
   const [previewInvoiceData, setPreviewInvoiceData] = useState<Invoice | null>(null);
   const [invoicePreviewScale, setInvoicePreviewScale] = useState<number>(0.72);
   const [showAddActModal, setShowAddActModal] = useState(false);
@@ -1064,6 +1105,14 @@ export const PatientProfile: React.FC = () => {
             invoice={previewInvoiceData}
             config={clinicConfig}
           />
+        ) : isPrintingEmptyCarnet ? (
+          <PatientLedgerPrintLayout
+            config={clinicConfig}
+            isEmptyCarnet={true}
+            acts={[]}
+            payments={[]}
+            summary={{ totalActsAmount: 0, totalPaidAmount: 0, remainingBalance: 0 }}
+          />
         ) : patient && (
           <PatientLedgerPrintLayout
             patient={patient}
@@ -1876,7 +1925,10 @@ export const PatientProfile: React.FC = () => {
                 </button>
 
                 <button
-                  onClick={() => setShowCarnetPreview(true)}
+                  onClick={() => {
+                    setCarnetPreviewMode('patient');
+                    setShowCarnetPreview(true);
+                  }}
                   className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/30 dark:hover:bg-purple-900/40 border border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-300 text-xs font-bold transition-all cursor-pointer"
                   title="Aperçu avant impression du Carnet"
                 >
@@ -1885,7 +1937,19 @@ export const PatientProfile: React.FC = () => {
                 </button>
 
                 <button
-                  onClick={() => window.print()}
+                  onClick={() => setShowEmptyCarnetModal(true)}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/30 dark:hover:bg-purple-900/40 border border-purple-200 dark:border-purple-800 text-[#5c246e] dark:text-purple-300 text-xs font-bold transition-all cursor-pointer shadow-xs"
+                  title="Télécharger ou imprimer un carnet financier vierge sans données"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Carnet Vierge (Vide)</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsPrintingEmptyCarnet(false);
+                    setTimeout(() => window.print(), 50);
+                  }}
                   className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 text-xs font-bold transition-all cursor-pointer"
                   title="Imprimer le carnet officiel du patient"
                 >
@@ -3272,12 +3336,40 @@ export const PatientProfile: React.FC = () => {
                 </div>
                 <div className="truncate">
                   <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate">
-                    Aperçu du Carnet Patient A4 (Dossier & Historique)
+                    {carnetPreviewMode === 'empty' ? 'Carnet Financier Vierge (Modèle Vide A4)' : 'Aperçu du Carnet Patient A4 (Dossier & Historique)'}
                   </h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                    {patient.name} {patient.prenom || ''} • Dossier N° {patient.nationalId || (patient as any).customId || patient._id.slice(-6).toUpperCase()}
+                    {carnetPreviewMode === 'empty'
+                      ? 'Modèle officiel vierge sans données • Cabinet Tijini'
+                      : `${patient.name} ${patient.prenom || ''} • Dossier N° ${patient.nationalId || (patient as any).customId || patient._id.slice(-6).toUpperCase()}`}
                   </p>
                 </div>
+              </div>
+
+              {/* Mode Selector Toggle: Patient Data vs Vierge (Empty) */}
+              <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-white/10 text-xs font-bold">
+                <button
+                  type="button"
+                  onClick={() => setCarnetPreviewMode('patient')}
+                  className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                    carnetPreviewMode === 'patient'
+                      ? 'bg-white dark:bg-slate-700 text-purple-700 dark:text-purple-300 shadow-xs'
+                      : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
+                  }`}
+                >
+                  Carnet du Patient
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCarnetPreviewMode('empty')}
+                  className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                    carnetPreviewMode === 'empty'
+                      ? 'bg-purple-600 text-white shadow-xs'
+                      : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
+                  }`}
+                >
+                  Carnet Vierge (Vide)
+                </button>
               </div>
 
               {/* PDF Zoom & Fit Toolbar */}
@@ -3333,14 +3425,30 @@ export const PatientProfile: React.FC = () => {
                 </button>
               </div>
 
-              {/* Actions: Print and Close */}
+              {/* Actions: Download PDF, Print and Close */}
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => window.print()}
+                  type="button"
+                  onClick={handleDownloadCarnetPdf}
+                  disabled={isGeneratingCarnetPdf}
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-md shadow-purple-600/20 transition-all cursor-pointer"
+                  title="Télécharger le fichier PDF directement"
+                >
+                  {isGeneratingCarnetPdf ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4" />
+                  )}
+                  <span>Télécharger PDF</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handlePrintCarnet(false)}
                   className="flex items-center gap-1.5 px-4 py-2 bg-[#5c246e] hover:bg-[#4a1c59] text-white rounded-xl text-xs font-bold shadow-md shadow-[#5c246e]/25 transition-all cursor-pointer"
                 >
                   <Printer className="w-4 h-4" />
-                  <span>Imprimer le Carnet (A4)</span>
+                  <span>{carnetPreviewMode === 'empty' ? 'Imprimer Vierge (A4)' : 'Imprimer le Carnet (A4)'}</span>
                 </button>
                 <button
                   onClick={() => setShowCarnetPreview(false)}
@@ -3370,13 +3478,25 @@ export const PatientProfile: React.FC = () => {
                   }}
                   className="absolute top-0 left-0 bg-white rounded-sm overflow-hidden border border-slate-300 shadow-2xl"
                 >
-                  <PatientLedgerPrintLayout
-                    patient={patient}
-                    config={clinicConfig}
-                    acts={ledgerData?.acts || []}
-                    payments={ledgerData?.payments || []}
-                    summary={ledgerData?.summary || { totalActsAmount: 0, totalPaidAmount: 0, remainingBalance: 0 }}
-                  />
+                  <div id="preview-carnet-profile-sheet">
+                    {carnetPreviewMode === 'empty' ? (
+                      <PatientLedgerPrintLayout
+                        config={clinicConfig}
+                        isEmptyCarnet={true}
+                        acts={[]}
+                        payments={[]}
+                        summary={{ totalActsAmount: 0, totalPaidAmount: 0, remainingBalance: 0 }}
+                      />
+                    ) : (
+                      <PatientLedgerPrintLayout
+                        patient={patient}
+                        config={clinicConfig}
+                        acts={ledgerData?.acts || []}
+                        payments={ledgerData?.payments || []}
+                        summary={ledgerData?.summary || { totalActsAmount: 0, totalPaidAmount: 0, remainingBalance: 0 }}
+                      />
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -3802,6 +3922,13 @@ export const PatientProfile: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Modal: Carnet Financier Vierge */}
+      <EmptyCarnetModal
+        isOpen={showEmptyCarnetModal}
+        onClose={() => setShowEmptyCarnetModal(false)}
+        config={clinicConfig}
+      />
 
       </div>
     </div>

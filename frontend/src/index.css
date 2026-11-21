@@ -493,4 +493,25 @@ html {
     flex-direction: column !important;
     justify-content: space-between !important;
   }
+
+  /* Strict Isolation when printing Carnet Vierge: Hides entire application root (#root) */
+  body.printing-carnet-vierge #root,
+  body.printing-carnet-vierge > *:not(#print-carnet-vierge-portal) {
+    display: none !important;
+  }
+
+  body.printing-carnet-vierge #print-carnet-vierge-portal {
+    display: block !important;
+    position: static !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    background: white !important;
+  }
+
+  body.printing-carnet-vierge #print-carnet-vierge-portal * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
 }

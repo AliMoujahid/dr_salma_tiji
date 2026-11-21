@@ -4,39 +4,47 @@ import { formatDate } from '../utils/dateUtils';
 import clinicLogo from '../assets/logo.png';
 
 interface PatientLedgerPrintLayoutProps {
-  patient: Patient;
-  config: ClinicConfig | null;
-  acts: any[];
-  payments: any[];
-  summary: {
+  patient?: Patient | null;
+  config?: ClinicConfig | null;
+  acts?: any[];
+  payments?: any[];
+  summary?: {
     totalActsAmount: number;
     totalPaidAmount: number;
     remainingBalance: number;
   };
+  isEmptyCarnet?: boolean;
 }
 
 export const PatientLedgerPrintLayout: React.FC<PatientLedgerPrintLayoutProps> = ({
   patient,
   config,
-  acts,
-  payments,
+  acts = [],
+  payments = [],
+  isEmptyCarnet = false,
 }) => {
+  // If empty carnet requested, bypass patient data
+  const isBlank = isEmptyCarnet || !patient;
+
   // Extract patient info: name is Nom de famille, prenom is Prénom
-  const lastName = (patient.name || '').trim();
-  const firstName = (patient.prenom || '').trim();
+  const lastName = (!isBlank && patient?.name ? patient.name : '').trim();
+  const firstName = (!isBlank && patient?.prenom ? patient.prenom : '').trim();
 
   // Calculate age
-  const birthDateObj = patient.birthDate ? new Date(patient.birthDate) : null;
+  const birthDateObj = !isBlank && patient?.birthDate ? new Date(patient.birthDate) : null;
   const ageStr = birthDateObj && !isNaN(birthDateObj.getTime())
     ? `${Math.floor((Date.now() - birthDateObj.getTime()) / (365.25 * 24 * 3600 * 1000))}`
     : '';
 
-  const isFemale = patient.gender === 'Female';
-  const isMale = patient.gender === 'Male';
+  const isFemale = !isBlank && patient?.gender === 'Female';
+  const isMale = !isBlank && patient?.gender === 'Male';
 
-  // Merge acts and payments into chronological entries with running balance
+  // Merge acts and payments into chronological entries with running balance (empty if isBlank)
+  const effectiveActs = isBlank ? [] : acts;
+  const effectivePayments = isBlank ? [] : payments;
+
   const entries: any[] = [
-    ...acts.map((a) => {
+    ...effectiveActs.map((a) => {
       const actAdvance = Number(a.paidAmount) || Number(a.advance) || 0;
       return {
         rawDate: a.date,
@@ -47,7 +55,7 @@ export const PatientLedgerPrintLayout: React.FC<PatientLedgerPrintLayoutProps> =
         avance: actAdvance > 0 ? actAdvance : null,
       };
     }),
-    ...payments
+    ...effectivePayments
       .filter((p) => !p.treatmentId)
       .map((p) => ({
         rawDate: p.date,
@@ -101,13 +109,19 @@ export const PatientLedgerPrintLayout: React.FC<PatientLedgerPrintLayoutProps> =
                   >
                     Dossier N° :
                   </span>
-                  <span className="font-black text-xs text-[#5c246e] tracking-wider ml-1">
-                    {patient.nationalId || (patient as any).customId || patient._id.slice(-6).toUpperCase()}
-                  </span>
+                  {isBlank ? (
+                    <span className="w-14 border-b border-dotted border-[#5c246e]/40 ml-1 inline-block"></span>
+                  ) : (
+                    <span className="font-black text-xs text-[#5c246e] tracking-wider ml-1">
+                      {patient?.nationalId || (patient as any)?.customId || patient?._id?.slice(-6)?.toUpperCase() || ''}
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-baseline flex-1 ml-2.5 min-w-0">
                   <span className="font-bold text-slate-700 w-13 shrink-0 text-[11px]">Nom :</span>
-                  <span className="font-black uppercase text-slate-900 px-1 text-[11.5px] truncate">{lastName}</span>
+                  {!isBlank && lastName ? (
+                    <span className="font-black uppercase text-slate-900 px-1 text-[11.5px] truncate">{lastName}</span>
+                  ) : null}
                   <span className="flex-1 border-b border-dotted border-[#5c246e]/40 min-w-3"></span>
                 </div>
               </div>
@@ -115,23 +129,29 @@ export const PatientLedgerPrintLayout: React.FC<PatientLedgerPrintLayoutProps> =
               {/* Line 2: Prénom */}
               <div className="flex items-baseline">
                 <span className="font-bold text-slate-700 w-16 shrink-0">Prénom :</span>
-                <span className="font-bold text-slate-900 px-1">{firstName}</span>
+                {!isBlank && firstName ? (
+                  <span className="font-bold text-slate-900 px-1">{firstName}</span>
+                ) : null}
                 <span className="flex-1 border-b border-dotted border-[#5c246e]/40 min-w-8"></span>
               </div>
 
               {/* Line 3: Né(e) le */}
               <div className="flex items-baseline">
                 <span className="font-bold text-slate-700 w-16 shrink-0">Né(e) le :</span>
-                <span className="font-bold text-slate-900 px-1">
-                  {birthDateObj ? formatDate(patient.birthDate) : ''}
-                </span>
+                {!isBlank && birthDateObj ? (
+                  <span className="font-bold text-slate-900 px-1">
+                    {patient?.birthDate ? formatDate(patient.birthDate) : ''}
+                  </span>
+                ) : null}
                 <span className="flex-1 border-b border-dotted border-[#5c246e]/40 min-w-8"></span>
               </div>
 
               {/* Line 4: Age & Sexe */}
               <div className="flex items-baseline">
                 <span className="font-bold text-slate-700 w-16 shrink-0">Age :</span>
-                <span className="font-bold text-slate-900 px-1">{ageStr}</span>
+                {!isBlank && ageStr ? (
+                  <span className="font-bold text-slate-900 px-1">{ageStr}</span>
+                ) : null}
                 <span className="flex-1 border-b border-dotted border-[#5c246e]/40 min-w-4"></span>
                 <span className="font-bold text-slate-700 ml-2">Sex :</span>
                 <span className="inline-flex items-center gap-1 font-bold text-slate-900 ml-1.5">
@@ -151,30 +171,36 @@ export const PatientLedgerPrintLayout: React.FC<PatientLedgerPrintLayoutProps> =
               {/* Line 5: Adresse */}
               <div className="flex items-baseline">
                 <span className="font-bold text-slate-700 w-16 shrink-0">Adresse :</span>
-                <span className="font-semibold text-slate-900 px-1 truncate max-w-[210px]">{patient.address || ''}</span>
+                {!isBlank && patient?.address ? (
+                  <span className="font-semibold text-slate-900 px-1 truncate max-w-[210px]">{patient.address}</span>
+                ) : null}
                 <span className="flex-1 border-b border-dotted border-[#5c246e]/40 min-w-4"></span>
               </div>
 
               {/* Line 6: Tel */}
               <div className="flex items-baseline">
                 <span className="font-bold text-slate-700 w-16 shrink-0">Tel :</span>
-                <span className="font-black text-slate-900 px-1">{patient.phone || ''}</span>
+                {!isBlank && patient?.phone ? (
+                  <span className="font-black text-slate-900 px-1">{patient.phone}</span>
+                ) : null}
                 <span className="flex-1 border-b border-dotted border-[#5c246e]/40 min-w-4"></span>
               </div>
 
               {/* Line 7: Mutuelle */}
               <div className="flex items-baseline">
                 <span className="font-bold text-slate-700 w-16 shrink-0">Mutuelle :</span>
-                <span className="font-black text-[#5c246e] px-1">
-                  {patient.insurance?.provider || (patient as any).mutuelle || ''}
-                </span>
+                {!isBlank && (patient?.insurance?.provider || (patient as any)?.mutuelle) ? (
+                  <span className="font-black text-[#5c246e] px-1">
+                    {patient?.insurance?.provider || (patient as any)?.mutuelle}
+                  </span>
+                ) : null}
                 <span className="flex-1 border-b border-dotted border-[#5c246e]/40 min-w-4"></span>
               </div>
             </div>
 
             {/* Anatomical Dental Cross Diagram Box */}
             <div className="border-2 border-[#5c246e] rounded-xs p-1.5 flex flex-col items-center justify-center mt-2.5 bg-white h-[165px] box-border">
-              <DentalOdontogramCross acts={acts} />
+              <DentalOdontogramCross acts={effectiveActs} />
             </div>
           </div>
 
@@ -370,9 +396,9 @@ const ToothLogoSvg = () => (
 );
 
 // High-Fidelity Anatomical Odontogram Diagram matching the physical sheet drawing
-const DentalOdontogramCross: React.FC<{ acts: any[] }> = ({ acts }) => {
+const DentalOdontogramCross: React.FC<{ acts?: any[] }> = ({ acts = [] }) => {
   const treatedTeeth = new Set(
-    acts.map((a) => String(a.tooth || '').trim()).filter((t) => t && t !== '-')
+    (acts || []).map((a) => String(a.tooth || '').trim()).filter((t) => t && t !== '-')
   );
 
   return (
